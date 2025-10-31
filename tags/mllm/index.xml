@@ -71,7 +71,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;p&gt;在 autoregressive 生成过程中，每步生成的 KV cache 都必须与模型参数一起加载与存储于 GPU 显存，导致显著的 memory-bound 现象。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>Beyond Attention or Similarity： Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>

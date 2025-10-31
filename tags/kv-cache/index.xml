@@ -67,7 +67,7 @@ However, they often produce excessively long outputs, leading to prohibitively l
 This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>Beyond Attention or Similarity： Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
