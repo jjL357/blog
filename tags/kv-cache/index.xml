@@ -6,8 +6,26 @@
     <description>Recent content in KV Cache on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 30 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 31 Oct 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/kv-cache/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
+      <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
+      <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadKV/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; ICLR&#39;25
+&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/FYYFU/HeadKV&#34;&gt;https://github.com/FYYFU/HeadKV&lt;/a&gt;.&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;这篇工作和 DuoAttention 的关注点类似，都是关注不同 attention head 对模型不同能力的贡献不同，这篇工作更关注 attention head 对模型 &lt;strong&gt;Retrieval&lt;/strong&gt; 与 &lt;strong&gt;Reasoning&lt;/strong&gt; 的 importance score, 来实现 KV Cache 的 nonuniform budget allocation 。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;现代 LLM 越来越支持极长上下文（例如 GPT-4、Llama-3、Qwen-2、Claude 等），但随着输入长度增长，Transformer 的 self-attention 导致 KV cache（attention 的 key/value 状态）占用内存线性增长，成为推理阶段的主要瓶颈。已有工作通过 token eviction / 层级缓存压缩来缓解，但&lt;strong&gt;几乎没有研究在“头（head）级别”上对 KV cache 大小进行差异化分配&lt;/strong&gt;。作者观察到 attention heads 在功能上高度异质（如 retrieval heads、reasoning heads 等），因此提出基于头重要性的 head-level KV cache 压缩方法（HeadKV），并在此基础上提出结合检索与推理能力评估的 HeadKV-R2。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-relative-work&#34;&gt;2. Relative Work&lt;/h2&gt;
+&lt;h3 id=&#34;21-attention-heads&#34;&gt;2.1 Attention heads&lt;/h3&gt;
+&lt;p&gt;回顾了对多头注意力中 head 功能的研究（Voita et al., Olsson et al., Wu et al., Zheng et al. 等），并指出不同 head 在词法、结构、复制（induction）、检索等方面扮演不同角色。这些观察为按 head 分配 KV cache 提供理论基础。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
