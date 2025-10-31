@@ -26,5 +26,57 @@
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
+    <item>
+      <title>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+      <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
+      <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./image/RKV/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25
+&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Zefan-Cai/R-KV&#34;&gt;https://github.com/Zefan-Cai/R-KV&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning.
+However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.&lt;/p&gt;
+&lt;p&gt;For instance, a &lt;strong&gt;DeepSeek-R1-Distill-Llama-8B&lt;/strong&gt; model may generate &lt;strong&gt;32K tokens&lt;/strong&gt; to solve a complex math problem, consuming &lt;strong&gt;15.5GB&lt;/strong&gt; of memory to load model weights and &lt;strong&gt;4.1GB&lt;/strong&gt; to store the KV cache.
+This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
+      <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
+      <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./image/C2C/title.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;-motivation动机--背景&#34;&gt;💡 Motivation（动机 / 背景）&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./image/C2C/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;现状：多-LLM 系统通常通过 &lt;strong&gt;文本（Text-to-Text, T2T）&lt;/strong&gt; 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 &lt;strong&gt;串行解码带来的延迟&lt;/strong&gt; 等问题。&lt;/li&gt;
+&lt;li&gt;问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。&lt;/li&gt;
+&lt;li&gt;提出的问题（核心研究问）：&lt;strong&gt;LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？&lt;/strong&gt;（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）&lt;/li&gt;
+&lt;li&gt;主要观察驱动：作者的 Oracle 实验显示
+(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
+(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
+这些观察支持用 KV-Cache 作为通信媒介的可行性。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;-challenges挑战&#34;&gt;⚔ Challenges（挑战）&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./image/C2C/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;跨模型的 KV-Cache 表示差异&lt;/strong&gt;：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;对齐问题（token-level &amp;amp; layer-level）&lt;/strong&gt;：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;避免破坏接收者原有语义&lt;/strong&gt;：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;选择性注入（哪些层注入、注入多少）&lt;/strong&gt;：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;效率 / 延迟权衡&lt;/strong&gt;：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;-observations--analysis&#34;&gt;🔍 Observations / Analysis&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./image/C2C/f34t12.png&#34;&gt;&lt;/p&gt;</description>
+    </item>
   </channel>
 </rss>

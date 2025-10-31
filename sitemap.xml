@@ -25,5 +25,14 @@
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/</loc>
     <lastmod>2025-10-27T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2025-10-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</loc>
+    <lastmod>2025-10-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</loc>
+    <lastmod>2025-10-15T00:00:00+00:00</lastmod>
   </url>
 </urlset>

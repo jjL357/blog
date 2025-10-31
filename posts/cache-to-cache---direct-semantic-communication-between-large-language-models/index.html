@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>Cache-to-Cache: Direct Semantic Communication Between Large Language Models | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Paper Note">
+<meta name="description" content="
+
+github：https://github.com/thu-nics/C2C
+
+
+💡 Motivation（动机 / 背景）
+
+
+现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。
+问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。
+提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）
+主要观察驱动：作者的 Oracle 实验显示
+(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
+(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
+这些观察支持用 KV-Cache 作为通信媒介的可行性。
+
+
+⚔ Challenges（挑战）
+
+
+跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。
+对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。
+避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。
+选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。
+效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。
+
+
+🔍 Observations / Analysis
+">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/">
+<link crossorigin="anonymous" href="../../blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="Cache-to-Cache: Direct Semantic Communication Between Large Language Models">
+  <meta property="og:description" content="
+github：https://github.com/thu-nics/C2C 💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis ">
+  <meta property="og:locale" content="en-us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-10-15T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-10-15T00:00:00+00:00">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Cache-to-Cache: Direct Semantic Communication Between Large Language Models">
+<meta name="twitter:description" content="
+
+github：https://github.com/thu-nics/C2C
+
+
+💡 Motivation（动机 / 背景）
+
+
+现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。
+问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。
+提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）
+主要观察驱动：作者的 Oracle 实验显示
+(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
+(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
+这些观察支持用 KV-Cache 作为通信媒介的可行性。
+
+
+⚔ Challenges（挑战）
+
+
+跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。
+对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。
+避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。
+选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。
+效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。
+
+
+🔍 Observations / Analysis
+">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
+      "item": "https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
+  "name": "Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
+  "description": "\ngithub：https://github.com/thu-nics/C2C 💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level \u0026amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis ",
+  "keywords": [
+    "KV Cache", "Paper Note"
+  ],
+  "articleBody": "\ngithub：https://github.com/thu-nics/C2C 💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level \u0026 layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis Oracle（缓存富化）实验：把 few-shot 示例 $E$ 和问题 $X$ 一起 prefill，然后丢弃 $E$ 的 cache 片段，只保留对问题 $X$ 对齐的 slice（即 Oracle cache enrichment）：\n$$ C^*(X) = C_{E \\oplus X}[|E| : |E| + |X|] $$\n在不增长 $|X|$ 的情况下能显著提升准确率，说明「上下文影响了如何把问题编码到 KV-Cache 中」，而这并非仅仅是因为额外 token 的注意力范围。详见 Table 1 与相关讨论。\n其中，$C(\\cdot)$ 表示 prefill 后得到的 per-token KV-Cache。\nCache 转换实验：使用 3-layer MLP 将大模型（Qwen3-4B）的 KV 映射到小模型（Qwen3-0.6B）表示空间，t-SNE 显示映射后的 cache 落入接收模型 KV 空间内部，但只覆盖其子集，说明可转换但不完全等价（信息子集化）。\n层级差异：不同层对 cache enrichment 的响应不同（Appendix A.2.1 展示单层替换结果，部分层有正收益，部分层负收益），这直接促成了设计中使用 per-layer gate 的动机。\n互补正确集：不同模型在同一 benchmark 上的正确答案集合有较少重叠（Venn 图 Figure 7），说明多模型间存在互补性，若能有效融合则能提高总体正确率。\n🧠 Methods 概览：提出 Cache-to-Cache (C2C) —— 用一个神经模块（Cache Fuser）把 Sharer（来源模型）的 KV-Cache 投影到 Receiver（目标模型）的表示空间并按层残差地融合到 Receiver 的原始 KV-Cache，从而在 decode 阶段让 Receiver 利用两者的语义表示，而不必通过文字中介。\n3.1 预备 输入 token 序列：\n$$ X[0:n] = [x_0, x_1, \\dots, x_{n-1}] $$\nprefill 后 LLM 生成 per-token KV-Cache：\n$$ C(X[0:n]) = [c_0, c_1, \\dots, c_{n-1}] \\in \\mathbb{R}^{n \\times d} $$\n其中 $d$ 为 KV 向量维度（将各层/各头的 K/V 展平）。\nDecode 时预测下一个 token：\n$$ y_{i+1} = P\\big(y_i \\mid C(X) \\oplus C(Y[0:i])\\big) $$\n其中 $\\oplus$ 表示序列级拼接。\n3.2 C2C 总体框架 在 prefill 阶段，令 Fuser 模块 $F_n$ 将 Receiver 第 $n$ 层的 cache $C_n(X)$ 和 Sharer 对应层 $C^S_{G(n)}(X)$（层映射函数为 $G$）融合，得到 fused cache：\n$$ C^F = {, F_n(C_n(X), C^S_{G(n)}(X)) ,}_{n=1}^N $$\nDecode 时使用 fused cache：\n$$ y_{i+1} = P\\big(y_i \\mid C^F(X) \\oplus C(Y[0:i])\\big) $$\n（参见论文公式 (3) 和 (4)）\n3.3 C2C Fuser 结构（Figure 5） 总体三模块设计（Residual Integration）：\nProjection → Dynamic Weighting → Learnable Gate（Gumbel-sigmoid 训练 → 二值化推理）\n(1) Projection Module 将 Receiver 的 KV 与 Sharer 的 KV 做拼接（concatenate），经过一层或多层投影（例如线性层或小 MLP）以统一维度 / 映射表示；紧接着做 feature fusion（可能是再一层线性/FFN 或跨-head 重组）。（论文在 Appendix 也提到 C2C-C 更复杂的 variant，会先用三层 MLP 投影）。\n(2) Dynamic Weighting（输入感知的 head modulation） 按 attention-head 级别做输入相关的重权重（head-wise modulation），目的是根据当前输入动态调整 Sharer 提供信息的影响力（避免盲目覆盖）。论文称为 “input-aware head modulation”。\n(3) Learnable Gate（可训练门控） 每层有一个可学习 gate 值，用 Gumbel-Sigmoid（并在训练时做温度 annealing）从可微分软选择过渡到推理期的硬二值决定（是否把该层的 fused cache 注入）。 这解决了哪些层应该注入的问题并能学到层选择策略。\n3.4 Model Alignment Token 对齐：将 Receiver token 解码为字符串，然后使用 Sharer tokenizer 重新编码（re-encode）；若出现 one-to-many，用 “maximal-coverage selection” （选择字符串覆盖最长的 token）作为默认策略（论文观察两种策略差异不大但 maximal-coverage 更安全）。对 template（系统角色/格式化 tokens）部分用 padding 匹配长度。\nLayer 对齐（Layer mapping）：采用 terminal alignment（从输出侧开始对齐：最后一层对最后一层、倒数第二对倒数第二，以此类推），作者在 Appendix 比较了 depth-normalized alignment 并选择 terminal alignment，因为 empirical 效果更好。\n3.5 训练方案 冻结 Sharer 和 Receiver 模型参数，仅训练 C2C 模块（Fuser）。 监督目标是 Receiver 在使用 fused cache 下的 next-token 预测（SFT 风格），即最小化标准交叉熵：\n$$ \\mathcal{L}{\\text{C2C}} = -\\sum_i \\log P\\theta(y_i | C^F(X), Y[0:i-1]) $$\n训练步骤：\nForward：两模型产生 cache Fusion：C2C 生成 fused cache Supervision：Receiver 用 fused cache decode，loss 反传回 C2C 训练数据：主要使用 OpenHermes-2.5 的前 500k 样本训练；优化器与超参： $$ \\text{lr}=1\\times10^{-4}, \\text{ weight decay}=0.01, \\text{warmup}=10%, T_{init}=1.0 \\rightarrow T_{final}=0.001 $$ 固定随机种子 42。\n📊 Evaluation 数据集与设置 Benchmarks：OpenBookQA, MMLU-Redux, ARC-Challenge (ARC-C), C-Eval（中文）以及 LongBench（长上下文任务）。 设置：zero-shot，greedy 解码（temperature=0），多选题最大生成长度 = 64。 设备：NVIDIA A100，batch=1。 对比基线 Receiver 单独运行（baseline） Sharer 单独运行（对比） Query-level routing（将难题路由到强模型） Text-to-Text（T2T）：Sharer 生成 “分析/关键信息” 文本拼接到 Receiver 输入中。 核心结果总结 C2C 相较于 Receiver-only：平均提升 8.5–11%（不同表述范围 8.5–11.9%）。 C2C 相较于 T2T：平均提升 3–5%，且推理延迟平均约为 T2T 的 1/2。 长上下文任务（LongBench）：C2C 持续优于 T2T，尤其在 strong→weak 设定中显著恢复弱模型性能（PGR 指标大幅提高）。 Ablation 去掉 fuse（仅 projection）性能最差；加入 fuse 后大幅提升；再加入 gate（完整 C2C）进一步提升约 3%（见 Table 7）。 说明 Projection + Fuse + Gate 三者协同作用显著。\n",
+  "wordCount" : "517",
+  "inLanguage": "en",
+  "datePublished": "2025-10-15T00:00:00Z",
+  "dateModified": "2025-10-15T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jjl357.github.io/blog/" accesskey="h" title="JJ&#39;s Blog (Alt + H)">JJ&#39;s Blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      Cache-to-Cache: Direct Semantic Communication Between Large Language Models
+    </h1>
+    <div class="post-meta"><span title='2025-10-15 00:00:00 +0000 UTC'>October 15, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="../../image/C2C/title.png"></p>
+<ul>
+<li>github：<a href="https://github.com/thu-nics/C2C">https://github.com/thu-nics/C2C</a></li>
+</ul>
+<hr>
+<h2 id="-motivation动机--背景">💡 Motivation（动机 / 背景）<a hidden class="anchor" aria-hidden="true" href="#-motivation动机--背景">#</a></h2>
+<p><img loading="lazy" src="../../image/C2C/figure1.png"></p>
+<ul>
+<li>现状：多-LLM 系统通常通过 <strong>文本（Text-to-Text, T2T）</strong> 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 <strong>串行解码带来的延迟</strong> 等问题。</li>
+<li>问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。</li>
+<li>提出的问题（核心研究问）：<strong>LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？</strong>（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）</li>
+<li>主要观察驱动：作者的 Oracle 实验显示
+(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
+(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
+这些观察支持用 KV-Cache 作为通信媒介的可行性。</li>
+</ul>
+<hr>
+<h2 id="-challenges挑战">⚔ Challenges（挑战）<a hidden class="anchor" aria-hidden="true" href="#-challenges挑战">#</a></h2>
+<p><img loading="lazy" src="../../image/C2C/figure2.png"></p>
+<ol>
+<li><strong>跨模型的 KV-Cache 表示差异</strong>：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。</li>
+<li><strong>对齐问题（token-level &amp; layer-level）</strong>：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。</li>
+<li><strong>避免破坏接收者原有语义</strong>：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。</li>
+<li><strong>选择性注入（哪些层注入、注入多少）</strong>：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。</li>
+<li><strong>效率 / 延迟权衡</strong>：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。</li>
+</ol>
+<hr>
+<h2 id="-observations--analysis">🔍 Observations / Analysis<a hidden class="anchor" aria-hidden="true" href="#-observations--analysis">#</a></h2>
+<p><img loading="lazy" src="../../image/C2C/f34t12.png"></p>
+<ul>
+<li>
+<p><strong>Oracle（缓存富化）实验</strong>：把 few-shot 示例 $E$ 和问题 $X$ 一起 prefill，然后丢弃 $E$ 的 cache 片段，只保留对问题 $X$ 对齐的 slice（即 Oracle cache enrichment）：</p>
+<p>$$
+C^*(X) = C_{E \oplus X}[|E| : |E| + |X|]
+$$</p>
+<p>在不增长 $|X|$ 的情况下能显著提升准确率，说明「上下文影响了如何把问题编码到 KV-Cache 中」，而这并非仅仅是因为额外 token 的注意力范围。详见 Table 1 与相关讨论。</p>
+<p>其中，$C(\cdot)$ 表示 prefill 后得到的 per-token KV-Cache。</p>
+</li>
+<li>
+<p><strong>Cache 转换实验</strong>：使用 3-layer MLP 将大模型（Qwen3-4B）的 KV 映射到小模型（Qwen3-0.6B）表示空间，t-SNE 显示映射后的 cache 落入接收模型 KV 空间内部，但只覆盖其子集，说明可转换但不完全等价（信息子集化）。</p>
+</li>
+<li>
+<p><strong>层级差异</strong>：不同层对 cache enrichment 的响应不同（Appendix A.2.1 展示单层替换结果，部分层有正收益，部分层负收益），这直接促成了设计中使用 per-layer gate 的动机。</p>
+</li>
+<li>
+<p><strong>互补正确集</strong>：不同模型在同一 benchmark 上的正确答案集合有较少重叠（Venn 图 Figure 7），说明多模型间存在互补性，若能有效融合则能提高总体正确率。</p>
+</li>
+</ul>
+<hr>
+<h2 id="-methods">🧠 Methods<a hidden class="anchor" aria-hidden="true" href="#-methods">#</a></h2>
+<blockquote>
+<p>概览：提出 <strong>Cache-to-Cache (C2C)</strong> —— 用一个神经模块（Cache Fuser）把 Sharer（来源模型）的 KV-Cache 投影到 Receiver（目标模型）的表示空间并按层残差地融合到 Receiver 的原始 KV-Cache，从而在 decode 阶段让 Receiver 利用两者的语义表示，而不必通过文字中介。</p>
+</blockquote>
+<hr>
+<h3 id="31-预备">3.1 预备<a hidden class="anchor" aria-hidden="true" href="#31-预备">#</a></h3>
+<p>输入 token 序列：</p>
+<p>$$
+X[0:n] = [x_0, x_1, \dots, x_{n-1}]
+$$</p>
+<p>prefill 后 LLM 生成 per-token KV-Cache：</p>
+<p>$$
+C(X[0:n]) = [c_0, c_1, \dots, c_{n-1}] \in \mathbb{R}^{n \times d}
+$$</p>
+<p>其中 $d$ 为 KV 向量维度（将各层/各头的 K/V 展平）。</p>
+<p>Decode 时预测下一个 token：</p>
+<p>$$
+y_{i+1} = P\big(y_i \mid C(X) \oplus C(Y[0:i])\big)
+$$</p>
+<p>其中 $\oplus$ 表示序列级拼接。</p>
+<hr>
+<h3 id="32-c2c-总体框架">3.2 C2C 总体框架<a hidden class="anchor" aria-hidden="true" href="#32-c2c-总体框架">#</a></h3>
+<p>在 prefill 阶段，令 Fuser 模块 $F_n$ 将 Receiver 第 $n$ 层的 cache $C_n(X)$ 和 Sharer 对应层 $C^S_{G(n)}(X)$（层映射函数为 $G$）融合，得到 fused cache：</p>
+<p>$$
+C^F = {, F_n(C_n(X), C^S_{G(n)}(X)) ,}_{n=1}^N
+$$</p>
+<p>Decode 时使用 fused cache：</p>
+<p>$$
+y_{i+1} = P\big(y_i \mid C^F(X) \oplus C(Y[0:i])\big)
+$$</p>
+<p>（参见论文公式 (3) 和 (4)）</p>
+<hr>
+<h3 id="33-c2c-fuser-结构figure-5">3.3 C2C Fuser 结构（Figure 5）<a hidden class="anchor" aria-hidden="true" href="#33-c2c-fuser-结构figure-5">#</a></h3>
+<p><img loading="lazy" src="../../image/C2C/figure5.png">
+总体三模块设计（Residual Integration）：</p>
+<p><strong>Projection → Dynamic Weighting → Learnable Gate</strong>（Gumbel-sigmoid 训练 → 二值化推理）</p>
+<h4 id="1-projection-module">(1) Projection Module<a hidden class="anchor" aria-hidden="true" href="#1-projection-module">#</a></h4>
+<p>将 Receiver 的 KV 与 Sharer 的 KV 做拼接（concatenate），经过一层或多层投影（例如线性层或小 MLP）以统一维度 / 映射表示；紧接着做 feature fusion（可能是再一层线性/FFN 或跨-head 重组）。（论文在 Appendix 也提到 C2C-C 更复杂的 variant，会先用三层 MLP 投影）。</p>
+<h4 id="2-dynamic-weighting输入感知的-head-modulation">(2) Dynamic Weighting（输入感知的 head modulation）<a hidden class="anchor" aria-hidden="true" href="#2-dynamic-weighting输入感知的-head-modulation">#</a></h4>
+<p>按 attention-head 级别做输入相关的重权重（head-wise modulation），目的是根据当前输入动态调整 Sharer 提供信息的影响力（避免盲目覆盖）。论文称为 “input-aware head modulation”。</p>
+<h4 id="3-learnable-gate可训练门控">(3) Learnable Gate（可训练门控）<a hidden class="anchor" aria-hidden="true" href="#3-learnable-gate可训练门控">#</a></h4>
+<p>每层有一个可学习 gate 值，用 Gumbel-Sigmoid（并在训练时做温度 annealing）从可微分软选择过渡到推理期的硬二值决定（是否把该层的 fused cache 注入）。
+这解决了哪些层应该注入的问题并能学到层选择策略。</p>
+<hr>
+<h3 id="34-model-alignment">3.4 Model Alignment<a hidden class="anchor" aria-hidden="true" href="#34-model-alignment">#</a></h3>
+<ul>
+<li>
+<p><strong>Token 对齐</strong>：将 Receiver token 解码为字符串，然后使用 Sharer tokenizer 重新编码（re-encode）；若出现 one-to-many，用 “maximal-coverage selection” （选择字符串覆盖最长的 token）作为默认策略（论文观察两种策略差异不大但 maximal-coverage 更安全）。对 template（系统角色/格式化 tokens）部分用 padding 匹配长度。</p>
+</li>
+<li>
+<p><strong>Layer 对齐（Layer mapping）</strong>：采用 <strong>terminal alignment</strong>（从输出侧开始对齐：最后一层对最后一层、倒数第二对倒数第二，以此类推），作者在 Appendix 比较了 depth-normalized alignment 并选择 terminal alignment，因为 empirical 效果更好。</p>
+</li>
+</ul>
+<hr>
+<h3 id="35-训练方案">3.5 训练方案<a hidden class="anchor" aria-hidden="true" href="#35-训练方案">#</a></h3>
+<p>冻结 Sharer 和 Receiver 模型参数，仅训练 C2C 模块（Fuser）。
+监督目标是 Receiver 在使用 fused cache 下的 next-token 预测（SFT 风格），即最小化标准交叉熵：</p>
+<p>$$
+\mathcal{L}<em>{\text{C2C}} = -\sum_i \log P</em>\theta(y_i | C^F(X), Y[0:i-1])
+$$</p>
+<p>训练步骤：</p>
+<ol>
+<li>Forward：两模型产生 cache</li>
+<li>Fusion：C2C 生成 fused cache</li>
+<li>Supervision：Receiver 用 fused cache decode，loss 反传回 C2C</li>
+</ol>
+<p>训练数据：主要使用 OpenHermes-2.5 的前 500k 样本训练；优化器与超参：
+$$
+\text{lr}=1\times10^{-4}, \text{ weight decay}=0.01, \text{warmup}=10%, T_{init}=1.0 \rightarrow T_{final}=0.001
+$$
+固定随机种子 42。</p>
+<hr>
+<h2 id="-evaluation">📊 Evaluation<a hidden class="anchor" aria-hidden="true" href="#-evaluation">#</a></h2>
+<h3 id="数据集与设置">数据集与设置<a hidden class="anchor" aria-hidden="true" href="#数据集与设置">#</a></h3>
+<ul>
+<li><strong>Benchmarks</strong>：OpenBookQA, MMLU-Redux, ARC-Challenge (ARC-C), C-Eval（中文）以及 LongBench（长上下文任务）。</li>
+<li><strong>设置</strong>：zero-shot，greedy 解码（temperature=0），多选题最大生成长度 = 64。</li>
+<li><strong>设备</strong>：NVIDIA A100，batch=1。</li>
+</ul>
+<hr>
+<h3 id="对比基线">对比基线<a hidden class="anchor" aria-hidden="true" href="#对比基线">#</a></h3>
+<ul>
+<li>Receiver 单独运行（baseline）</li>
+<li>Sharer 单独运行（对比）</li>
+<li>Query-level routing（将难题路由到强模型）</li>
+<li>Text-to-Text（T2T）：Sharer 生成 “分析/关键信息” 文本拼接到 Receiver 输入中。</li>
+</ul>
+<hr>
+<p><img loading="lazy" src="../../image/C2C/table3.png">
+<img loading="lazy" src="../../image/C2C/f6t45.png">
+<img loading="lazy" src="../../image/C2C/t67.png"></p>
+<h3 id="核心结果总结">核心结果总结<a hidden class="anchor" aria-hidden="true" href="#核心结果总结">#</a></h3>
+<ul>
+<li><strong>C2C 相较于 Receiver-only</strong>：平均提升 <strong>8.5–11%</strong>（不同表述范围 8.5–11.9%）。</li>
+<li><strong>C2C 相较于 T2T</strong>：平均提升 <strong>3–5%</strong>，且推理延迟平均约为 <strong>T2T 的 1/2</strong>。</li>
+<li><strong>长上下文任务（LongBench）</strong>：C2C 持续优于 T2T，尤其在 strong→weak 设定中显著恢复弱模型性能（PGR 指标大幅提高）。</li>
+</ul>
+<hr>
+<h3 id="ablation">Ablation<a hidden class="anchor" aria-hidden="true" href="#ablation">#</a></h3>
+<p>去掉 fuse（仅 projection）性能最差；加入 fuse 后大幅提升；再加入 gate（完整 C2C）进一步提升约 <strong>3%</strong>（见 Table 7）。
+说明 Projection + Fuse + Gate 三者协同作用显著。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

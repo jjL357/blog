@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Paper Note">
+<meta name="description" content="
+Conference: NeurIPS&#39;25
+Github: https://github.com/Zefan-Cai/R-KV
+
+My Thoughts
+R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。
+1. Motivation
+Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning.
+However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.
+For instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache.
+This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/">
+<link crossorigin="anonymous" href="../../blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="R-KV: Redundancy-aware KV Cache Compression for Reasoning Models">
+  <meta property="og:description" content="
+Conference: NeurIPS&#39;25 Github: https://github.com/Zefan-Cai/R-KV
+My Thoughts R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。
+1. Motivation Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning. However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.
+For instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache. This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.">
+  <meta property="og:locale" content="en-us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-10-25T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-10-25T00:00:00+00:00">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="R-KV: Redundancy-aware KV Cache Compression for Reasoning Models">
+<meta name="twitter:description" content="
+Conference: NeurIPS&#39;25
+Github: https://github.com/Zefan-Cai/R-KV
+
+My Thoughts
+R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。
+1. Motivation
+Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning.
+However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.
+For instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache.
+This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+      "item": "https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+  "name": "R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+  "description": "\nConference: NeurIPS'25 Github: https://github.com/Zefan-Cai/R-KV\nMy Thoughts R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。\n1. Motivation Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning. However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.\nFor instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache. This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.\n",
+  "keywords": [
+    "KV Cache", "Paper Note"
+  ],
+  "articleBody": "\nConference: NeurIPS'25 Github: https://github.com/Zefan-Cai/R-KV\nMy Thoughts R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。\n1. Motivation Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning. However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.\nFor instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache. This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.\n这种模型在推理时经常会产生极长的生成序列，其中包含大量冗余内容，如：\n重复的自我反思（self-reflection） 多次重复的推理尝试 冗长的自对话式输出 这些部分虽然在语义上贡献有限，却显著增加了 KV 缓存长度和内存负担。\n2. Challenge While chain-of-thought inference significantly improves performance on complex reasoning tasks, existing KV cache compression methods often fail in this scenario.\n原因： 传统压缩方法多基于 attention 重要性过滤（如按注意力权重筛选 token），但 reasoning 模型的输出往往包含高度重复的段落。 由于这些重复段落之间互相强化注意力得分，简单基于注意力的裁剪策略会：\n错误地保留冗余重复内容； 错误地删除离散但关键的 reasoning 片段。 最终导致推理链断裂或答案错误。\n3. Contribution We propose R-KV (Redundancy-aware KV Cache Compression) — a novel decoding-time KV compression method for reasoning LLMs.\n核心创新包括三部分：\nAttention-based importance scoring：根据注意力分数衡量每个 token 的上下文重要性。 Dynamic redundancy scoring：通过 Key 向量语义相似度动态估计 token 的冗余度。 Joint eviction mechanism：结合重要性与冗余度的联合打分机制，优化缓存利用率。 实验结果：\n在保留仅 10–34% 的原始 KV cache 情况下，性能与未压缩模型几乎一致； 在 AIME-24 数据集上，仅用 16% KV cache 即实现 105% of FullKV accuracy； 方法训练无关、模型无关，可直接部署于 RL rollout 或推理服务。 4. Observation 4.1 Redundancy in Reasoning Models 观察：\n多种 reasoning 模型（DeepSeek-R1-Distill-Llama-8B、DeepSeek-R1-Distill-Qwen-7B、Qwen-14B）生成的输出长度普遍比 ground truth 长 8 倍以上； 输出中 1-gram 与 2-gram 的平均重复频率显著高于参考答案，表明生成文本存在显著的冗余结构。 4.2 Failure of Existing KV Compression Methods 现有如 SnapKV 等 attention-based 方法倾向于保留重复的 reasoning 片段，例如重复的 “reflection” 或 “final answer” 段落，造成有效上下文被冗余信息挤占。\nR-KV 的目标正是针对这种冗余失效模式进行修正。\n5. Method R-KV 的核心思想是在 decoding 阶段（即生成时）实时压缩 KV cache， 动态选择最有用的历史 token，同时过滤掉冗余内容。\n整个方法包括以下模块：\n5.1 Decoding-time Compression 与大多数仅作用于 prefilling 阶段 的方法不同，R-KV 针对 decoding 阶段设计。\n设定两个缓存区：\nCache 区：存放保留的 KV 对，容量为 ( B_{\\text{budget}} ) Buffer 区：存放最新生成的 token，容量为 ( B_{\\text{buffer}} ) 总内存需求： $$ B_{\\text{total}} = B_{\\text{budget}} + B_{\\text{buffer}} $$\n压缩步骤（循环执行）：\n模型生成一段长度为 ( B_{\\text{buffer}} ) 的文本； Buffer 的最后 (\\alpha) 个 token（称作 observation tokens）始终保留； 拼接： $$ n = B_{\\text{budget}} + B_{\\text{buffer}} - \\alpha $$ 形成候选集合； 对所有候选 token 计算综合得分； 选出前 (k = B_{\\text{budget}} - \\alpha) 个 token + (\\alpha) 个 observation token 组成新的 cache。 5.2 Importance Scoring via Attention Weights 对每个 attention head (h)：\n$$ A^{(h)} = \\operatorname{softmax}!\\left(\\frac{Q^{(h)} (K^{(h)})^\\top}{\\sqrt{d}}\\right) $$\n其中：\n( Q^{(h)} \\in \\mathbb{R}^{\\alpha \\times d} )：最近 (\\alpha) 个 query； ( K^{(h)} \\in \\mathbb{R}^{n \\times d} )：候选 key。 为了防止极端注意力值导致不稳定， 在 token 维度上进行滑窗最大池化（window size = (2W)）：\n$$ \\tilde A^{(h)}{j,i} = \\max(A^{(h)}{j,i-W},\\ldots,A^{(h)}_{j,i+W-1}) $$\n最后对 query 平均化得到 importance score：\n$$ I^{(h)}i = \\frac{1}{\\alpha}\\sum{j=0}^{\\alpha-1}\\tilde A^{(h)}_{j,i} $$\n5.3 Redundancy Estimation via Semantic Similarity 目标：找出语义重复的 token。\n归一化每个 key 向量： $$ \\hat K^{(h)}_i = \\frac{K^{(h)}_i}{|K^{(h)}_i|_2 + \\varepsilon} $$\n计算余弦相似度矩阵： $$ S^{(h)} = \\hat K^{(h)} (\\hat K^{(h)})^\\top,\\quad S^{(h)}_{i,i}=0 $$\n为避免误删最近相关的重复 token，对每个 token (i)：\n取与其相似度高于阈值 (T) 的集合 (\\mathcal{I}^{(h)}i = {j | S^{(h)}{j,i} \u003e T}) 仅保留最近 (\\beta) 个（即生成时间上靠近的），其他相似 token 设为 0： $$ S^{(h)}{j,i} = 0,\\quad \\forall j \\in \\mathcal{I}^{(h)}{i,\\beta} $$ 计算平均相似度并归一化： $$ \\bar S^{(h)}i = \\frac{1}{n}\\sum{j=0}^{n-1} S^{(h)}_{j,i}, \\quad R^{(h)}_i = \\operatorname{softmax}(\\bar S^{(h)}) $$\n高相似度意味着冗余度高，应被淘汰。\n5.4 Joint Selection Strategy 最终综合得分为：\n$$ Z^{(h)}_i = \\lambda I^{(h)}_i - (1 - \\lambda) R^{(h)}_i $$\n(\\lambda)：控制重要性与冗余的平衡\n(\\lambda \\to 1)：接近 attention-only (\\lambda \\to 0)：接近 redundancy-only 论文实验表明： 最佳范围 ( 0.01 \\le \\lambda \\le 0.1 )，默认取 ( \\lambda=0.1 )。\n5.5 Aggregation and Selection 对所有 head 的结果取平均： $$ Z_i = \\frac{1}{H}\\sum_h Z^{(h)}_i $$\n然后选出 top-(k = B_{\\text{budget}} - \\alpha) 个 token： $$ \\text{Idx}_{\\text{sel}} = \\operatorname{TopK}(Z, k) $$\n最终 cache： $$ K_{\\text{new}} = [K_{\\text{cand}}[\\text{Idx}{\\text{sel}}]; K{\\text{obs}}] $$\n6. Evaluation 6.1 Setup Models:\nDeepSeek-R1-Distill-Llama-8B DeepSeek-R1-Distill-Qwen-14B Datasets:\nMATH-500 AIME-24 / AIME-25 Hyperparams:\n( B_{\\text{buffer}} = 128 ), ( \\alpha = 8 ), ( \\lambda = 0.1 ) Sampling: temperature = 0.6, top-p = 0.95\nMetric: pass@1\n6.2 Baselines FullKV — 无压缩基线； SnapKV — attention-only 压缩方法； R-KV — 本文方法。 压缩周期：每生成 128 token 后执行一次。\n6.3 Main Results (1) DeepSeek-R1-Distill-Llama-8B 在 MATH-500 上：\n34% KV cache 即可保持与 FullKV 几乎一致性能。 在 AIME-24 上：\n10% KV cache 即能无损压缩； 16% KV cache 时性能甚至 超越 FullKV (105%)。 (2) DeepSeek-R1-Distill-Qwen-14B 在 MATH-500 上：lossless ratio 为 54%； 在 AIME-24 上：lossless ratio 为 25%； 在 33% cache 情况下达到 105% accuracy。 (3) 对比 SnapKV SnapKV 往往错误保留大量重复反思段落； R-KV 通过冗余得分检测，能有效过滤此类内容，在所有预算条件下均优于 SnapKV。\n6.4 Efficiency \u0026 Throughput 在 Llama3-8B 上：\n压缩到 10% KV cache 时，内存减少约 90%； 吞吐提升可达 4.5–9×； 最大 batch size 提升 7–13×。 计算开销： 虽然 redundancy 估计需要额外计算，但由于 attention 计算规模降低，整体推理速度仍提升。\n6.5 Quantitative Summary Model Dataset KV Retained Accuracy (vs Full) Speedup Memory ↓ R1-Llama-8B MATH-500 34% ≈100% 4.3× 72% R1-Llama-8B AIME-24 16% 105% 6.5× 84% R1-Qwen-14B AIME-24 33% 105% 7.2× 80% 7. Discussion 7.1 How to Choose λ λ 控制重要性与冗余的权衡：\n当 λ → 0，仅依赖冗余，可能误删关键信息；\n当 λ → 1，仅依赖注意力，冗余压缩失效；\n最佳区间： $$ 0.01 \\le λ \\le 0.1 $$\n经验设置：\nreasoning 冗余较重时取小 λ； context 稳定性要求高时取稍大 λ。 7.2 Failure of Attention-Based Methods SnapKV 等方法仅依据 attention，导致重复句子被反复保留。 R-KV 通过冗余矩阵有效识别这些重复项并删除。\n关键区别： Attention ≠ Information Novelty 注意力表示“被关注”，不代表“信息增量”。\n7.3 Efficiency Analysis R-KV 压缩后 attention 矩阵规模下降，计算量从 (O(n^2 d)) 降到 (O(k n d))。\n冗余计算为 (O(n^2 d))，但 n 远小于完整序列长度，整体收益显著。\n实测表明：\nbatch size ↑ 13.4× throughput ↑ 9.19× memory ↓ 90% 8. Conclusion We introduced R-KV, a decoding-time KV cache compression method for reasoning LLMs.\n通过联合建模 importance 与 redundancy， R-KV 在保留仅 10–34% 的 KV cache 下，性能与 FullKV 持平或超越。\n其训练无关、模型无关、实现简单，可直接集成至 RL rollout 或推理服务， 在长序列生成中带来高达 9× 吞吐提升、13× batch 扩展能力。\nR-KV = 保性能 + 减内存 + 提吞吐 是 reasoning 型 LLM 推理优化的重要一步。\n",
+  "wordCount" : "807",
+  "inLanguage": "en",
+  "datePublished": "2025-10-25T00:00:00Z",
+  "dateModified": "2025-10-25T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jjl357.github.io/blog/" accesskey="h" title="JJ&#39;s Blog (Alt + H)">JJ&#39;s Blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      R-KV: Redundancy-aware KV Cache Compression for Reasoning Models
+    </h1>
+    <div class="post-meta"><span title='2025-10-25 00:00:00 +0000 UTC'>October 25, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="../../image/RKV/title.png"></p>
+<p><strong>Conference:</strong> NeurIPS'25
+<strong>Github:</strong> <a href="https://github.com/Zefan-Cai/R-KV">https://github.com/Zefan-Cai/R-KV</a></p>
+<hr>
+<h2 id="my-thoughts">My Thoughts<a hidden class="anchor" aria-hidden="true" href="#my-thoughts">#</a></h2>
+<p>R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。</p>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<p>Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning.
+However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.</p>
+<p>For instance, a <strong>DeepSeek-R1-Distill-Llama-8B</strong> model may generate <strong>32K tokens</strong> to solve a complex math problem, consuming <strong>15.5GB</strong> of memory to load model weights and <strong>4.1GB</strong> to store the KV cache.
+This long CoT (chain-of-thought) generation necessitates the development of <strong>KV cache compression</strong>.</p>
+<p>这种模型在推理时经常会产生<strong>极长的生成序列</strong>，其中包含大量<strong>冗余内容</strong>，如：</p>
+<ul>
+<li>重复的自我反思（self-reflection）</li>
+<li>多次重复的推理尝试</li>
+<li>冗长的自对话式输出</li>
+</ul>
+<p>这些部分虽然在语义上贡献有限，却显著增加了 KV 缓存长度和内存负担。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge<a hidden class="anchor" aria-hidden="true" href="#2-challenge">#</a></h2>
+<p>While chain-of-thought inference significantly improves performance on complex reasoning tasks,
+existing KV cache compression methods often fail in this scenario.</p>
+<p><strong>原因：</strong>
+传统压缩方法多基于 attention 重要性过滤（如按注意力权重筛选 token），但 reasoning 模型的输出往往包含高度重复的段落。
+由于这些重复段落之间互相强化注意力得分，简单基于注意力的裁剪策略会：</p>
+<ul>
+<li>错误地保留冗余重复内容；</li>
+<li>错误地删除离散但关键的 reasoning 片段。</li>
+</ul>
+<p>最终导致推理链断裂或答案错误。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution<a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h2>
+<p>We propose <strong>R-KV (Redundancy-aware KV Cache Compression)</strong> — a novel <strong>decoding-time</strong> KV compression method for reasoning LLMs.</p>
+<p><strong>核心创新包括三部分：</strong></p>
+<ol>
+<li><strong>Attention-based importance scoring</strong>：根据注意力分数衡量每个 token 的上下文重要性。</li>
+<li><strong>Dynamic redundancy scoring</strong>：通过 Key 向量语义相似度动态估计 token 的冗余度。</li>
+<li><strong>Joint eviction mechanism</strong>：结合重要性与冗余度的联合打分机制，优化缓存利用率。</li>
+</ol>
+<p><strong>实验结果：</strong></p>
+<ul>
+<li>在保留仅 <strong>10–34%</strong> 的原始 KV cache 情况下，性能与未压缩模型几乎一致；</li>
+<li>在 AIME-24 数据集上，仅用 <strong>16% KV cache</strong> 即实现 <strong>105%</strong> of FullKV accuracy；</li>
+<li>方法<strong>训练无关</strong>、<strong>模型无关</strong>，可直接部署于 RL rollout 或推理服务。</li>
+</ul>
+<hr>
+<h2 id="4-observation">4. Observation<a hidden class="anchor" aria-hidden="true" href="#4-observation">#</a></h2>
+<h3 id="41-redundancy-in-reasoning-models">4.1 Redundancy in Reasoning Models<a hidden class="anchor" aria-hidden="true" href="#41-redundancy-in-reasoning-models">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/figure2.png"></p>
+<p><strong>观察：</strong></p>
+<ul>
+<li>多种 reasoning 模型（DeepSeek-R1-Distill-Llama-8B、DeepSeek-R1-Distill-Qwen-7B、Qwen-14B）生成的输出长度普遍比 ground truth <strong>长 8 倍以上</strong>；</li>
+<li>输出中 1-gram 与 2-gram 的平均重复频率显著高于参考答案，表明生成文本存在显著的冗余结构。</li>
+</ul>
+<hr>
+<h3 id="42-failure-of-existing-kv-compression-methods">4.2 Failure of Existing KV Compression Methods<a hidden class="anchor" aria-hidden="true" href="#42-failure-of-existing-kv-compression-methods">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/figure3.png"></p>
+<p>现有如 <strong>SnapKV</strong> 等 attention-based 方法倾向于保留重复的 reasoning 片段，例如重复的 “reflection” 或 “final answer” 段落，造成有效上下文被冗余信息挤占。</p>
+<p>R-KV 的目标正是针对这种冗余失效模式进行修正。</p>
+<hr>
+<h2 id="5-method">5. Method<a hidden class="anchor" aria-hidden="true" href="#5-method">#</a></h2>
+<p>R-KV 的核心思想是在 <strong>decoding 阶段</strong>（即生成时）实时压缩 KV cache，
+动态选择最有用的历史 token，同时过滤掉冗余内容。</p>
+<p>整个方法包括以下模块：</p>
+<h3 id="51-decoding-time-compression">5.1 Decoding-time Compression<a hidden class="anchor" aria-hidden="true" href="#51-decoding-time-compression">#</a></h3>
+<p>与大多数仅作用于 <strong>prefilling 阶段</strong> 的方法不同，R-KV 针对 <strong>decoding 阶段</strong>设计。</p>
+<ul>
+<li>
+<p>设定两个缓存区：</p>
+<ul>
+<li><strong>Cache 区</strong>：存放保留的 KV 对，容量为 ( B_{\text{budget}} )</li>
+<li><strong>Buffer 区</strong>：存放最新生成的 token，容量为 ( B_{\text{buffer}} )</li>
+</ul>
+</li>
+<li>
+<p>总内存需求：
+$$
+B_{\text{total}} = B_{\text{budget}} + B_{\text{buffer}}
+$$</p>
+</li>
+</ul>
+<p><strong>压缩步骤（循环执行）</strong>：</p>
+<ol>
+<li>模型生成一段长度为 ( B_{\text{buffer}} ) 的文本；</li>
+<li>Buffer 的最后 (\alpha) 个 token（称作 <em>observation tokens</em>）始终保留；</li>
+<li>拼接：
+$$
+n = B_{\text{budget}} + B_{\text{buffer}} - \alpha
+$$
+形成候选集合；</li>
+<li>对所有候选 token 计算综合得分；</li>
+<li>选出前 (k = B_{\text{budget}} - \alpha) 个 token + (\alpha) 个 observation token 组成新的 cache。</li>
+</ol>
+<hr>
+<h3 id="52-importance-scoring-via-attention-weights">5.2 Importance Scoring via Attention Weights<a hidden class="anchor" aria-hidden="true" href="#52-importance-scoring-via-attention-weights">#</a></h3>
+<p>对每个 attention head (h)：</p>
+<p>$$
+A^{(h)} = \operatorname{softmax}!\left(\frac{Q^{(h)} (K^{(h)})^\top}{\sqrt{d}}\right)
+$$</p>
+<p>其中：</p>
+<ul>
+<li>( Q^{(h)} \in \mathbb{R}^{\alpha \times d} )：最近 (\alpha) 个 query；</li>
+<li>( K^{(h)} \in \mathbb{R}^{n \times d} )：候选 key。</li>
+</ul>
+<p>为了防止极端注意力值导致不稳定，
+在 token 维度上进行滑窗最大池化（window size = (2W)）：</p>
+<p>$$
+\tilde A^{(h)}<em>{j,i} = \max(A^{(h)}</em>{j,i-W},\ldots,A^{(h)}_{j,i+W-1})
+$$</p>
+<p>最后对 query 平均化得到 importance score：</p>
+<p>$$
+I^{(h)}<em>i = \frac{1}{\alpha}\sum</em>{j=0}^{\alpha-1}\tilde A^{(h)}_{j,i}
+$$</p>
+<hr>
+<h3 id="53-redundancy-estimation-via-semantic-similarity">5.3 Redundancy Estimation via Semantic Similarity<a hidden class="anchor" aria-hidden="true" href="#53-redundancy-estimation-via-semantic-similarity">#</a></h3>
+<p>目标：找出语义重复的 token。</p>
+<ol>
+<li>
+<p>归一化每个 key 向量：
+$$
+\hat K^{(h)}_i = \frac{K^{(h)}_i}{|K^{(h)}_i|_2 + \varepsilon}
+$$</p>
+</li>
+<li>
+<p>计算余弦相似度矩阵：
+$$
+S^{(h)} = \hat K^{(h)} (\hat K^{(h)})^\top,\quad S^{(h)}_{i,i}=0
+$$</p>
+</li>
+<li>
+<p>为避免误删最近相关的重复 token，对每个 token (i)：</p>
+<ul>
+<li>取与其相似度高于阈值 (T) 的集合
+(\mathcal{I}^{(h)}<em>i = {j | S^{(h)}</em>{j,i} &gt; T})</li>
+<li>仅保留最近 (\beta) 个（即生成时间上靠近的），其他相似 token 设为 0：
+$$
+S^{(h)}<em>{j,i} = 0,\quad \forall j \in \mathcal{I}^{(h)}</em>{i,\beta}
+$$</li>
+</ul>
+</li>
+<li>
+<p>计算平均相似度并归一化：
+$$
+\bar S^{(h)}<em>i = \frac{1}{n}\sum</em>{j=0}^{n-1} S^{(h)}_{j,i}, \quad
+R^{(h)}_i = \operatorname{softmax}(\bar S^{(h)})
+$$</p>
+</li>
+</ol>
+<p>高相似度意味着冗余度高，应被淘汰。</p>
+<hr>
+<h3 id="54-joint-selection-strategy">5.4 Joint Selection Strategy<a hidden class="anchor" aria-hidden="true" href="#54-joint-selection-strategy">#</a></h3>
+<p>最终综合得分为：</p>
+<p>$$
+Z^{(h)}_i = \lambda I^{(h)}_i - (1 - \lambda) R^{(h)}_i
+$$</p>
+<ul>
+<li>
+<p>(\lambda)：控制重要性与冗余的平衡</p>
+<ul>
+<li>(\lambda \to 1)：接近 attention-only</li>
+<li>(\lambda \to 0)：接近 redundancy-only</li>
+</ul>
+</li>
+</ul>
+<p>论文实验表明：
+最佳范围 ( 0.01 \le \lambda \le 0.1 )，默认取 ( \lambda=0.1 )。</p>
+<hr>
+<h3 id="55-aggregation-and-selection">5.5 Aggregation and Selection<a hidden class="anchor" aria-hidden="true" href="#55-aggregation-and-selection">#</a></h3>
+<p>对所有 head 的结果取平均：
+$$
+Z_i = \frac{1}{H}\sum_h Z^{(h)}_i
+$$</p>
+<p>然后选出 top-(k = B_{\text{budget}} - \alpha) 个 token：
+$$
+\text{Idx}_{\text{sel}} = \operatorname{TopK}(Z, k)
+$$</p>
+<p>最终 cache：
+$$
+K_{\text{new}} = [K_{\text{cand}}[\text{Idx}<em>{\text{sel}}]; K</em>{\text{obs}}]
+$$</p>
+<hr>
+<h2 id="6-evaluation">6. Evaluation<a hidden class="anchor" aria-hidden="true" href="#6-evaluation">#</a></h2>
+<h3 id="61-setup">6.1 Setup<a hidden class="anchor" aria-hidden="true" href="#61-setup">#</a></h3>
+<ul>
+<li>
+<p><strong>Models:</strong></p>
+<ul>
+<li>DeepSeek-R1-Distill-Llama-8B</li>
+<li>DeepSeek-R1-Distill-Qwen-14B</li>
+</ul>
+</li>
+<li>
+<p><strong>Datasets:</strong></p>
+<ul>
+<li>MATH-500</li>
+<li>AIME-24 / AIME-25</li>
+</ul>
+</li>
+<li>
+<p><strong>Hyperparams:</strong></p>
+<ul>
+<li>( B_{\text{buffer}} = 128 ), ( \alpha = 8 ), ( \lambda = 0.1 )</li>
+</ul>
+</li>
+<li>
+<p><strong>Sampling:</strong> temperature = 0.6, top-p = 0.95</p>
+</li>
+<li>
+<p><strong>Metric:</strong> pass@1</p>
+</li>
+</ul>
+<hr>
+<h3 id="62-baselines">6.2 Baselines<a hidden class="anchor" aria-hidden="true" href="#62-baselines">#</a></h3>
+<ul>
+<li><strong>FullKV</strong> — 无压缩基线；</li>
+<li><strong>SnapKV</strong> — attention-only 压缩方法；</li>
+<li><strong>R-KV</strong> — 本文方法。</li>
+</ul>
+<p>压缩周期：每生成 128 token 后执行一次。</p>
+<hr>
+<h3 id="63-main-results">6.3 Main Results<a hidden class="anchor" aria-hidden="true" href="#63-main-results">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/figure4.png"></p>
+<h4 id="1-deepseek-r1-distill-llama-8b">(1) DeepSeek-R1-Distill-Llama-8B<a hidden class="anchor" aria-hidden="true" href="#1-deepseek-r1-distill-llama-8b">#</a></h4>
+<ul>
+<li>
+<p>在 MATH-500 上：</p>
+<ul>
+<li><strong>34% KV cache</strong> 即可保持与 FullKV 几乎一致性能。</li>
+</ul>
+</li>
+<li>
+<p>在 AIME-24 上：</p>
+<ul>
+<li><strong>10% KV cache</strong> 即能无损压缩；</li>
+<li><strong>16% KV cache</strong> 时性能甚至 <strong>超越 FullKV (105%)</strong>。</li>
+</ul>
+</li>
+</ul>
+<h4 id="2-deepseek-r1-distill-qwen-14b">(2) DeepSeek-R1-Distill-Qwen-14B<a hidden class="anchor" aria-hidden="true" href="#2-deepseek-r1-distill-qwen-14b">#</a></h4>
+<ul>
+<li>在 MATH-500 上：lossless ratio 为 <strong>54%</strong>；</li>
+<li>在 AIME-24 上：lossless ratio 为 <strong>25%</strong>；</li>
+<li>在 <strong>33% cache</strong> 情况下达到 <strong>105% accuracy</strong>。</li>
+</ul>
+<h4 id="3-对比-snapkv">(3) 对比 SnapKV<a hidden class="anchor" aria-hidden="true" href="#3-对比-snapkv">#</a></h4>
+<p>SnapKV 往往错误保留大量重复反思段落；
+R-KV 通过冗余得分检测，能有效过滤此类内容，在所有预算条件下均优于 SnapKV。</p>
+<hr>
+<h3 id="64-efficiency--throughput">6.4 Efficiency &amp; Throughput<a hidden class="anchor" aria-hidden="true" href="#64-efficiency--throughput">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/table1.png"></p>
+<ul>
+<li>
+<p>在 Llama3-8B 上：</p>
+<ul>
+<li>压缩到 10% KV cache 时，内存减少约 <strong>90%</strong>；</li>
+<li>吞吐提升可达 <strong>4.5–9×</strong>；</li>
+<li>最大 batch size 提升 <strong>7–13×</strong>。</li>
+</ul>
+</li>
+<li>
+<p>计算开销：
+虽然 redundancy 估计需要额外计算，但由于 attention 计算规模降低，整体推理速度仍提升。</p>
+</li>
+</ul>
+<hr>
+<h3 id="65-quantitative-summary">6.5 Quantitative Summary<a hidden class="anchor" aria-hidden="true" href="#65-quantitative-summary">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th>Dataset</th>
+          <th>KV Retained</th>
+          <th>Accuracy (vs Full)</th>
+          <th>Speedup</th>
+          <th>Memory ↓</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>R1-Llama-8B</td>
+          <td>MATH-500</td>
+          <td>34%</td>
+          <td>≈100%</td>
+          <td>4.3×</td>
+          <td>72%</td>
+      </tr>
+      <tr>
+          <td>R1-Llama-8B</td>
+          <td>AIME-24</td>
+          <td>16%</td>
+          <td><strong>105%</strong></td>
+          <td>6.5×</td>
+          <td>84%</td>
+      </tr>
+      <tr>
+          <td>R1-Qwen-14B</td>
+          <td>AIME-24</td>
+          <td>33%</td>
+          <td>105%</td>
+          <td>7.2×</td>
+          <td>80%</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="7-discussion">7. Discussion<a hidden class="anchor" aria-hidden="true" href="#7-discussion">#</a></h2>
+<h3 id="71-how-to-choose-λ">7.1 How to Choose λ<a hidden class="anchor" aria-hidden="true" href="#71-how-to-choose-λ">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/figure56.png"></p>
+<p><strong>λ 控制重要性与冗余的权衡：</strong></p>
+<ul>
+<li>
+<p>当 λ → 0，仅依赖冗余，可能误删关键信息；</p>
+</li>
+<li>
+<p>当 λ → 1，仅依赖注意力，冗余压缩失效；</p>
+</li>
+<li>
+<p>最佳区间：
+$$
+0.01 \le λ \le 0.1
+$$</p>
+</li>
+<li>
+<p>经验设置：</p>
+<ul>
+<li>reasoning 冗余较重时取小 λ；</li>
+<li>context 稳定性要求高时取稍大 λ。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="72-failure-of-attention-based-methods">7.2 Failure of Attention-Based Methods<a hidden class="anchor" aria-hidden="true" href="#72-failure-of-attention-based-methods">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/figure7.png"></p>
+<p>SnapKV 等方法仅依据 attention，导致重复句子被反复保留。
+R-KV 通过冗余矩阵有效识别这些重复项并删除。</p>
+<p>关键区别：
+<strong>Attention ≠ Information Novelty</strong>
+注意力表示“被关注”，不代表“信息增量”。</p>
+<hr>
+<h3 id="73-efficiency-analysis">7.3 Efficiency Analysis<a hidden class="anchor" aria-hidden="true" href="#73-efficiency-analysis">#</a></h3>
+<p><img loading="lazy" src="../../image/RKV/table1.png"></p>
+<ul>
+<li>
+<p>R-KV 压缩后 attention 矩阵规模下降，计算量从 (O(n^2 d)) 降到 (O(k n d))。</p>
+</li>
+<li>
+<p>冗余计算为 (O(n^2 d))，但 n 远小于完整序列长度，整体收益显著。</p>
+</li>
+<li>
+<p>实测表明：</p>
+<ul>
+<li>batch size ↑ 13.4×</li>
+<li>throughput ↑ 9.19×</li>
+<li>memory ↓ 90%</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="8-conclusion">8. Conclusion<a hidden class="anchor" aria-hidden="true" href="#8-conclusion">#</a></h2>
+<p>We introduced <strong>R-KV</strong>, a <strong>decoding-time KV cache compression method</strong> for reasoning LLMs.</p>
+<p>通过联合建模 <strong>importance</strong> 与 <strong>redundancy</strong>，
+R-KV 在保留仅 <strong>10–34%</strong> 的 KV cache 下，性能与 FullKV 持平或超越。</p>
+<p>其训练无关、模型无关、实现简单，可直接集成至 RL rollout 或推理服务，
+在长序列生成中带来高达 <strong>9× 吞吐提升、13× batch 扩展能力</strong>。</p>
+<p><strong>R-KV = 保性能 + 减内存 + 提吞吐</strong>
+是 reasoning 型 LLM 推理优化的重要一步。</p>
+<hr>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
