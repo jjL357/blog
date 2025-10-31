@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders | JJ&#39;s Blog</title>
+<meta name="keywords" content="Speculative Decoding, Paper Note">
+<meta name="description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/yuezhouhu/adaspec
+
+My Thoughts
+这篇论文的 methods 挺简明的，感觉可以有个新 idea:
+将 MoSD 和 AdaSPEC 结合起来 —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。
+问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此需要新的方式来改进这一部分的蒸馏与利用机制。
+
+1. Motivation
+Speculative Decoding (SD) accelerates large language model inference by employing a small draft model to generate predictions, which are then verified by a larger target model.">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/">
+<link crossorigin="anonymous" href="../../blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="en" href="https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders">
+  <meta property="og:description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/yuezhouhu/adaspec
+My Thoughts 这篇论文的 methods 挺简明的，感觉可以有个新 idea:
+将 MoSD 和 AdaSPEC 结合起来 —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。
+问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差）， 因此需要新的方式来改进这一部分的蒸馏与利用机制。
+1. Motivation Speculative Decoding (SD) accelerates large language model inference by employing a small draft model to generate predictions, which are then verified by a larger target model.">
+  <meta property="og:locale" content="en-us">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-10-27T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-10-27T00:00:00+00:00">
+    <meta property="article:tag" content="Speculative Decoding">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders">
+<meta name="twitter:description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/yuezhouhu/adaspec
+
+My Thoughts
+这篇论文的 methods 挺简明的，感觉可以有个新 idea:
+将 MoSD 和 AdaSPEC 结合起来 —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。
+问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此需要新的方式来改进这一部分的蒸馏与利用机制。
+
+1. Motivation
+Speculative Decoding (SD) accelerates large language model inference by employing a small draft model to generate predictions, which are then verified by a larger target model.">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders",
+      "item": "https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders",
+  "name": "AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders",
+  "description": "\nConference: NeurIPS'25 Spotlight\nGithub: https://github.com/yuezhouhu/adaspec\nMy Thoughts 这篇论文的 methods 挺简明的，感觉可以有个新 idea:\n将 MoSD 和 AdaSPEC 结合起来 —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。\n问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？\n论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差）， 因此需要新的方式来改进这一部分的蒸馏与利用机制。\n1. Motivation Speculative Decoding (SD) accelerates large language model inference by employing a small draft model to generate predictions, which are then verified by a larger target model.\n",
+  "keywords": [
+    "Speculative Decoding", "Paper Note"
+  ],
+  "articleBody": "\nConference: NeurIPS'25 Spotlight\nGithub: https://github.com/yuezhouhu/adaspec\nMy Thoughts 这篇论文的 methods 挺简明的，感觉可以有个新 idea:\n将 MoSD 和 AdaSPEC 结合起来 —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。\n问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？\n论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差）， 因此需要新的方式来改进这一部分的蒸馏与利用机制。\n1. Motivation Speculative Decoding (SD) accelerates large language model inference by employing a small draft model to generate predictions, which are then verified by a larger target model.\nSD 的加速性能依赖于 draft 与 target 模型的对齐度（alignment）。传统 Knowledge Distillation (KD) 的目标是最小化 KL 散度，但这与 SD 的最终目标——最大化 token acceptance rate（被 target 接受的比例）——并不一致。\n因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。\n核心问题： 容量受限：小 draft 模型无法表达 target 的完整分布。 目标不一致：KD 优化 KL，而 SD 追求 acceptance rate。 浪费学习资源：draft 把容量浪费在那些“无论如何都难学”的 hard tokens 上。 2. Challenge Conventional KD methods minimize the forward KL divergence between the draft and target models across all tokens:\n$$ \\mathcal{L}{KD} = \\mathbb{E}{x \\sim D},[,\\mathrm{KL}(P_\\text{target}(y|x)|P_\\text{draft}(y|x)),] $$\n然而，这种“对所有 token 进行均匀蒸馏”的目标存在两大问题：\n与 SD 目标不匹配：SD 的目标是最大化 acceptance rate，而不是全分布 KL。 token 学习难度差异巨大： “easy tokens” 可以被小模型很好地学习； “hard tokens” 无论怎么训练都难以对齐。 因此，draft 模型若在 hard token 上浪费容量，反而可能损害 easy token 的拟合质量。\n3. Contribution AdaSPEC 的核心贡献：\nSelective Token Filtering：利用 reference model 识别并过滤掉 draft 难以学习的 tokens，仅对“易学 token”执行 KD。 Draft Model 资源再分配：使有限容量专注于容易拟合的区域，从而显著提升 acceptance rate。 广泛验证：在算术推理、指令跟随、代码生成、摘要生成任务上均显著优于 DistillSpec，最高提升约 15%。 4. Method AdaSPEC 的训练过程分为两个主要步骤：\nStep 1: Constructing the Reference Model 初始化：以 draft 模型结构为基础，复制其参数得到 reference model ( M_{\\text{ref}} )。 蒸馏训练：利用 target 模型 ( M_{\\text{tgt}} ) 作为 teacher，对 reference model 进行常规 KD： $$ \\mathcal{L}{ref} = \\mathbb{E}\\big[\\mathrm{KL}(P{\\text{tgt}}(y|x)|P_{\\text{ref}}(y|x))\\big] $$ 目标：得到一个对 target 行为较好拟合、但容量仍接近 draft 的 reference 模型，用于衡量 token 难度。 Step 2: Selective Knowledge Distillation for the Draft Model 在训练 draft 模型 ( M_q ) 时，引入 selective token filtering：\n定义 token-wise loss 差值：\n对于每个 token ( w )，计算 draft 与 reference 在相对于 target 的 KL 损失： $$ L_{ref}(w) = \\mathrm{KL}(P_{\\text{tgt}}(w|x)|P_{\\text{ref}}(w|x)) $$ $$ L_{draft}(w) = \\mathrm{KL}(P_{\\text{tgt}}(w|x)|P_{\\text{draft}}(w|x)) $$\n定义差值： $$ \\Delta L(w) = L_{draft}(w) - L_{ref}(w) $$\ntoken 选择（Filtering）：\n计算每个 token 的 ΔL，并按值排序，仅保留 top-k%（例如 40%）的 token 参与蒸馏： $$ S = { w \\mid \\Delta L(w) \\text{ 位于前 } k% } $$\n直觉：\n若 ΔL 较大 → draft 对该 token 仍有改进空间，值得学习； 若 ΔL 较小或负 → token 太难或 draft/ref 都学不好，无需浪费容量。 最终的 selective distillation loss：\n仅对选中的 token 求平均： $$ \\mathcal{L}{AdaSPEC} = \\frac{1}{|S|}\\sum{w \\in S} L_{draft}(w) $$\n5. Evaluation 5.1 实验设置 Datasets / Tasks：\nArithmetic reasoning (GSM8K) Instruction-following (Alpaca) Coding (MBPP) Summarization (CNN/DM, XSUM) Model pairs：\nPythia-31M → 1.4B CodeGen-350M → Phi-2 (2.7B) Phi-1.5 → Phi-2 Mixtral-8x7B → Mixtral-8x22B Baselines：\nDirect KD DistillSpec RKL-based distillation Token filtering ablations (不同 filter 阈值) Metrics：\nToken acceptance rate (↑) Task accuracy (e.g. pass@1, rouge-L) Speed-up ratio (↑) Draft perplexity vs. target perplexity 5.2 主要结果 Acceptance Rate 显著提升\n平均提升 8–15%； 在 31M → 1.4B 的极大规模差下效果最突出； 即使在 capacity gap 达 64× 的情况下，仍维持高 acceptance rate。 Generation Quality 无明显下降\nRouge-L、BLEU、pass@1 等指标几乎保持； selective filtering 并未导致语义偏移或句法异常。 Token Filtering 的比例影响\n论文实验显示当过滤比例在 30–50% 时性能最优； 过滤过多（\u003c20%）导致信息不足，过滤过少（\u003e60%）则浪费容量。 Wall-Time Speed-up\n在 vLLM 实测下可达 1.2–1.4× 加速； 与 EAGLE 等 speculative sampling 策略结合可进一步提升。 5.3 消融研究（Ablation） 无过滤（Full KD）：acceptance rate 最低； 随机过滤：无规律性能下降； AdaSPEC Filtering：在相同 loss 下可显著提升 α； 不同 KD 损失（RKL / TVD）：forward KL 表现最稳定。 6. Discussion 6.1 Size Gap Between Target and Draft Models 论文指出，在传统 SD 中，draft 与 target 的规模差一般 \u003c10×。 但 AdaSPEC 通过 selective KD，即使在 64× 参数差距下仍保持显著性能提升。\n解释：\n当模型容量差距扩大时，直接 KD 的“representation mismatch”问题更严重； AdaSPEC 通过聚焦于易学 token，减少了 mismatch 区域； 因此模型差距越大，AdaSPEC 的相对收益越明显。 6.2 与 Rho-1 的关系（Lin et al., 2024） Rho-1 (Not All Tokens Are What You Need) 强调在预训练阶段 优先学习 hard tokens；\nAdaSPEC 则相反：在 SD 中 排除 hard tokens，聚焦于易学部分；\n区别源于目标不同：\n预训练希望扩展模型能力； SD 蒸馏希望最大化小模型的实用性能（acceptance rate）。 6.3 局限性与未来方向 “As a preliminary study on selective training for SD, we limit our study on simple loss-related token filter.”\nfuture work:\n与 tree-based speculative decoding (如 MoSD) 结合 7. Conclusion We present AdaSPEC, a novel approach for training more efficient draft models for Speculative Decoding. AdaSPEC introduces selective token filtering based on reference model perplexity gaps, enabling draft models to focus limited capacity on tokens where alignment with the target model is most achievable.\nHigher acceptance rates across diverse tasks; Significant acceleration without degradation in output quality; Robustness across large model gaps. AdaSPEC 为小模型的高效推理（尤其是在 edge / on-device 场景）提供了新的蒸馏视角。 它启发我们：在推理加速任务中，学习什么比学多少更重要。\n",
+  "wordCount" : "640",
+  "inLanguage": "en",
+  "datePublished": "2025-10-27T00:00:00Z",
+  "dateModified": "2025-10-27T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jjl357.github.io/blog/" accesskey="h" title="JJ&#39;s Blog (Alt + H)">JJ&#39;s Blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders
+    </h1>
+    <div class="post-meta"><span title='2025-10-27 00:00:00 +0000 UTC'>October 27, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="../../image/AdaSpec/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25 Spotlight</strong><br>
+<strong>Github:</strong> <a href="https://github.com/yuezhouhu/adaspec">https://github.com/yuezhouhu/adaspec</a></p>
+<hr>
+<h2 id="my-thoughts">My Thoughts<a hidden class="anchor" aria-hidden="true" href="#my-thoughts">#</a></h2>
+<p>这篇论文的 methods 挺简明的，感觉可以有个新 idea:<br>
+<strong>将 MoSD 和 AdaSPEC 结合起来</strong> —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。</p>
+<p>问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？<br>
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此需要新的方式来改进这一部分的蒸馏与利用机制。</p>
+<hr>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<p>Speculative Decoding (SD) accelerates large language model inference by employing a small <strong>draft model</strong> to generate predictions, which are then verified by a larger <strong>target model</strong>.</p>
+<p><img loading="lazy" src="../../image/AdaSpec/figure1.png"></p>
+<p>SD 的加速性能依赖于 draft 与 target 模型的<strong>对齐度（alignment）</strong>。传统 Knowledge Distillation (KD) 的目标是最小化 KL 散度，但这与 SD 的最终目标——<strong>最大化 token acceptance rate（被 target 接受的比例）</strong>——并不一致。</p>
+<p>因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。</p>
+<h3 id="核心问题">核心问题：<a hidden class="anchor" aria-hidden="true" href="#核心问题">#</a></h3>
+<ul>
+<li><strong>容量受限</strong>：小 draft 模型无法表达 target 的完整分布。</li>
+<li><strong>目标不一致</strong>：KD 优化 KL，而 SD 追求 acceptance rate。</li>
+<li><strong>浪费学习资源</strong>：draft 把容量浪费在那些“无论如何都难学”的 hard tokens 上。</li>
+</ul>
+<hr>
+<h2 id="2-challenge">2. Challenge<a hidden class="anchor" aria-hidden="true" href="#2-challenge">#</a></h2>
+<p>Conventional KD methods minimize the forward KL divergence between the draft and target models across all tokens:</p>
+<p>$$
+\mathcal{L}<em>{KD} = \mathbb{E}</em>{x \sim D},[,\mathrm{KL}(P_\text{target}(y|x)|P_\text{draft}(y|x)),]
+$$</p>
+<p>然而，这种“对所有 token 进行均匀蒸馏”的目标存在两大问题：</p>
+<ol>
+<li><strong>与 SD 目标不匹配</strong>：SD 的目标是最大化 acceptance rate，而不是全分布 KL。</li>
+<li><strong>token 学习难度差异巨大</strong>：
+<ul>
+<li>“easy tokens” 可以被小模型很好地学习；</li>
+<li>“hard tokens” 无论怎么训练都难以对齐。</li>
+</ul>
+</li>
+</ol>
+<p>因此，draft 模型若在 hard token 上浪费容量，反而可能损害 easy token 的拟合质量。</p>
+<p><img loading="lazy" src="../../image/AdaSpec/figure2.png"></p>
+<hr>
+<h2 id="3-contribution">3. Contribution<a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h2>
+<p>AdaSPEC 的核心贡献：</p>
+<ul>
+<li><strong>Selective Token Filtering</strong>：利用 reference model 识别并过滤掉 draft 难以学习的 tokens，仅对“易学 token”执行 KD。</li>
+<li><strong>Draft Model 资源再分配</strong>：使有限容量专注于容易拟合的区域，从而显著提升 acceptance rate。</li>
+<li><strong>广泛验证</strong>：在算术推理、指令跟随、代码生成、摘要生成任务上均显著优于 DistillSpec，最高提升约 15%。</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
+<p><img loading="lazy" src="../../image/AdaSpec/figure1.png"></p>
+<p>AdaSPEC 的训练过程分为两个主要步骤：</p>
+<h3 id="step-1-constructing-the-reference-model">Step 1: Constructing the Reference Model<a hidden class="anchor" aria-hidden="true" href="#step-1-constructing-the-reference-model">#</a></h3>
+<ol>
+<li><strong>初始化</strong>：以 draft 模型结构为基础，复制其参数得到 reference model ( M_{\text{ref}} )。</li>
+<li><strong>蒸馏训练</strong>：利用 target 模型 ( M_{\text{tgt}} ) 作为 teacher，对 reference model 进行常规 KD：
+$$
+\mathcal{L}<em>{ref} = \mathbb{E}\big[\mathrm{KL}(P</em>{\text{tgt}}(y|x)|P_{\text{ref}}(y|x))\big]
+$$</li>
+<li><strong>目标</strong>：得到一个对 target 行为较好拟合、但容量仍接近 draft 的 reference 模型，用于衡量 token 难度。</li>
+</ol>
+<hr>
+<h3 id="step-2-selective-knowledge-distillation-for-the-draft-model">Step 2: Selective Knowledge Distillation for the Draft Model<a hidden class="anchor" aria-hidden="true" href="#step-2-selective-knowledge-distillation-for-the-draft-model">#</a></h3>
+<p>在训练 draft 模型 ( M_q ) 时，引入 selective token filtering：</p>
+<ol>
+<li>
+<p><strong>定义 token-wise loss 差值：</strong></p>
+<p>对于每个 token ( w )，计算 draft 与 reference 在相对于 target 的 KL 损失：
+$$
+L_{ref}(w) = \mathrm{KL}(P_{\text{tgt}}(w|x)|P_{\text{ref}}(w|x))
+$$
+$$
+L_{draft}(w) = \mathrm{KL}(P_{\text{tgt}}(w|x)|P_{\text{draft}}(w|x))
+$$</p>
+<p>定义差值：
+$$
+\Delta L(w) = L_{draft}(w) - L_{ref}(w)
+$$</p>
+</li>
+<li>
+<p><strong>token 选择（Filtering）</strong>：</p>
+<p>计算每个 token 的 ΔL，并按值排序，仅保留 top-k%（例如 40%）的 token 参与蒸馏：
+$$
+S = { w \mid \Delta L(w) \text{ 位于前 } k% }
+$$</p>
+<p>直觉：</p>
+<ul>
+<li>若 ΔL 较大 → draft 对该 token 仍有改进空间，值得学习；</li>
+<li>若 ΔL 较小或负 → token 太难或 draft/ref 都学不好，无需浪费容量。</li>
+</ul>
+</li>
+<li>
+<p><strong>最终的 selective distillation loss：</strong></p>
+<p>仅对选中的 token 求平均：
+$$
+\mathcal{L}<em>{AdaSPEC} = \frac{1}{|S|}\sum</em>{w \in S} L_{draft}(w)
+$$</p>
+</li>
+</ol>
+<hr>
+<h2 id="5-evaluation">5. Evaluation<a hidden class="anchor" aria-hidden="true" href="#5-evaluation">#</a></h2>
+<h3 id="51-实验设置">5.1 实验设置<a hidden class="anchor" aria-hidden="true" href="#51-实验设置">#</a></h3>
+<ul>
+<li>
+<p><strong>Datasets / Tasks</strong>：</p>
+<ul>
+<li>Arithmetic reasoning (GSM8K)</li>
+<li>Instruction-following (Alpaca)</li>
+<li>Coding (MBPP)</li>
+<li>Summarization (CNN/DM, XSUM)</li>
+</ul>
+</li>
+<li>
+<p><strong>Model pairs</strong>：</p>
+<ul>
+<li>Pythia-31M → 1.4B</li>
+<li>CodeGen-350M → Phi-2 (2.7B)</li>
+<li>Phi-1.5 → Phi-2</li>
+<li>Mixtral-8x7B → Mixtral-8x22B</li>
+</ul>
+</li>
+<li>
+<p><strong>Baselines</strong>：</p>
+<ul>
+<li>Direct KD</li>
+<li>DistillSpec</li>
+<li>RKL-based distillation</li>
+<li>Token filtering ablations (不同 filter 阈值)</li>
+</ul>
+</li>
+<li>
+<p><strong>Metrics</strong>：</p>
+<ul>
+<li>Token acceptance rate (↑)</li>
+<li>Task accuracy (e.g. pass@1, rouge-L)</li>
+<li>Speed-up ratio (↑)</li>
+<li>Draft perplexity vs. target perplexity</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="52-主要结果">5.2 主要结果<a hidden class="anchor" aria-hidden="true" href="#52-主要结果">#</a></h3>
+<p><img loading="lazy" src="../../image/AdaSpec/table1.png">
+<img loading="lazy" src="../../image/AdaSpec/figure3.png"></p>
+<ol>
+<li>
+<p><strong>Acceptance Rate 显著提升</strong></p>
+<ul>
+<li>平均提升 8–15%；</li>
+<li>在 31M → 1.4B 的极大规模差下效果最突出；</li>
+<li>即使在 capacity gap 达 64× 的情况下，仍维持高 acceptance rate。</li>
+</ul>
+</li>
+<li>
+<p><strong>Generation Quality 无明显下降</strong></p>
+<ul>
+<li>Rouge-L、BLEU、pass@1 等指标几乎保持；</li>
+<li>selective filtering 并未导致语义偏移或句法异常。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="../../image/AdaSpec/table234.png">
+<img loading="lazy" src="../../image/AdaSpec/table5.png"></p>
+<ol start="3">
+<li>
+<p><strong>Token Filtering 的比例影响</strong></p>
+<ul>
+<li>论文实验显示当过滤比例在 30–50% 时性能最优；</li>
+<li>过滤过多（&lt;20%）导致信息不足，过滤过少（&gt;60%）则浪费容量。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="../../image/AdaSpec/table67.png">
+<img loading="lazy" src="../../image/AdaSpec/table8.png"></p>
+<ol start="4">
+<li>
+<p><strong>Wall-Time Speed-up</strong></p>
+<ul>
+<li>在 vLLM 实测下可达 1.2–1.4× 加速；</li>
+<li>与 EAGLE 等 speculative sampling 策略结合可进一步提升。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="53-消融研究ablation">5.3 消融研究（Ablation）<a hidden class="anchor" aria-hidden="true" href="#53-消融研究ablation">#</a></h3>
+<p><img loading="lazy" src="../../image/AdaSpec/table5.png"></p>
+<ul>
+<li><strong>无过滤（Full KD）</strong>：acceptance rate 最低；</li>
+<li><strong>随机过滤</strong>：无规律性能下降；</li>
+<li><strong>AdaSPEC Filtering</strong>：在相同 loss 下可显著提升 α；</li>
+<li><strong>不同 KD 损失（RKL / TVD）</strong>：forward KL 表现最稳定。</li>
+</ul>
+<hr>
+<h2 id="6-discussion">6. Discussion<a hidden class="anchor" aria-hidden="true" href="#6-discussion">#</a></h2>
+<h3 id="61-size-gap-between-target-and-draft-models">6.1 Size Gap Between Target and Draft Models<a hidden class="anchor" aria-hidden="true" href="#61-size-gap-between-target-and-draft-models">#</a></h3>
+<p>论文指出，在传统 SD 中，draft 与 target 的规模差一般 &lt;10×。
+但 AdaSPEC 通过 selective KD，即使在 <strong>64× 参数差距</strong>下仍保持显著性能提升。</p>
+<p><strong>解释：</strong></p>
+<ul>
+<li>当模型容量差距扩大时，直接 KD 的“representation mismatch”问题更严重；</li>
+<li>AdaSPEC 通过聚焦于易学 token，减少了 mismatch 区域；</li>
+<li>因此模型差距越大，AdaSPEC 的相对收益越明显。</li>
+</ul>
+<hr>
+<h3 id="62-与-rho-1-的关系lin-et-al-2024">6.2 与 Rho-1 的关系（Lin et al., 2024）<a hidden class="anchor" aria-hidden="true" href="#62-与-rho-1-的关系lin-et-al-2024">#</a></h3>
+<ul>
+<li>
+<p>Rho-1 (<em>Not All Tokens Are What You Need</em>) 强调在预训练阶段 <strong>优先学习 hard tokens</strong>；</p>
+</li>
+<li>
+<p>AdaSPEC 则相反：在 SD 中 <strong>排除 hard tokens</strong>，聚焦于易学部分；</p>
+</li>
+<li>
+<p>区别源于目标不同：</p>
+<ul>
+<li>预训练希望扩展模型能力；</li>
+<li>SD 蒸馏希望最大化小模型的实用性能（acceptance rate）。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="63-局限性与未来方向">6.3 局限性与未来方向<a hidden class="anchor" aria-hidden="true" href="#63-局限性与未来方向">#</a></h3>
+<blockquote>
+<p>“As a preliminary study on selective training for SD, we limit our study on simple loss-related token filter.”</p>
+</blockquote>
+<ul>
+<li>
+<p>future work:</p>
+<ul>
+<li>与 tree-based speculative decoding (如 MoSD) 结合</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="7-conclusion">7. Conclusion<a hidden class="anchor" aria-hidden="true" href="#7-conclusion">#</a></h2>
+<p>We present <strong>AdaSPEC</strong>, a novel approach for training more efficient draft models for Speculative Decoding.
+AdaSPEC introduces <strong>selective token filtering</strong> based on reference model perplexity gaps, enabling draft models to focus limited capacity on tokens where alignment with the target model is most achievable.</p>
+<ul>
+<li><strong>Higher acceptance rates</strong> across diverse tasks;</li>
+<li><strong>Significant acceleration</strong> without degradation in output quality;</li>
+<li><strong>Robustness</strong> across large model gaps.</li>
+</ul>
+<p><img loading="lazy" src="../../image/AdaSpec/table8.png"></p>
+<blockquote>
+<p>AdaSPEC 为小模型的高效推理（尤其是在 edge / on-device 场景）提供了新的蒸馏视角。
+它启发我们：<strong>在推理加速任务中，学习什么比学多少更重要。</strong></p>
+</blockquote>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/speculative-decoding/">Speculative Decoding</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
