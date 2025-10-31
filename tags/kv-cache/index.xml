@@ -5,9 +5,50 @@
     <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
     <description>Recent content in KV Cache on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
-    <language>en-us</language>
-    <lastBuildDate>Sat, 25 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 30 Oct 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/kv-cache/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
+      <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
+      <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight
+&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;KV Cache 占用高&lt;/strong&gt;：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Q/K/V 投影重复计算&lt;/strong&gt;：三组权重矩阵独立计算，造成算力浪费。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;模型量化困难&lt;/strong&gt;：激活分布存在极端 outliers，难以稳定进行低比特量化。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;QSVD 的目标是&lt;strong&gt;统一地对 Q/K/V 权重矩阵进行低秩近似&lt;/strong&gt;并结合&lt;strong&gt;后训练量化 (PTQ)&lt;/strong&gt;，实现以下三点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;减少参数量、计算量、缓存占用；&lt;/li&gt;
+&lt;li&gt;保持模型性能；&lt;/li&gt;
+&lt;li&gt;支持低精度硬件部署。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
+&lt;h3 id=&#34;21-svd-in-large-models&#34;&gt;2.1 SVD in Large Models&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;Singular Value Decomposition (SVD)&lt;/strong&gt; 是经典的矩阵分解方法。
+对于矩阵 ( W \in \mathbb{R}^{m \times n} )，可分解为：&lt;/p&gt;
+&lt;p&gt;$$
+W = U \Sigma V^T
+$$&lt;/p&gt;
+&lt;p&gt;其中：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;(U, V) 为正交矩阵；&lt;/li&gt;
+&lt;li&gt;(\Sigma) 为奇异值对角矩阵；&lt;/li&gt;
+&lt;li&gt;保留前 (r) 个奇异值可得到 rank-(r) 近似：&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;$$
+W \approx U_r \Sigma_r V_r^T
+$$&lt;/p&gt;</description>
+    </item>
     <item>
       <title>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
       <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
@@ -24,6 +65,31 @@
 However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.&lt;/p&gt;
 &lt;p&gt;For instance, a &lt;strong&gt;DeepSeek-R1-Distill-Llama-8B&lt;/strong&gt; model may generate &lt;strong&gt;32K tokens&lt;/strong&gt; to solve a complex math problem, consuming &lt;strong&gt;15.5GB&lt;/strong&gt; of memory to load model weights and &lt;strong&gt;4.1GB&lt;/strong&gt; to store the KV cache.
 This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Beyond Attention or Similarity： Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
+      <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;
+&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;相较于 Attention-based methods 中的 &lt;strong&gt;attention shift&lt;/strong&gt; 问题和 Similarity-based methods 中忽略了 query 的问题，这篇论文从 &lt;strong&gt;增加 visual tokens 全局多样性（同时保持对 query 的关注）&lt;/strong&gt; 的角度出发，提出了 &lt;strong&gt;CDPruner&lt;/strong&gt;，通过将 token 多样性建模为 DPP（Determinantal Point Process）求解问题，实现了 SOTA 的 pruning 效果。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;motivations&#34;&gt;Motivations&lt;/h2&gt;
+&lt;p&gt;在多模态大语言模型（MLLMs）中，视觉 token 的输入长度往往远大于文本 token，从而带来高昂的推理开销。例如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;LLaVA-1.5 将一张 336×336 图像转换为 &lt;strong&gt;576 tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LLaVA-NeXT 的高分辨率版本在输入加倍的情况下生成 &lt;strong&gt;2,880 tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LongVA 处理 2,000 帧视频时生成超过 &lt;strong&gt;200K visual tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LongVILA 能处理 &lt;strong&gt;6,000 帧&lt;/strong&gt;并产生 &lt;strong&gt;超过 1M visual tokens&lt;/strong&gt;，导致巨大的计算成本。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;challenges&#34;&gt;Challenges&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
     <item>
       <title>Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>

@@ -2,35 +2,50 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://jjl357.github.io/blog/categories/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/mllm/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/quantization/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/</loc>
+    <lastmod>2025-10-30T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/speculative-decoding/</loc>
+    <lastmod>2025-10-29T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</loc>
+    <lastmod>2025-10-29T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</loc>
     <lastmod>2025-10-27T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://jjl357.github.io/blog/categories/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/posts/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/speculative-decoding/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/</loc>
-    <lastmod>2025-10-27T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
-    <lastmod>2025-10-25T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</loc>
     <lastmod>2025-10-25T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</loc>
+    <lastmod>2025-10-24T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</loc>
     <lastmod>2025-10-15T00:00:00+00:00</lastmod>

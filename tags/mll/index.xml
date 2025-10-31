@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>MLL on JJ&#39;s Blog</title>
+    <link>http://localhost:1313/tags/mll/</link>
+    <description>Recent content in MLL on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 25 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/tags/mll/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Beyond Attention or Similarity： Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <link>http://localhost:1313/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
+      <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./pic/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;
+&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;相较于 Attention-based methods 中的 &lt;strong&gt;attention shift&lt;/strong&gt; 问题和 Similarity-based methods 中忽略了 query 的问题，这篇论文从 &lt;strong&gt;增加 visual tokens 全局多样性（同时保持对 query 的关注）&lt;/strong&gt; 的角度出发，提出了 &lt;strong&gt;CDPruner&lt;/strong&gt;，通过将 token 多样性建模为 DPP（Determinantal Point Process）求解问题，实现了 SOTA 的 pruning 效果。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;motivations&#34;&gt;Motivations&lt;/h2&gt;
+&lt;p&gt;在多模态大语言模型（MLLMs）中，视觉 token 的输入长度往往远大于文本 token，从而带来高昂的推理开销。例如：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;LLaVA-1.5 将一张 336×336 图像转换为 &lt;strong&gt;576 tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LLaVA-NeXT 的高分辨率版本在输入加倍的情况下生成 &lt;strong&gt;2,880 tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LongVA 处理 2,000 帧视频时生成超过 &lt;strong&gt;200K visual tokens&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LongVILA 能处理 &lt;strong&gt;6,000 帧&lt;/strong&gt;并产生 &lt;strong&gt;超过 1M visual tokens&lt;/strong&gt;，导致巨大的计算成本。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;challenges&#34;&gt;Challenges&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./pic/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

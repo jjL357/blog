@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Spec on JJ&#39;s Blog</title>
+    <link>http://localhost:1313/tags/spec/</link>
+    <description>Recent content in Spec on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>en-us</language>
+    <lastBuildDate>Wed, 29 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/tags/spec/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
+      <link>http://localhost:1313/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
+      <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;./pic/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;
+&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Video large language models (Vid-LLMs) have shown strong capabilities in understanding video content. However, their reliance on dense video token representations introduces substantial memory and computational overhead in both prefilling and decoding.&lt;/p&gt;
+&lt;p&gt;例如：
+LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。若视频为两分钟、60 FPS，则总 token 数量超过 100 万。
+如此大量的 video tokens 导致：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;序列长度急剧增加；&lt;/li&gt;
+&lt;li&gt;Prefill 阶段的 attention 开销呈平方级增长；&lt;/li&gt;
+&lt;li&gt;Decoding 阶段 KV cache 急速膨胀，成为显著的 GPU 内存瓶颈。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;在 autoregressive 生成过程中，每步生成的 KV cache 都必须与模型参数一起加载与存储于 GPU 显存，导致显著的 memory-bound 现象。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

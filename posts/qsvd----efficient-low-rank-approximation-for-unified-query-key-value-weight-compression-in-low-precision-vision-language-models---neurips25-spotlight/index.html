@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Quantization, MLLM, Paper Note">
+<meta name="description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/SAI-Lab-NYU/QSVD
+
+1. Motivation
+Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：
+
+KV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。
+Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。
+模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。
+
+QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：
+
+减少参数量、计算量、缓存占用；
+保持模型性能；
+支持低精度硬件部署。
+
+
+
+2. Related Work
+2.1 SVD in Large Models
+Singular Value Decomposition (SVD) 是经典的矩阵分解方法。
+对于矩阵 ( W \in \mathbb{R}^{m \times n} )，可分解为：
+$$
+W = U \Sigma V^T
+$$
+其中：
+
+(U, V) 为正交矩阵；
+(\Sigma) 为奇异值对角矩阵；
+保留前 (r) 个奇异值可得到 rank-(r) 近似：
+
+$$
+W \approx U_r \Sigma_r V_r^T
+$$">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><meta property="og:url" content="https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models">
+  <meta property="og:description" content="
+Conference: NeurIPS&#39;25 Spotlight Github: https://github.com/SAI-Lab-NYU/QSVD
+1. Motivation Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：
+KV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。 Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。 模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。 QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：
+减少参数量、计算量、缓存占用； 保持模型性能； 支持低精度硬件部署。 2. Related Work 2.1 SVD in Large Models Singular Value Decomposition (SVD) 是经典的矩阵分解方法。 对于矩阵 ( W \in \mathbb{R}^{m \times n} )，可分解为：
+$$ W = U \Sigma V^T $$
+其中：
+(U, V) 为正交矩阵； (\Sigma) 为奇异值对角矩阵； 保留前 (r) 个奇异值可得到 rank-(r) 近似： $$ W \approx U_r \Sigma_r V_r^T $$">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-10-30T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-10-30T00:00:00+00:00">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Quantization">
+    <meta property="article:tag" content="MLLM">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models">
+<meta name="twitter:description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/SAI-Lab-NYU/QSVD
+
+1. Motivation
+Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：
+
+KV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。
+Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。
+模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。
+
+QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：
+
+减少参数量、计算量、缓存占用；
+保持模型性能；
+支持低精度硬件部署。
+
+
+
+2. Related Work
+2.1 SVD in Large Models
+Singular Value Decomposition (SVD) 是经典的矩阵分解方法。
+对于矩阵 ( W \in \mathbb{R}^{m \times n} )，可分解为：
+$$
+W = U \Sigma V^T
+$$
+其中：
+
+(U, V) 为正交矩阵；
+(\Sigma) 为奇异值对角矩阵；
+保留前 (r) 个奇异值可得到 rank-(r) 近似：
+
+$$
+W \approx U_r \Sigma_r V_r^T
+$$">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
+      "item": "https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
+  "name": "QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
+  "description": "\nConference: NeurIPS'25 Spotlight Github: https://github.com/SAI-Lab-NYU/QSVD\n1. Motivation Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：\nKV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。 Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。 模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。 QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：\n减少参数量、计算量、缓存占用； 保持模型性能； 支持低精度硬件部署。 2. Related Work 2.1 SVD in Large Models Singular Value Decomposition (SVD) 是经典的矩阵分解方法。 对于矩阵 ( W \\in \\mathbb{R}^{m \\times n} )，可分解为：\n$$ W = U \\Sigma V^T $$\n其中：\n(U, V) 为正交矩阵； (\\Sigma) 为奇异值对角矩阵； 保留前 (r) 个奇异值可得到 rank-(r) 近似： $$ W \\approx U_r \\Sigma_r V_r^T $$\n",
+  "keywords": [
+    "KV Cache", "Quantization", "MLLM", "Paper Note"
+  ],
+  "articleBody": "\nConference: NeurIPS'25 Spotlight Github: https://github.com/SAI-Lab-NYU/QSVD\n1. Motivation Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：\nKV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。 Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。 模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。 QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：\n减少参数量、计算量、缓存占用； 保持模型性能； 支持低精度硬件部署。 2. Related Work 2.1 SVD in Large Models Singular Value Decomposition (SVD) 是经典的矩阵分解方法。 对于矩阵 ( W \\in \\mathbb{R}^{m \\times n} )，可分解为：\n$$ W = U \\Sigma V^T $$\n其中：\n(U, V) 为正交矩阵； (\\Sigma) 为奇异值对角矩阵； 保留前 (r) 个奇异值可得到 rank-(r) 近似： $$ W \\approx U_r \\Sigma_r V_r^T $$\n或写作：\n$$ W \\approx AB, \\quad A = U_r \\Sigma_r^{1/2}, , B = \\Sigma_r^{1/2} V_r^T $$\nSVD 在大模型压缩中的应用广泛，但面临显著挑战：\nFWSVD 基于 Fisher 信息确定重要参数； ASVD 考虑激活 outliers； SVD-LLM / AdaSVD 通过误差感知截断减少损失； Palu / SVD-LLM V2 进一步结合 KV-cache 压缩； DeepSeek / MLA 引入 latent attention，将 attention 中的 Key/Value 投影到低秩空间以减少计算。 QSVD 的创新在于： → 将 Q/K/V 拼接为统一矩阵 进行 SVD，共享下投影矩阵，实现 KV-cache 的统一压缩。\n2.2 Quantization for Large Models Post-Training Quantization (PTQ) 是实现大模型推理高效化的关键技术。\nAffineQuant: 通过可学习仿射变换优化缩放因子； SmoothQuant: 将激活 outliers 转移到权重； QuaRot / DuQuant / SpinQuant: 引入正交旋转矩阵 ( H )，平滑通道分布。 核心思想： 若 ( Y = XW )，可写作：\n$$ Y = (XH)(H^TW) $$\n其中 (H) 为正交矩阵，可离线预计算，从而在不改变输出的前提下平滑激活分布。\n针对多模态模型（VLM），近年也有特化的量化研究：\nQSLAW: 引入多模态 warmup + group-wise scaling； Q-VLM: 用激活熵衡量跨层依赖； MBQ: 平衡视觉/文本模态梯度差异。 但以往工作均未探索 “SVD 与量化联合优化” 的方案。 QSVD 是首个提出低秩联合分解 + 低比特量化的高效 VLM 框架。\n3. Contributions | 主要贡献 Unified Joint SVD on Q/K/V\n将 Q/K/V 三个权重拼接为一个矩阵进行 SVD； 得到共享的下投影矩阵 (W_{qkv}^d)，显著减少权重参数与 KV-cache 存储。 Cross-layer Rank Allocation\n提出基于梯度内积的 singular value 重要性评估； 实现全局秩预算分配，在保证性能的同时最小化模型秩。 Low-precision Quantization within SVD Framework\n在低秩空间引入正交旋转矩阵 (H_1, H_2)，消除中间表示 (C_{qkv}) 的通道 outlier； 提出学习型指数参数 (\\beta)，自适应控制奇异值放缩强度。 高效低比特 VLM\nQSVD 在 W8A8、W8A4、W4A4 下均保持接近 FP16 性能； 显著降低 KV-cache、权重与推理 FLOPs。 4. Method 4.1 Singular-Value Decomposition over Joint QKV Weights 传统注意力层中：\nQuery/Key/Value 权重矩阵分别为 ( W_q, W_k, W_v \\in \\mathbb{R}^{E \\times E} )； 对输入 (X \\in \\mathbb{R}^{L \\times E})，计算： ( Q = XW_q, , K = XW_k, , V = XW_v )。 QSVD 将这三者拼接为统一矩阵：\n$$ W_{concat} = [W_q, W_k, W_v] \\in \\mathbb{R}^{E \\times 3E} $$\n对其进行低秩分解：\n$$ W_{concat} \\approx W^d_r \\Sigma_r W^u_r $$\n并定义幂次加权：\n$$ W_{qkv}^d = W^d_r \\Sigma_r^\\beta, \\quad W_{qkv}^u = \\Sigma_r^{1-\\beta} W^u_r $$\n此时：\n$$ [W_q, W_k, W_v] \\approx W_{qkv}^d [W_q^u, W_k^u, W_v^u] $$\nParameter / Memory / FLOPs Analysis 项目 原始 (FP16) 独立 SVD 联合 SVD (QSVD) 参数量 (3E^2) (6rE) (4rE) 中间缓存 (2LE) (2rL) (rL) FLOPs (3LE^2) (6LrE) (4LrE) 条件 (r \u003c 0.75E) 即可保证压缩收益显著。 同时联合 SVD 仅需计算一次 (XW_{qkv}^d)，减少重复计算与访存。\n推理阶段：\n缓存中间表示： $$ C_{qkv} = X W_{qkv}^d $$\n重构： $$ K = C_{qkv} W_k^u, \\quad V = C_{qkv} W_v^u $$\n由此，缓存仅需存储 (C_{qkv}) 而非 (K,V)，KV-cache 减半以上。\n4.2 Cross-layer Rank Allocation for Low-rank SVD 低秩分解的关键在于：如何确定每层应保留的 rank (r)。 QSVD 提出基于梯度内积的 singular value importance scoring。\n基本推导： 设 $$ W = \\sum_{i=1}^{n} \\sigma_i u_i v_i^T $$\n若截断第 i 个奇异值： $$ \\Delta W_{\\sigma_i} = \\sigma_i u_i v_i^T $$\n对训练损失 (L_t(W)) 做一阶近似： $$ L_t(W - \\Delta W_{\\sigma_i}) \\approx L_t(W) - \\sum_{j,k} \\Delta W_{\\sigma_i}[j,k] \\frac{\\partial L_t}{\\partial W[j,k]} $$\n即损失变化： $$ \\Delta L_{\\sigma_i} = \\langle \\Delta W_{\\sigma_i}, G_W \\rangle_F $$\n多样本期望的重要性分数： $$ \\hat I_{\\sigma_i} = \\mathbb{E}{x\\sim D}\\left[(\\Delta L{\\sigma_i})^2\\right] \\approx \\frac{1}{N}\\sum_{n=1}^{N}\\left( \\sum_{j,k} \\Delta W_{\\sigma_i}[j,k] G_W^{(n)}[j,k] \\right)^2 $$\n直接计算需 (O(E^3)) 内存。 论文推导等价表达（Appendix A.1）：\n$$ \\hat I_{\\sigma_i} = \\frac{1}{N} \\sum_{n=1}^N \\sigma_i^2 [U^T G_W^{(n)} V]_{(i,i)}^2 $$\n此式仅需 (O(E^2)) 内存。\nCross-layer Global Ranking 对每层计算所有奇异值的重要性分数； 将全模型所有奇异值排序； 在总 rank 预算 (k) 下保留前 (k) 个； 其余奇异值置零（truncation）。 该方法能实现全模型层间 rank 自适应分配，确保保留对整体任务最关键的方向。\n4.3 Post-Training Quantization for Low-rank VLMs SVD 压缩后，模型内部仍存在严重的通道 outlier，特别是中间表示：\n$$ C_{qkv} = X W^d_{qkv} $$\n为此，QSVD 提出旋转 + β 学习 的联合量化方案。\n(1) Orthogonal Rotation (H₁, H₂) 引入两个正交矩阵 (H_1, H_2)，使得：\n$$ Y = X W^d_{qkv} W^u_{qkv} = (XH_1^T)(H_1 W^d_{qkv} H_2^T)(H_2 W^u_{qkv}) $$\n这样在量化时可写为：\n$$ C_{qkv} \\approx Q(XH_1^T) Q(H_1 W^d_{qkv} H_2^T) $$\n正交旋转可以在不改变输出的前提下平滑激活分布，从而减少量化误差。\n(2) β 学习机制 因： $$ W^d_{qkv} = W^d_r \\Sigma_r^{\\beta} $$\n若奇异值分布跨度大，则： $$ C_{qkv} = XW^d_r \\Sigma_r^{\\beta} $$ 中某些通道会出现极端值。\n为缓解此问题，QSVD 通过在校准集上最小化量化前后输出误差学习最优 (\\beta)：\n$$ \\min_\\beta \\sum_{d\\in D} | Y_d - Y’_d |_2^2 $$\n其中 (Y_d) 为非量化输出，(Y’_d) 为量化输出。\n(\\beta) 可在每层独立学习，通常取值 0.4–0.8 范围。\n(3) Quantization Details Component Scheme Note Weight Per-channel symmetric RTN 可学习 clip ratio Activation Per-token symmetric 旋转后分布更平滑 Bitwidth 8/4 bits 支持 W8A8, W8A4, W4A4 Calibration 256 ScienceQA 样本 用于 rank 分配 \u0026 β 学习 5. Evaluation 关于 (R_1) 与 (R_2)\n符号 含义 数学定义 直观解释 ( R_1 ) 综合计算与参数压缩比率 ( R_1 = \\frac{\\alpha_i}{\\alpha_{fp}} = \\frac{\\gamma_i}{\\gamma_{fp}} ) 表示当前方案（i）相对于原始 FP16 模型的权重参数量和计算 FLOPs 比例 ( R_2 ) 缓存压缩比率 ( R_2 = \\frac{\\eta_i}{\\eta_{fp}} ) 表示当前方案的 KV 缓存（或中间表示）占原模型的比例 其中：\n(\\alpha) 表示模型参数量； (\\gamma) 表示计算 FLOPs； (\\eta) 表示 KV cache 或 intermediate buffer 大小。 5.1 Experimental Setup Models: SmolVLM-2B, LLaVA-v1.5 7B / 13B, LLaVA-Next 7B / 13B Tasks: ScienceQA, VizWiz, SEED-Bench-IMG, HallusionBench Calibration Set: 256 samples from ScienceQA Hardware: NVIDIA RTX A6000 (48GB) Metrics: Accuracy / Groundedness / Hallucination Rate 5.2 SVD-only (QSVD-noQ) Results: 在 LLaVA-v1.5 13B 上，当 rank ratio (R_1 = 46.7%, R_2 = 17.5%) 时：\nScienceQA-IMG: accuracy 下降 \u003c1%； VizWiz 上甚至略优于 FP16。 Insights: 联合 SVD 的共享下投影使压缩后性能更稳定； 当 (r) 过低 (\u003c0.5E) 时仍能保持较好表现； 在部分任务上出现正向正则化效应（减轻 hallucination）。 5.3 QSVD (SVD + Quantization) (a) W8A8 Results 在相同压缩比下 QSVD 明显优于 DuQuant、Q-VLM； 在 LLaVA-v1.5 13B 上接近 FP16 精度； 中间缓存缩减至 18.75%。 (b) W8A4 Results 激进压缩下 (KV 仅 9.38%) QSVD 仍接近 FP16； 其他方法如 DuQuant 精度显著下降。 (c) W4A4 Results QASVD / DuQuant 几乎退化； QSVD 仍保持可用精度，验证了旋转 + β 学习的有效性。 5.4 Ablation Studies (1) Rank Allocation 方法 描述 结果 Uniform-rank 每层相同 r 最差 Fisher-based 按 Fisher 信息分配 中等 QSVD-importance 基于梯度内积重要性评分 最佳性能 =\u003e QSVD 的重要性打分能更精准地捕捉对任务关键的方向。\n(2) β 学习 固定 β = 0.0/0.4/0.8 vs 学习 β； 在 W4A4 下学习 β 带来 4–6% 精度提升； 在高比特下（W8A8）影响较小； 表明 β 在极端低比特压缩中尤为关键。 (3) Hallucination Reduction 在 HallusionBench 上：\nModel FP16 QSVD-noQ ΔGroundedness LLaVA-v1.5 13B 26.7 30.3 +3.6 说明低秩近似带来轻微“正则化”效果，有助减少幻觉生成。\n5.5 Latency and Throughput QSVD-noQ 在 4070 GPU（12GB）上避免 KV-cache offload； QSVD (W8A8) 在 seq=4K 时最高达 13.1× 推理加速； 存储与计算同时下降，推理延迟显著改善。 5.6 Overall Findings Setting Memory ↓ FLOPs ↓ Accuracy ↓ SVD-noQ (r/E=0.5) 65% 60% \u003c1% QSVD W8A8 80% 70% \u003c2% QSVD W4A4 90% 80% \u003c5% 6. Conclusion \u0026 Discussion Summary QSVD 是首个结合 joint SVD + importance-based rank allocation + orthogonal quantization 的 VLM 压缩\n框架。 在多模型上验证，达到了：\nKV-cache 最高缩减 82%； 推理速度提升 13×； 精度保持在 FP16 ±1% 以内。 Limitation \u0026 Future Work 目前仅针对 self-attention 层； Future work: extend to FFN 层 / cross-modal adapter； 高效 VLM 可能导致滥用（隐私、监控），需进一步伦理研究。 ",
+  "wordCount" : "948",
+  "inLanguage": "zh-cn",
+  "datePublished": "2025-10-30T00:00:00Z",
+  "dateModified": "2025-10-30T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+    <nav class="nav">
+        <div class="logo">
+            <a href="https://jjl357.github.io/blog/" accesskey="h" title="JJ&#39;s Blog (Alt + H)">JJ&#39;s Blog</a>
+            <div class="logo-switches">
+                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <ul id="menu">
+        </ul>
+    </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models
+    </h1>
+    <div class="post-meta"><span title='2025-10-30 00:00:00 +0000 UTC'>October 30, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/title.png"></p>
+<p><strong>Conference:</strong> NeurIPS'25 Spotlight
+<strong>Github:</strong> <a href="https://github.com/SAI-Lab-NYU/QSVD">https://github.com/SAI-Lab-NYU/QSVD</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<p>Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：</p>
+<ul>
+<li><strong>KV Cache 占用高</strong>：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。</li>
+<li><strong>Q/K/V 投影重复计算</strong>：三组权重矩阵独立计算，造成算力浪费。</li>
+<li><strong>模型量化困难</strong>：激活分布存在极端 outliers，难以稳定进行低比特量化。</li>
+</ul>
+<p>QSVD 的目标是<strong>统一地对 Q/K/V 权重矩阵进行低秩近似</strong>并结合<strong>后训练量化 (PTQ)</strong>，实现以下三点：</p>
+<ol>
+<li>减少参数量、计算量、缓存占用；</li>
+<li>保持模型性能；</li>
+<li>支持低精度硬件部署。</li>
+</ol>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure1.png"></p>
+<hr>
+<h2 id="2-related-work">2. Related Work<a hidden class="anchor" aria-hidden="true" href="#2-related-work">#</a></h2>
+<h3 id="21-svd-in-large-models">2.1 SVD in Large Models<a hidden class="anchor" aria-hidden="true" href="#21-svd-in-large-models">#</a></h3>
+<p><strong>Singular Value Decomposition (SVD)</strong> 是经典的矩阵分解方法。
+对于矩阵 ( W \in \mathbb{R}^{m \times n} )，可分解为：</p>
+<p>$$
+W = U \Sigma V^T
+$$</p>
+<p>其中：</p>
+<ul>
+<li>(U, V) 为正交矩阵；</li>
+<li>(\Sigma) 为奇异值对角矩阵；</li>
+<li>保留前 (r) 个奇异值可得到 rank-(r) 近似：</li>
+</ul>
+<p>$$
+W \approx U_r \Sigma_r V_r^T
+$$</p>
+<p>或写作：</p>
+<p>$$
+W \approx AB, \quad A = U_r \Sigma_r^{1/2}, , B = \Sigma_r^{1/2} V_r^T
+$$</p>
+<hr>
+<p>SVD 在大模型压缩中的应用广泛，但面临显著挑战：</p>
+<ul>
+<li><strong>FWSVD</strong> 基于 Fisher 信息确定重要参数；</li>
+<li><strong>ASVD</strong> 考虑激活 outliers；</li>
+<li><strong>SVD-LLM / AdaSVD</strong> 通过误差感知截断减少损失；</li>
+<li><strong>Palu / SVD-LLM V2</strong> 进一步结合 KV-cache 压缩；</li>
+<li><strong>DeepSeek / MLA</strong> 引入 latent attention，将 attention 中的 Key/Value 投影到低秩空间以减少计算。</li>
+</ul>
+<p>QSVD 的创新在于：
+→ 将 <strong>Q/K/V 拼接为统一矩阵</strong> 进行 SVD，<strong>共享下投影矩阵</strong>，实现 KV-cache 的统一压缩。</p>
+<hr>
+<h3 id="22-quantization-for-large-models">2.2 Quantization for Large Models<a hidden class="anchor" aria-hidden="true" href="#22-quantization-for-large-models">#</a></h3>
+<p><strong>Post-Training Quantization (PTQ)</strong> 是实现大模型推理高效化的关键技术。</p>
+<ul>
+<li><strong>AffineQuant</strong>: 通过可学习仿射变换优化缩放因子；</li>
+<li><strong>SmoothQuant</strong>: 将激活 outliers 转移到权重；</li>
+<li><strong>QuaRot / DuQuant / SpinQuant</strong>: 引入正交旋转矩阵 ( H )，平滑通道分布。</li>
+</ul>
+<p>核心思想：
+若 ( Y = XW )，可写作：</p>
+<p>$$
+Y = (XH)(H^TW)
+$$</p>
+<p>其中 (H) 为正交矩阵，可离线预计算，从而在不改变输出的前提下平滑激活分布。</p>
+<hr>
+<p>针对多模态模型（VLM），近年也有特化的量化研究：</p>
+<ul>
+<li><strong>QSLAW</strong>: 引入多模态 warmup + group-wise scaling；</li>
+<li><strong>Q-VLM</strong>: 用激活熵衡量跨层依赖；</li>
+<li><strong>MBQ</strong>: 平衡视觉/文本模态梯度差异。</li>
+</ul>
+<p>但以往工作均未探索 <strong>“SVD 与量化联合优化”</strong> 的方案。
+QSVD 是首个提出<strong>低秩联合分解 + 低比特量化</strong>的高效 VLM 框架。</p>
+<hr>
+<h2 id="3-contributions--主要贡献">3. Contributions | 主要贡献<a hidden class="anchor" aria-hidden="true" href="#3-contributions--主要贡献">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure1.png"></p>
+<ol>
+<li>
+<p><strong>Unified Joint SVD on Q/K/V</strong></p>
+<ul>
+<li>将 Q/K/V 三个权重拼接为一个矩阵进行 SVD；</li>
+<li>得到共享的下投影矩阵 (W_{qkv}^d)，显著减少权重参数与 KV-cache 存储。</li>
+</ul>
+</li>
+<li>
+<p><strong>Cross-layer Rank Allocation</strong></p>
+<ul>
+<li>提出基于梯度内积的 singular value 重要性评估；</li>
+<li>实现全局秩预算分配，在保证性能的同时最小化模型秩。</li>
+</ul>
+</li>
+<li>
+<p><strong>Low-precision Quantization within SVD Framework</strong></p>
+<ul>
+<li>在低秩空间引入正交旋转矩阵 (H_1, H_2)，消除中间表示 (C_{qkv}) 的通道 outlier；</li>
+<li>提出学习型指数参数 (\beta)，自适应控制奇异值放缩强度。</li>
+</ul>
+</li>
+<li>
+<p><strong>高效低比特 VLM</strong></p>
+<ul>
+<li>QSVD 在 W8A8、W8A4、W4A4 下均保持接近 FP16 性能；</li>
+<li>显著降低 KV-cache、权重与推理 FLOPs。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
+<h3 id="41-singular-value-decomposition-over-joint-qkv-weights">4.1 Singular-Value Decomposition over Joint QKV Weights<a hidden class="anchor" aria-hidden="true" href="#41-singular-value-decomposition-over-joint-qkv-weights">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure2.png"></p>
+<p>传统注意力层中：</p>
+<ul>
+<li>Query/Key/Value 权重矩阵分别为 ( W_q, W_k, W_v \in \mathbb{R}^{E \times E} )；</li>
+<li>对输入 (X \in \mathbb{R}^{L \times E})，计算：
+( Q = XW_q, , K = XW_k, , V = XW_v )。</li>
+</ul>
+<hr>
+<p>QSVD 将这三者拼接为统一矩阵：</p>
+<p>$$
+W_{concat} = [W_q, W_k, W_v] \in \mathbb{R}^{E \times 3E}
+$$</p>
+<p>对其进行低秩分解：</p>
+<p>$$
+W_{concat} \approx W^d_r \Sigma_r W^u_r
+$$</p>
+<p>并定义幂次加权：</p>
+<p>$$
+W_{qkv}^d = W^d_r \Sigma_r^\beta, \quad W_{qkv}^u = \Sigma_r^{1-\beta} W^u_r
+$$</p>
+<p>此时：</p>
+<p>$$
+[W_q, W_k, W_v] \approx W_{qkv}^d [W_q^u, W_k^u, W_v^u]
+$$</p>
+<hr>
+<h4 id="parameter--memory--flops-analysis">Parameter / Memory / FLOPs Analysis<a hidden class="anchor" aria-hidden="true" href="#parameter--memory--flops-analysis">#</a></h4>
+<table>
+  <thead>
+      <tr>
+          <th>项目</th>
+          <th>原始 (FP16)</th>
+          <th>独立 SVD</th>
+          <th>联合 SVD (QSVD)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>参数量</td>
+          <td>(3E^2)</td>
+          <td>(6rE)</td>
+          <td><strong>(4rE)</strong></td>
+      </tr>
+      <tr>
+          <td>中间缓存</td>
+          <td>(2LE)</td>
+          <td>(2rL)</td>
+          <td><strong>(rL)</strong></td>
+      </tr>
+      <tr>
+          <td>FLOPs</td>
+          <td>(3LE^2)</td>
+          <td>(6LrE)</td>
+          <td><strong>(4LrE)</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>条件 (r &lt; 0.75E) 即可保证压缩收益显著。
+同时联合 SVD 仅需计算一次 (XW_{qkv}^d)，减少重复计算与访存。</p>
+<hr>
+<p>推理阶段：</p>
+<ol>
+<li>
+<p>缓存中间表示：
+$$
+C_{qkv} = X W_{qkv}^d
+$$</p>
+</li>
+<li>
+<p>重构：
+$$
+K = C_{qkv} W_k^u, \quad V = C_{qkv} W_v^u
+$$</p>
+</li>
+</ol>
+<p>由此，缓存仅需存储 (C_{qkv}) 而非 (K,V)，KV-cache 减半以上。</p>
+<hr>
+<h3 id="42-cross-layer-rank-allocation-for-low-rank-svd">4.2 Cross-layer Rank Allocation for Low-rank SVD<a hidden class="anchor" aria-hidden="true" href="#42-cross-layer-rank-allocation-for-low-rank-svd">#</a></h3>
+<p>低秩分解的关键在于：如何确定每层应保留的 rank (r)。
+QSVD 提出基于梯度内积的 <strong>singular value importance scoring</strong>。</p>
+<hr>
+<h4 id="基本推导">基本推导：<a hidden class="anchor" aria-hidden="true" href="#基本推导">#</a></h4>
+<p>设
+$$
+W = \sum_{i=1}^{n} \sigma_i u_i v_i^T
+$$</p>
+<p>若截断第 i 个奇异值：
+$$
+\Delta W_{\sigma_i} = \sigma_i u_i v_i^T
+$$</p>
+<p>对训练损失 (L_t(W)) 做一阶近似：
+$$
+L_t(W - \Delta W_{\sigma_i}) \approx L_t(W) - \sum_{j,k} \Delta W_{\sigma_i}[j,k] \frac{\partial L_t}{\partial W[j,k]}
+$$</p>
+<p>即损失变化：
+$$
+\Delta L_{\sigma_i} = \langle \Delta W_{\sigma_i}, G_W \rangle_F
+$$</p>
+<hr>
+<h4 id="多样本期望的重要性分数">多样本期望的重要性分数：<a hidden class="anchor" aria-hidden="true" href="#多样本期望的重要性分数">#</a></h4>
+<p>$$
+\hat I_{\sigma_i} = \mathbb{E}<em>{x\sim D}\left[(\Delta L</em>{\sigma_i})^2\right] \approx \frac{1}{N}\sum_{n=1}^{N}\left( \sum_{j,k} \Delta W_{\sigma_i}[j,k] G_W^{(n)}[j,k] \right)^2
+$$</p>
+<p>直接计算需 (O(E^3)) 内存。
+论文推导等价表达（Appendix A.1）：</p>
+<p>$$
+\hat I_{\sigma_i} = \frac{1}{N} \sum_{n=1}^N \sigma_i^2 [U^T G_W^{(n)} V]_{(i,i)}^2
+$$</p>
+<p>此式仅需 (O(E^2)) 内存。</p>
+<hr>
+<h4 id="cross-layer-global-ranking">Cross-layer Global Ranking<a hidden class="anchor" aria-hidden="true" href="#cross-layer-global-ranking">#</a></h4>
+<ol>
+<li>对每层计算所有奇异值的重要性分数；</li>
+<li>将全模型所有奇异值排序；</li>
+<li>在总 rank 预算 (k) 下保留前 (k) 个；</li>
+<li>其余奇异值置零（truncation）。</li>
+</ol>
+<p>该方法能实现全模型层间 rank 自适应分配，确保保留对整体任务最关键的方向。</p>
+<hr>
+<h3 id="43-post-training-quantization-for-low-rank-vlms">4.3 Post-Training Quantization for Low-rank VLMs<a hidden class="anchor" aria-hidden="true" href="#43-post-training-quantization-for-low-rank-vlms">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure3.png"></p>
+<p>SVD 压缩后，模型内部仍存在严重的通道 outlier，特别是中间表示：</p>
+<p>$$
+C_{qkv} = X W^d_{qkv}
+$$</p>
+<p>为此，QSVD 提出<strong>旋转 + β 学习</strong> 的联合量化方案。</p>
+<hr>
+<h4 id="1-orthogonal-rotation-h-h">(1) Orthogonal Rotation (H₁, H₂)<a hidden class="anchor" aria-hidden="true" href="#1-orthogonal-rotation-h-h">#</a></h4>
+<p>引入两个正交矩阵 (H_1, H_2)，使得：</p>
+<p>$$
+Y = X W^d_{qkv} W^u_{qkv} = (XH_1^T)(H_1 W^d_{qkv} H_2^T)(H_2 W^u_{qkv})
+$$</p>
+<p>这样在量化时可写为：</p>
+<p>$$
+C_{qkv} \approx Q(XH_1^T) Q(H_1 W^d_{qkv} H_2^T)
+$$</p>
+<p>正交旋转可以在不改变输出的前提下平滑激活分布，从而减少量化误差。</p>
+<hr>
+<h4 id="2-β-学习机制">(2) β 学习机制<a hidden class="anchor" aria-hidden="true" href="#2-β-学习机制">#</a></h4>
+<p>因：
+$$
+W^d_{qkv} = W^d_r \Sigma_r^{\beta}
+$$</p>
+<p>若奇异值分布跨度大，则：
+$$
+C_{qkv} = XW^d_r \Sigma_r^{\beta}
+$$
+中某些通道会出现极端值。</p>
+<p>为缓解此问题，QSVD 通过在校准集上最小化量化前后输出误差学习最优 (\beta)：</p>
+<p>$$
+\min_\beta \sum_{d\in D} | Y_d - Y&rsquo;_d |_2^2
+$$</p>
+<p>其中 (Y_d) 为非量化输出，(Y&rsquo;_d) 为量化输出。</p>
+<p>(\beta) 可在每层独立学习，通常取值 0.4–0.8 范围。</p>
+<hr>
+<h4 id="3-quantization-details">(3) Quantization Details<a hidden class="anchor" aria-hidden="true" href="#3-quantization-details">#</a></h4>
+<table>
+  <thead>
+      <tr>
+          <th>Component</th>
+          <th>Scheme</th>
+          <th>Note</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Weight</td>
+          <td>Per-channel symmetric RTN</td>
+          <td>可学习 clip ratio</td>
+      </tr>
+      <tr>
+          <td>Activation</td>
+          <td>Per-token symmetric</td>
+          <td>旋转后分布更平滑</td>
+      </tr>
+      <tr>
+          <td>Bitwidth</td>
+          <td>8/4 bits</td>
+          <td>支持 W8A8, W8A4, W4A4</td>
+      </tr>
+      <tr>
+          <td>Calibration</td>
+          <td>256 ScienceQA 样本</td>
+          <td>用于 rank 分配 &amp; β 学习</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="5-evaluation">5. Evaluation<a hidden class="anchor" aria-hidden="true" href="#5-evaluation">#</a></h2>
+<p><strong>关于 (R_1) 与 (R_2)</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>符号</th>
+          <th>含义</th>
+          <th>数学定义</th>
+          <th>直观解释</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>( R_1 )</td>
+          <td><strong>综合计算与参数压缩比率</strong></td>
+          <td>( R_1 = \frac{\alpha_i}{\alpha_{fp}} = \frac{\gamma_i}{\gamma_{fp}} )</td>
+          <td>表示当前方案（i）相对于原始 FP16 模型的<strong>权重参数量和计算 FLOPs 比例</strong></td>
+      </tr>
+      <tr>
+          <td>( R_2 )</td>
+          <td><strong>缓存压缩比率</strong></td>
+          <td>( R_2 = \frac{\eta_i}{\eta_{fp}} )</td>
+          <td>表示当前方案的 KV 缓存（或中间表示）占原模型的比例</td>
+      </tr>
+  </tbody>
+</table>
+<p>其中：</p>
+<ul>
+<li>(\alpha) 表示模型参数量；</li>
+<li>(\gamma) 表示计算 FLOPs；</li>
+<li>(\eta) 表示 KV cache 或 intermediate buffer 大小。</li>
+</ul>
+<h3 id="51-experimental-setup">5.1 Experimental Setup<a hidden class="anchor" aria-hidden="true" href="#51-experimental-setup">#</a></h3>
+<ul>
+<li><strong>Models</strong>: SmolVLM-2B, LLaVA-v1.5 7B / 13B, LLaVA-Next 7B / 13B</li>
+<li><strong>Tasks</strong>: ScienceQA, VizWiz, SEED-Bench-IMG, HallusionBench</li>
+<li><strong>Calibration Set</strong>: 256 samples from ScienceQA</li>
+<li><strong>Hardware</strong>: NVIDIA RTX A6000 (48GB)</li>
+<li><strong>Metrics</strong>: Accuracy / Groundedness / Hallucination Rate</li>
+</ul>
+<hr>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table1.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table2.png"></p>
+<h3 id="52-svd-only-qsvd-noq">5.2 SVD-only (QSVD-noQ)<a hidden class="anchor" aria-hidden="true" href="#52-svd-only-qsvd-noq">#</a></h3>
+<h4 id="results">Results:<a hidden class="anchor" aria-hidden="true" href="#results">#</a></h4>
+<ul>
+<li>
+<p>在 LLaVA-v1.5 13B 上，当 rank ratio (R_1 = 46.7%, R_2 = 17.5%) 时：</p>
+<ul>
+<li>ScienceQA-IMG: accuracy 下降 &lt;1%；</li>
+<li>VizWiz 上甚至略优于 FP16。</li>
+</ul>
+</li>
+</ul>
+<h4 id="insights">Insights:<a hidden class="anchor" aria-hidden="true" href="#insights">#</a></h4>
+<ul>
+<li>联合 SVD 的共享下投影使压缩后性能更稳定；</li>
+<li>当 (r) 过低 (&lt;0.5E) 时仍能保持较好表现；</li>
+<li>在部分任务上出现正向正则化效应（减轻 hallucination）。</li>
+</ul>
+<hr>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table3.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table4.png"></p>
+<h3 id="53-qsvd-svd--quantization">5.3 QSVD (SVD + Quantization)<a hidden class="anchor" aria-hidden="true" href="#53-qsvd-svd--quantization">#</a></h3>
+<h4 id="a-w8a8-results">(a) W8A8 Results<a hidden class="anchor" aria-hidden="true" href="#a-w8a8-results">#</a></h4>
+<ul>
+<li>在相同压缩比下 QSVD 明显优于 DuQuant、Q-VLM；</li>
+<li>在 LLaVA-v1.5 13B 上接近 FP16 精度；</li>
+<li>中间缓存缩减至 18.75%。</li>
+</ul>
+<h4 id="b-w8a4-results">(b) W8A4 Results<a hidden class="anchor" aria-hidden="true" href="#b-w8a4-results">#</a></h4>
+<ul>
+<li>激进压缩下 (KV 仅 9.38%) QSVD 仍接近 FP16；</li>
+<li>其他方法如 DuQuant 精度显著下降。</li>
+</ul>
+<h4 id="c-w4a4-results">(c) W4A4 Results<a hidden class="anchor" aria-hidden="true" href="#c-w4a4-results">#</a></h4>
+<ul>
+<li>QASVD / DuQuant 几乎退化；</li>
+<li>QSVD 仍保持可用精度，验证了旋转 + β 学习的有效性。</li>
+</ul>
+<hr>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table5.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/table6.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure4.png"></p>
+<h3 id="54-ablation-studies">5.4 Ablation Studies<a hidden class="anchor" aria-hidden="true" href="#54-ablation-studies">#</a></h3>
+<h4 id="1-rank-allocation">(1) Rank Allocation<a hidden class="anchor" aria-hidden="true" href="#1-rank-allocation">#</a></h4>
+<table>
+  <thead>
+      <tr>
+          <th>方法</th>
+          <th>描述</th>
+          <th>结果</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Uniform-rank</td>
+          <td>每层相同 r</td>
+          <td>最差</td>
+      </tr>
+      <tr>
+          <td>Fisher-based</td>
+          <td>按 Fisher 信息分配</td>
+          <td>中等</td>
+      </tr>
+      <tr>
+          <td><strong>QSVD-importance</strong></td>
+          <td>基于梯度内积重要性评分</td>
+          <td><strong>最佳性能</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>=&gt; QSVD 的重要性打分能更精准地捕捉对任务关键的方向。</p>
+<hr>
+<h4 id="2-β-学习">(2) β 学习<a hidden class="anchor" aria-hidden="true" href="#2-β-学习">#</a></h4>
+<ul>
+<li>固定 β = 0.0/0.4/0.8 vs 学习 β；</li>
+<li>在 W4A4 下学习 β 带来 4–6% 精度提升；</li>
+<li>在高比特下（W8A8）影响较小；</li>
+<li>表明 β 在极端低比特压缩中尤为关键。</li>
+</ul>
+<hr>
+<h4 id="3-hallucination-reduction">(3) Hallucination Reduction<a hidden class="anchor" aria-hidden="true" href="#3-hallucination-reduction">#</a></h4>
+<p>在 HallusionBench 上：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th>FP16</th>
+          <th>QSVD-noQ</th>
+          <th>ΔGroundedness</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-v1.5 13B</td>
+          <td>26.7</td>
+          <td>30.3</td>
+          <td><strong>+3.6</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>说明低秩近似带来轻微“正则化”效果，有助减少幻觉生成。</p>
+<hr>
+<h3 id="55-latency-and-throughput">5.5 Latency and Throughput<a hidden class="anchor" aria-hidden="true" href="#55-latency-and-throughput">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/QSVD/figure4.png"></p>
+<ul>
+<li>QSVD-noQ 在 4070 GPU（12GB）上避免 KV-cache offload；</li>
+<li>QSVD (W8A8) 在 seq=4K 时最高达 <strong>13.1× 推理加速</strong>；</li>
+<li>存储与计算同时下降，推理延迟显著改善。</li>
+</ul>
+<hr>
+<h3 id="56-overall-findings">5.6 Overall Findings<a hidden class="anchor" aria-hidden="true" href="#56-overall-findings">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Setting</th>
+          <th>Memory ↓</th>
+          <th>FLOPs ↓</th>
+          <th>Accuracy ↓</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>SVD-noQ (r/E=0.5)</td>
+          <td>65%</td>
+          <td>60%</td>
+          <td>&lt;1%</td>
+      </tr>
+      <tr>
+          <td>QSVD W8A8</td>
+          <td>80%</td>
+          <td>70%</td>
+          <td>&lt;2%</td>
+      </tr>
+      <tr>
+          <td>QSVD W4A4</td>
+          <td>90%</td>
+          <td>80%</td>
+          <td>&lt;5%</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="6-conclusion--discussion">6. Conclusion &amp; Discussion<a hidden class="anchor" aria-hidden="true" href="#6-conclusion--discussion">#</a></h2>
+<h3 id="summary">Summary<a hidden class="anchor" aria-hidden="true" href="#summary">#</a></h3>
+<p>QSVD 是首个结合 <strong>joint SVD + importance-based rank allocation + orthogonal quantization</strong> 的 VLM 压缩</p>
+<p>框架。
+在多模型上验证，达到了：</p>
+<ul>
+<li>KV-cache 最高缩减 82%；</li>
+<li>推理速度提升 13×；</li>
+<li>精度保持在 FP16 ±1% 以内。</li>
+</ul>
+<hr>
+<h3 id="limitation--future-work">Limitation &amp; Future Work<a hidden class="anchor" aria-hidden="true" href="#limitation--future-work">#</a></h3>
+<ul>
+<li>目前仅针对 self-attention 层；</li>
+<li>Future work: extend to FFN 层 / cross-modal adapter；</li>
+<li>高效 VLM 可能导致滥用（隐私、监控），需进一步伦理研究。</li>
+</ul>
+<hr>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/quantization/">Quantization</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
