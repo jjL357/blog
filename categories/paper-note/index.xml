@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Paper Note on JJ&#39;s Blog</title>
+    <link>https://example.org/categories/paper-note/</link>
+    <description>Recent content in Paper Note on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 27 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://example.org/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
+      <link>https://example.org/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
+      <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://example.org/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://example.org/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;br&gt;
+&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;这篇论文的 methods 挺简明的，感觉可以有个新 idea:&lt;br&gt;
+&lt;strong&gt;将 MoSD 和 AdaSPEC 结合起来&lt;/strong&gt; —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。&lt;/p&gt;
+&lt;p&gt;问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？&lt;br&gt;
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此需要新的方式来改进这一部分的蒸馏与利用机制。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
