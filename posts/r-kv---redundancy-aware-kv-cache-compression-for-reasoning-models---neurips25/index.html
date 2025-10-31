@@ -20,7 +20,7 @@ For instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to so
 This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.">
 <meta name="author" content="">
 <link rel="canonical" href="https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/">
-<link crossorigin="anonymous" href="../../blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
 <link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
 <link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
 <link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
@@ -204,7 +204,7 @@ This long CoT (chain-of-thought) generation necessitates the development of KV c
 
 </div>
   </header> 
-  <div class="post-content"><p><img loading="lazy" src="../../image/RKV/title.png"></p>
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/title.png"></p>
 <p><strong>Conference:</strong> NeurIPS'25
 <strong>Github:</strong> <a href="https://github.com/Zefan-Cai/R-KV">https://github.com/Zefan-Cai/R-KV</a></p>
 <hr>
@@ -252,7 +252,7 @@ existing KV cache compression methods often fail in this scenario.</p>
 <hr>
 <h2 id="4-observation">4. Observation<a hidden class="anchor" aria-hidden="true" href="#4-observation">#</a></h2>
 <h3 id="41-redundancy-in-reasoning-models">4.1 Redundancy in Reasoning Models<a hidden class="anchor" aria-hidden="true" href="#41-redundancy-in-reasoning-models">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/figure2.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/figure2.png"></p>
 <p><strong>观察：</strong></p>
 <ul>
 <li>多种 reasoning 模型（DeepSeek-R1-Distill-Llama-8B、DeepSeek-R1-Distill-Qwen-7B、Qwen-14B）生成的输出长度普遍比 ground truth <strong>长 8 倍以上</strong>；</li>
@@ -260,7 +260,7 @@ existing KV cache compression methods often fail in this scenario.</p>
 </ul>
 <hr>
 <h3 id="42-failure-of-existing-kv-compression-methods">4.2 Failure of Existing KV Compression Methods<a hidden class="anchor" aria-hidden="true" href="#42-failure-of-existing-kv-compression-methods">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/figure3.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/figure3.png"></p>
 <p>现有如 <strong>SnapKV</strong> 等 attention-based 方法倾向于保留重复的 reasoning 片段，例如重复的 “reflection” 或 “final answer” 段落，造成有效上下文被冗余信息挤占。</p>
 <p>R-KV 的目标正是针对这种冗余失效模式进行修正。</p>
 <hr>
@@ -425,7 +425,7 @@ $$</p>
 <p>压缩周期：每生成 128 token 后执行一次。</p>
 <hr>
 <h3 id="63-main-results">6.3 Main Results<a hidden class="anchor" aria-hidden="true" href="#63-main-results">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/figure4.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/figure4.png"></p>
 <h4 id="1-deepseek-r1-distill-llama-8b">(1) DeepSeek-R1-Distill-Llama-8B<a hidden class="anchor" aria-hidden="true" href="#1-deepseek-r1-distill-llama-8b">#</a></h4>
 <ul>
 <li>
@@ -453,7 +453,7 @@ $$</p>
 R-KV 通过冗余得分检测，能有效过滤此类内容，在所有预算条件下均优于 SnapKV。</p>
 <hr>
 <h3 id="64-efficiency--throughput">6.4 Efficiency &amp; Throughput<a hidden class="anchor" aria-hidden="true" href="#64-efficiency--throughput">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/table1.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/table1.png"></p>
 <ul>
 <li>
 <p>在 Llama3-8B 上：</p>
@@ -511,7 +511,7 @@ R-KV 通过冗余得分检测，能有效过滤此类内容，在所有预算条
 <hr>
 <h2 id="7-discussion">7. Discussion<a hidden class="anchor" aria-hidden="true" href="#7-discussion">#</a></h2>
 <h3 id="71-how-to-choose-λ">7.1 How to Choose λ<a hidden class="anchor" aria-hidden="true" href="#71-how-to-choose-λ">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/figure56.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/figure56.png"></p>
 <p><strong>λ 控制重要性与冗余的权衡：</strong></p>
 <ul>
 <li>
@@ -536,7 +536,7 @@ $$</p>
 </ul>
 <hr>
 <h3 id="72-failure-of-attention-based-methods">7.2 Failure of Attention-Based Methods<a hidden class="anchor" aria-hidden="true" href="#72-failure-of-attention-based-methods">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/figure7.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/figure7.png"></p>
 <p>SnapKV 等方法仅依据 attention，导致重复句子被反复保留。
 R-KV 通过冗余矩阵有效识别这些重复项并删除。</p>
 <p>关键区别：
@@ -544,7 +544,7 @@ R-KV 通过冗余矩阵有效识别这些重复项并删除。</p>
 注意力表示“被关注”，不代表“信息增量”。</p>
 <hr>
 <h3 id="73-efficiency-analysis">7.3 Efficiency Analysis<a hidden class="anchor" aria-hidden="true" href="#73-efficiency-analysis">#</a></h3>
-<p><img loading="lazy" src="../../image/RKV/table1.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/RKV/table1.png"></p>
 <ul>
 <li>
 <p>R-KV 压缩后 attention 矩阵规模下降，计算量从 (O(n^2 d)) 降到 (O(k n d))。</p>

@@ -13,7 +13,7 @@
       <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;../../image/RKV/title.png&#34;&gt;&lt;/p&gt;
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25
 &lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Zefan-Cai/R-KV&#34;&gt;https://github.com/Zefan-Cai/R-KV&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -30,13 +30,13 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
       <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
       <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;../../image/C2C/title.png&#34;&gt;&lt;/p&gt;
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/title.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-motivation动机--背景&#34;&gt;💡 Motivation（动机 / 背景）&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;../../image/C2C/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;现状：多-LLM 系统通常通过 &lt;strong&gt;文本（Text-to-Text, T2T）&lt;/strong&gt; 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 &lt;strong&gt;串行解码带来的延迟&lt;/strong&gt; 等问题。&lt;/li&gt;
 &lt;li&gt;问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。&lt;/li&gt;
@@ -48,7 +48,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-challenges挑战&#34;&gt;⚔ Challenges（挑战）&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;../../image/C2C/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;跨模型的 KV-Cache 表示差异&lt;/strong&gt;：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;对齐问题（token-level &amp;amp; layer-level）&lt;/strong&gt;：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。&lt;/li&gt;
@@ -58,7 +58,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;/ol&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-observations--analysis&#34;&gt;🔍 Observations / Analysis&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;../../image/C2C/f34t12.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/f34t12.png&#34;&gt;&lt;/p&gt;</description>
     </item>
   </channel>
 </rss>
