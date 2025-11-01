@@ -1,11 +1,11 @@
-\<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-cn" dir="auto" data-theme="auto">
 
 <head><meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING | JJ&#39;s Blog</title>
+<title>NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING | JJ&#39;s Blog</title>
 <meta name="keywords" content="Paper Note, KV Cache">
 <meta name="description" content="
 Conference: ICLR&#39;25
@@ -118,7 +118,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING">
+  <meta property="og:title" content="NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING">
   <meta property="og:description" content="
 Conference: ICLR&#39;25 Github: https://github.com/FYYFU/HeadKV.
 My Thoughts 这篇工作和 DuoAttention 的关注点类似，都是关注不同 attention head 对模型不同能力的贡献不同，这篇工作更关注 attention head 对模型 Retrieval 与 Reasoning 的 importance score, 来实现 KV Cache 的 nonuniform budget allocation 。
@@ -132,7 +132,7 @@ My Thoughts 这篇工作和 DuoAttention 的关注点类似，都是关注不同
     <meta property="article:tag" content="Paper Note">
     <meta property="article:tag" content="KV Cache">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING">
+<meta name="twitter:title" content="NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING">
 <meta name="twitter:description" content="
 Conference: ICLR&#39;25
 Github: https://github.com/FYYFU/HeadKV.
@@ -161,7 +161,7 @@ My Thoughts
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
+      "name": "NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
       "item": "https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/"
     }
   ]
@@ -171,8 +171,8 @@ My Thoughts
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
-  "name": "NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
+  "headline": "NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
+  "name": "NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING",
   "description": "\nConference: ICLR'25 Github: https://github.com/FYYFU/HeadKV.\nMy Thoughts 这篇工作和 DuoAttention 的关注点类似，都是关注不同 attention head 对模型不同能力的贡献不同，这篇工作更关注 attention head 对模型 Retrieval 与 Reasoning 的 importance score, 来实现 KV Cache 的 nonuniform budget allocation 。\n1. Motivation 现代 LLM 越来越支持极长上下文（例如 GPT-4、Llama-3、Qwen-2、Claude 等），但随着输入长度增长，Transformer 的 self-attention 导致 KV cache（attention 的 key/value 状态）占用内存线性增长，成为推理阶段的主要瓶颈。已有工作通过 token eviction / 层级缓存压缩来缓解，但几乎没有研究在“头（head）级别”上对 KV cache 大小进行差异化分配。作者观察到 attention heads 在功能上高度异质（如 retrieval heads、reasoning heads 等），因此提出基于头重要性的 head-level KV cache 压缩方法（HeadKV），并在此基础上提出结合检索与推理能力评估的 HeadKV-R2。\n2. Relative Work 2.1 Attention heads 回顾了对多头注意力中 head 功能的研究（Voita et al., Olsson et al., Wu et al., Zheng et al. 等），并指出不同 head 在词法、结构、复制（induction）、检索等方面扮演不同角色。这些观察为按 head 分配 KV cache 提供理论基础。\n",
   "keywords": [
     "Paper Note", "KV Cache"
@@ -196,51 +196,43 @@ My Thoughts
   }
 }
 </script>
-
-    
-    <script type="text/x-mathjax-config">
-        MathJax.Hub.Config({
-            tex2jax: {
-                inlineMath: [['$','$'], ['\\(','\\)']],
-                processEscapes: true
-            }
-        });
-    </script>
-
-    
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.4/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 </head>
 <body id="top">
     <header class="header">
-    <nav class="nav">
-        <div class="logo">
-            <a href="https://jjl357.github.io/blog/" accesskey="h" title="JJ&#39;s Blog (Alt + H)">JJ&#39;s Blog</a>
-            <div class="logo-switches">
-                <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
-                    <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                    </svg>
-                    <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
-                        fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <line x1="12" y1="1" x2="12" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="23"></line>
-                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                        <line x1="1" y1="12" x2="3" y2="12"></line>
-                        <line x1="21" y1="12" x2="23" y2="12"></line>
-                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        <ul id="menu">
-        </ul>
-    </nav>
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="🥛 ☕ 🍵 (Alt + H)">
+        <span>🥛 ☕ 🍵</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
 </header>
 <main class="main">
 
@@ -248,7 +240,7 @@ My Thoughts
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING
+      NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING
     </h1>
     <div class="post-meta"><span title='2025-10-31 00:00:00 +0000 UTC'>October 31, 2025</span>
 

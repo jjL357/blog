@@ -6,10 +6,35 @@
     <description>Recent content on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 31 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 01 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>NOT ALL HEADS MATTER - A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
+      <title>Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference </title>
+      <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
+      <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaKV/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;
+&lt;strong&gt;Github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/FFY0/AdaKV&#34;&gt;https://github.com/FFY0/AdaKV&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;这篇工作的idea在各个head之间adaptive 分配 budget, 直觉上就能知道这种设计是有效的，实验也验证了这一点。&lt;/p&gt;
+&lt;p&gt;比较惊喜的是作者实现了With efficient CUDA kernel implementations来解决variable-sized cache elements across attention heads，从而来真正实现了计算加速，以及其他KV Cache工作在也实现了对AdaKV集成，再次证明了其作为通用增强模块的价值。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;大型语言模型（LLM）在各个领域表现出色，但由于长序列推理所需的不断增长的键值（KV）cache，面临着效率挑战。LLM 的广泛应用推动了其处理扩展序列能力的发展。例如，GPT 支持长达 128K 的序列，Claude3 支持 200K，Gemini-Pro-1.5 甚至支持高达 2M 个 token。然而，这种 token 长度的增长带来了显著的挑战，尤其是在推理过程中cache大小的急剧膨胀。对于一个 8B 的 LLM，处理一个 2M token 的序列可能需要高达 256GB 的cache，这严重影响了 GPU 内存效率和计算运行时效率。&lt;/p&gt;
+&lt;p&gt;现有的 KV cache驱逐方法通常在所有注意力head上&lt;strong&gt;均匀分配&lt;/strong&gt;压缩预算，忽略了每个head独特的注意力模式。如 &lt;strong&gt;Figure 1a&lt;/strong&gt; 所示，不同head的注意力集中度（concentration）差异巨大：一些head（sparse heads）的注意力高度集中在少数几个 token 上，而另一些head（dispersed heads）的注意力则分布得更广。这种均匀分配导致了效率低下——要么在稀疏集中的head上浪费cache预算，要么在分散分布的head上造成显著的驱逐损失。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaKV/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;2-relative-work&#34;&gt;2. Relative Work&lt;/h2&gt;
+&lt;h3 id=&#34;21-cache-eviction-methods&#34;&gt;2.1 Cache Eviction Methods&lt;/h3&gt;
+&lt;p&gt;cache驱逐方法主要分为两类：滑动窗口驱逐和 Top-k 驱逐。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;滑动窗口方法&lt;/strong&gt;（如 StreamingLLM）简单地保留初始cache元素和滑动窗口内的元素，但这种无差别的驱逐会显著降低生成质量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Top-k 驱逐方法&lt;/strong&gt;（如 H2O, SnapKV, Pyramid）基于注意力权重识别并保留 &lt;code&gt;k&lt;/code&gt; 个关键cache元素。然而，现有 Top-k 方法通常在不同head上&lt;strong&gt;均匀分配&lt;/strong&gt;总预算。Ada-KV 通过&lt;strong&gt;自适应预算分配&lt;/strong&gt;来增强这些方法。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&#34;22-sparse-attention-methods&#34;&gt;2.2 Sparse Attention Methods&lt;/h3&gt;
+&lt;p&gt;稀疏注意力方法与 KV cache驱逐在根本上不同：前者保留所有cache，但在计算时只选择性地使用关键子集，因此&lt;strong&gt;不减少内存占用&lt;/strong&gt;。而 KV cache驱逐直接移除非关键条目，从而减小内存占用。这两种技术是正orthogonal的，未来可以结合使用。&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
       <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
       <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
