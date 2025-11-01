@@ -14,8 +14,8 @@
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;
-&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Video large language models (Vid-LLMs) have shown strong capabilities in understanding video content. However, their reliance on dense video token representations introduces substantial memory and computational overhead in both prefilling and decoding.&lt;/p&gt;
@@ -35,8 +35,8 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
       <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;br&gt;
-&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
 &lt;p&gt;这篇论文的 methods 挺简明的，感觉可以有个新 idea:&lt;br&gt;

@@ -14,8 +14,8 @@
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight
-&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：&lt;/p&gt;
@@ -55,8 +55,8 @@ $$&lt;/p&gt;</description>
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;
-&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Video large language models (Vid-LLMs) have shown strong capabilities in understanding video content. However, their reliance on dense video token representations introduces substantial memory and computational overhead in both prefilling and decoding.&lt;/p&gt;
@@ -76,8 +76,8 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;
-&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
 &lt;p&gt;相较于 Attention-based methods 中的 &lt;strong&gt;attention shift&lt;/strong&gt; 问题和 Similarity-based methods 中忽略了 query 的问题，这篇论文从 &lt;strong&gt;增加 visual tokens 全局多样性（同时保持对 query 的关注）&lt;/strong&gt; 的角度出发，提出了 &lt;strong&gt;CDPruner&lt;/strong&gt;，通过将 token 多样性建模为 DPP（Determinantal Point Process）求解问题，实现了 SOTA 的 pruning 效果。&lt;/p&gt;

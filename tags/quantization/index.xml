@@ -14,8 +14,8 @@
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight
-&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：&lt;/p&gt;
