@@ -6,8 +6,29 @@
     <description>Recent content on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 01 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 03 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
+      <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
+      <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/kaist-ina/specedge&#34;&gt;https://github.com/kaist-ina/specedge&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thought&#34;&gt;My Thought&lt;/h2&gt;
+&lt;p&gt;个人感觉这篇工作是将&lt;strong&gt;ICLR25 PEARL: Parallel Speculative Decoding with Adaptive Draft Length&lt;/strong&gt;中 大小模型彼此互不等待的协同Speculative Decoding模式放在了云边协同场景下(一般来说Pearl中的大小模型协同需要放在不同的卡上，在单卡场景下没法实现，而云边协同的场景下刚好符合Pearl的研究场景)，用来掩盖和减小 draft 和 target model 的网络通信开销。&lt;/p&gt;
+&lt;p&gt;同时也对 多edge draft models 的情况进行了优化，提出&lt;strong&gt;Server-Side Pipeline-Aware Scheduling&lt;/strong&gt;来进一步提高target model的利用率。&lt;/p&gt;
+&lt;p&gt;这篇工作真正实现上还有许多细节，有时间可以看看开源代码中是否涉及到。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Large language models (LLMs) power many modern applications, but serving them at scale remains costly and resource-intensive. Current server-centric systems overlook consumer-grade GPUs at the edge.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;大型语言模型（LLMs）支撑了众多现代智能应用，但其部署和推理成本极高。目前的主流推理系统普遍采用“服务器中心化”架构，忽视了边缘侧日益强大的消费级 GPU 资源。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;A compelling opportunity exists to dramatically reduce LLM serving costs by leveraging consumer-grade GPUs at the network edge.
+The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;/strong&gt;, even exceeding the &lt;strong&gt;312 TFLOPS&lt;/strong&gt; of data-center-class A100, while costing &lt;strong&gt;14.43× less&lt;/strong&gt;.&lt;/p&gt;</description>
+    </item>
     <item>
       <title>Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference </title>
       <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
