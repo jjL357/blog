@@ -6,8 +6,39 @@
     <description>Recent content in MLLM on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 30 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 05 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/mllm/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>ViSpec - Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
+      <link>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
+      <pubDate>Wed, 05 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/KangJialiang/ViSpec&#34;&gt;https://github.com/KangJialiang/ViSpec&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;个人感觉这篇工作是将Eagle应用于VLM， 并针对VLM带来的问题进行了解决。&lt;/p&gt;
+&lt;p&gt;但这篇工作也是需要training，构造数据集和进行训练花销还是挺大的， 好奇能否有更efficient甚至是training-free的method来实现Vision-Aware Speculative Decoding。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Speculative Decoding（推测解码）是一种在大型语言模型（LLM）中被广泛采用的推理加速技术。然而，其在视觉语言模型（Vision-Language Models, VLMs）中的应用仍然非常有限，已有方法的加速收益通常不足 &lt;strong&gt;1.5×&lt;/strong&gt;。&lt;br&gt;
+随着多模态能力逐渐成为大规模模型的核心能力，这一加速差距变得愈发显著。&lt;/p&gt;
+&lt;p&gt;ViSpec 的核心动机在于突破当前 VLM 加速的瓶颈：现有推测式解码方法主要针对纯文本推理设计，在视觉输入冗余较高的多模态场景下，小型草稿（draft）模型在生成过程中难以高效处理图像特征，从而限制了整体加速效率。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
+&lt;p&gt;目前针对 Vision-Language Models 的 Speculative Decoding 工作非常少。仅有的尝试[7] 在 LLaVA-7B 上应用了一个小型仅语言模型的 draft 模型，获得了大约 &lt;strong&gt;1.5×&lt;/strong&gt; 的加速。当他们将 image encoder 融入小型多模态草稿模型中时，加速效果并未显著提升，主要原因包括：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;图像信息冗余较高&lt;/strong&gt;：大量重复或低信息密度的视觉块（patch）对小模型造成干扰；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;多模态处理复杂性高&lt;/strong&gt;：视觉 token 的嵌入维度高、数量多，导致 draft 模型计算成本上升而收益有限。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这些问题说明：在现有的 speculative decoding 框架中，草稿模型无法充分理解和整合图像特征信息。因此，作者需要一个 &lt;strong&gt;能高效处理视觉与语言双模态特征并保持高预测精度&lt;/strong&gt; 的专门框架。ViSpec 即是在此背景下提出。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面的弱点。作者观察到，大型 VLM 能逐层过滤图像中冗余信息而保持语义理解，但小模型无法做到这一点。&lt;br&gt;
+为解决这一问题，ViSpec 提出了 &lt;strong&gt;Vision-Aware Speculative Decoding&lt;/strong&gt; 框架，核心贡献如下：&lt;/p&gt;</description>
+    </item>
     <item>
       <title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
