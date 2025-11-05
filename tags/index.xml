@@ -50,5 +50,33 @@
       <guid>https://jjl357.github.io/blog/tags/quantization/</guid>
       <description></description>
     </item>
+    <item>
+      <title>SVD</title>
+      <link>https://jjl357.github.io/blog/tags/svd/</link>
+      <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/svd/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Knowledge Distillation</title>
+      <link>https://jjl357.github.io/blog/tags/knowledge-distillation/</link>
+      <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/knowledge-distillation/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Reasoning Model</title>
+      <link>https://jjl357.github.io/blog/tags/reasoning-model/</link>
+      <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/reasoning-model/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Token Pruning</title>
+      <link>https://jjl357.github.io/blog/tags/token-pruning/</link>
+      <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/token-pruning/</guid>
+      <description></description>
+    </item>
   </channel>
 </rss>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Reasoning Model on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/reasoning-model/</link>
+    <description>Recent content in Reasoning Model on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 25 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/reasoning-model/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+      <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
+      <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Zefan-Cai/R-KV&#34;&gt;https://github.com/Zefan-Cai/R-KV&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning.
+However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.&lt;/p&gt;
+&lt;p&gt;For instance, a &lt;strong&gt;DeepSeek-R1-Distill-Llama-8B&lt;/strong&gt; model may generate &lt;strong&gt;32K tokens&lt;/strong&gt; to solve a complex math problem, consuming &lt;strong&gt;15.5GB&lt;/strong&gt; of memory to load model weights and &lt;strong&gt;4.1GB&lt;/strong&gt; to store the KV cache.
+This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
