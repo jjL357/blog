@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="noindex, nofollow">
+<title>SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs  | JJ&#39;s Blog</title>
+<meta name="keywords" content="Speculative Decoding, Cloud-Edge, Paper Note">
+<meta name="description" content="
+Conference: NeurIPS&#39;25 Spotlight
+Github: https://github.com/kaist-ina/specedge
+
+My Thought
+个人感觉这篇工作是将ICLR25 PEARL: Parallel Speculative Decoding with Adaptive Draft Length中 大小模型彼此互不等待的协同Speculative Decoding模式放在了云边协同场景下(一般来说Pearl中的大小模型协同需要放在不同的卡上，在单卡场景下没法实现，而云边协同的场景下刚好符合Pearl的研究场景)，用来掩盖和减小 draft 和 target model 的网络通信开销。
+同时也对 多edge draft models 的情况进行了优化，提出Server-Side Pipeline-Aware Scheduling来进一步提高target model的利用率。
+这篇工作真正实现上还有许多细节，有时间可以看看开源代码中是否涉及到。
+1. Motivation
+Large language models (LLMs) power many modern applications, but serving them at scale remains costly and resource-intensive. Current server-centric systems overlook consumer-grade GPUs at the edge.
+
+大型语言模型（LLMs）支撑了众多现代智能应用，但其部署和推理成本极高。目前的主流推理系统普遍采用“服务器中心化”架构，忽视了边缘侧日益强大的消费级 GPU 资源。
+
+A compelling opportunity exists to dramatically reduce LLM serving costs by leveraging consumer-grade GPUs at the network edge.
+The GeForce RTX 4090 delivers up to 330.3 TFLOPS (FP16 tensor), even exceeding the 312 TFLOPS of data-center-class A100, while costing 14.43× less.">
+<meta name="author" content="">
+<link rel="canonical" href="http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight.html">
+<link crossorigin="anonymous" href="http://localhost:1313/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="http://localhost:1313/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="http://localhost:1313/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight.html">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="http://localhost:1313/" accesskey="h" title="☕ 🍵🥛 (Alt + H)">
+        <span>☕ 🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs 
+    </h1>
+    <div class="post-meta"><span title='2025-11-03 00:00:00 +0000 UTC'>November 3, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25 Spotlight</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/kaist-ina/specedge">https://github.com/kaist-ina/specedge</a></p>
+<hr>
+<h2 id="my-thought">My Thought<a hidden class="anchor" aria-hidden="true" href="#my-thought">#</a></h2>
+<p>个人感觉这篇工作是将<strong>ICLR25 PEARL: Parallel Speculative Decoding with Adaptive Draft Length</strong>中 大小模型彼此互不等待的协同Speculative Decoding模式放在了云边协同场景下(一般来说Pearl中的大小模型协同需要放在不同的卡上，在单卡场景下没法实现，而云边协同的场景下刚好符合Pearl的研究场景)，用来掩盖和减小 draft 和 target model 的网络通信开销。</p>
+<p>同时也对 多edge draft models 的情况进行了优化，提出<strong>Server-Side Pipeline-Aware Scheduling</strong>来进一步提高target model的利用率。</p>
+<p>这篇工作真正实现上还有许多细节，有时间可以看看开源代码中是否涉及到。</p>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<p>Large language models (LLMs) power many modern applications, but serving them at scale remains costly and resource-intensive. Current server-centric systems overlook consumer-grade GPUs at the edge.</p>
+<blockquote>
+<p>大型语言模型（LLMs）支撑了众多现代智能应用，但其部署和推理成本极高。目前的主流推理系统普遍采用“服务器中心化”架构，忽视了边缘侧日益强大的消费级 GPU 资源。</p>
+</blockquote>
+<p>A compelling opportunity exists to dramatically reduce LLM serving costs by leveraging consumer-grade GPUs at the network edge.
+The GeForce RTX 4090 delivers up to <strong>330.3 TFLOPS (FP16 tensor)</strong>, even exceeding the <strong>312 TFLOPS</strong> of data-center-class A100, while costing <strong>14.43× less</strong>.</p>
+<blockquote>
+<p>RTX 4090 等消费级 GPU 的 FP16 张量算力已超过 A100，但成本仅为其十四分之一。若能在网络边缘充分利用这些 GPU，将可能从根本上改变 LLM 部署的经济性。</p>
+</blockquote>
+<p>然而，现有推理架构（如张量并行、流水线并行）依赖数据中心级高速互连（InfiniBand / NVLink），在广域网 (WAN) 条件下无法有效运行，成为利用边缘资源的主要障碍。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge<a hidden class="anchor" aria-hidden="true" href="#2-challenge">#</a></h2>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure1.png"></p>
+<h3 id="1传统并行失效">（1）传统并行失效<a hidden class="anchor" aria-hidden="true" href="#1传统并行失效">#</a></h3>
+<p>当前主流并行技术（Shoeybi et al., 2019；Aminabadi et al., 2022）在数据中心内部表现良好，但依赖高带宽低延迟互联，难以跨公网运行。
+WAN 环境下传输中间激活状态（如 KV Cache 或特征图）会带来巨量通信开销。</p>
+<h3 id="2split-computing-局限">（2）Split Computing 局限<a hidden class="anchor" aria-hidden="true" href="#2split-computing-局限">#</a></h3>
+<p>传统 split computing 通过“层切分”在边缘和服务器之间划分网络层，以减少服务器计算或原始输入传输。但对于自回归的 Transformer LLMs 而言，每生成一个 token 都需要一次前向传播与跨端通信，通信轮次与 token 数成正比，延迟巨大。</p>
+<p>因此，需要一种<strong>通信次数少、传输数据量小</strong>的新式协同推理方式。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution<a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h2>
+<p>We introduce <strong>SpecEdge</strong>, an edge-assisted inference framework that splits LLM workloads between edge and server GPUs <strong>using a speculative decoding scheme</strong>, exchanging <strong>only token outputs</strong> over the network.</p>
+<blockquote>
+<p>提出 <strong>SpecEdge</strong>：一种利用 <strong>推测式解码（speculative decoding）</strong> 在边缘与服务器间分工的推理框架，仅传输 token 序列，不传输中间激活。</p>
+</blockquote>
+<ul>
+<li>✅ <strong>Proactive edge drafting</strong>：边缘设备在服务器验证期间持续生成 token 候选，以隐藏网络延迟；</li>
+<li>✅ <strong>Pipeline-aware scheduling</strong>：服务器端智能交错多用户请求的验证任务，提高 GPU 利用率。</li>
+</ul>
+<p>实验表明：
+SpecEdge 在相同延迟下实现 <strong>2.22× server throughput</strong>、提升整体成本效率 <strong>1.91×</strong>，并降低 inter-token latency 约 11.24%。</p>
+<hr>
+<h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
+<h3 id="41-disaggregated-llm-decoding">4.1 Disaggregated LLM Decoding<a hidden class="anchor" aria-hidden="true" href="#41-disaggregated-llm-decoding">#</a></h3>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure2.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure3.png"></p>
+<p>SpecEdge 将 LLM 推理解耦为两个角色：</p>
+<ul>
+<li><strong>Edge GPU (consumer-grade)</strong>：负责 <em>drafting</em>（生成候选 token 树）；</li>
+<li><strong>Server GPU (data-center)</strong>：负责 <em>verification</em>（验证候选并生成最终 token）。</li>
+</ul>
+<p>这种 <strong>disaggregated speculative decoding</strong> 带来两大优势：</p>
+<ol>
+<li><strong>减少通信轮次与数据量</strong>：传统 layer-split 需要每 token 通信一次；SpecEdge 只在每 n 个 token 候选后交互一次；</li>
+<li><strong>提升算/I O 比</strong>：服务器端批量验证多个 token，可在一次前向中复用参数加载，提高算力利用率。</li>
+</ol>
+<p>但此分离引出两大新挑战：</p>
+<ul>
+<li><strong>潜在延迟增加</strong>：draft → verify 若顺序执行，会产生额外网络 RTT；</li>
+<li><strong>服务器空闲风险</strong>：若等待边缘端草稿完成再验证，会造成服务器闲置。</li>
+</ul>
+<p>为解决上述问题，SpecEdge 提出两项核心技术：</p>
+<ol>
+<li><strong>Proactive edge drafting (§ 4.2)</strong> —— 利用“主动生成”掩盖网络延迟；</li>
+<li><strong>Pipeline-aware scheduling (§ 4.3)</strong> —— 通过交错批验证保持服务器高利用率。</li>
+</ol>
+<hr>
+<h3 id="42-proactive-draft-generation-at-the-edge">4.2 Proactive Draft Generation at the Edge<a hidden class="anchor" aria-hidden="true" href="#42-proactive-draft-generation-at-the-edge">#</a></h3>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure4.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure5.png"></p>
+<h4 id="核心思想">核心思想<a hidden class="anchor" aria-hidden="true" href="#核心思想">#</a></h4>
+<p>当 edge GPU 生成 n 个候选并发送至 server 验证后，<strong>无需等待返回结果</strong>，而是立即继续向前生成新的候选 token。
+若服务器验证通过且其“bonus token”与边缘提前生成的首个 token 一致（称为 <strong>complete draft alignment</strong>），则这些预生成的 token 可直接接入生成流，无需重新计算，从而实现<strong>计算-通信重叠</strong>、隐藏延迟。</p>
+<p>当服务器验证了边缘端发送的候选 token 并生成下一个 token（bonus token）后，如果这个 bonus token 恰好与边缘端在等待期间主动预测出的第一个 token 一致，那么说明两边的生成路径完全吻合（即 complete draft alignment）。这意味着边缘端之前预生成的那一段 token 就是服务器最终认可的结果，可以直接沿用、无需重新计算，从而让边缘端在等待验证时做的工作不被浪费，实现“边算边传”的计算–通信重叠，显著减少整体生成延迟。</p>
+<h4 id="kv-cache-更新策略">KV Cache 更新策略<a hidden class="anchor" aria-hidden="true" href="#kv-cache-更新策略">#</a></h4>
+<ul>
+<li>对于 <strong>aligned path</strong>：Edge 可复用已有 KV Cache，仅增量更新；</li>
+<li>若验证失败或路径分叉，则丢弃 proactive 分支，从服务器返回的 token 序列重新构建 KV Cache。</li>
+</ul>
+<p>此机制保证一致性同时降低冗余计算。</p>
+<h4 id="性能收益模型">性能收益模型<a hidden class="anchor" aria-hidden="true" href="#性能收益模型">#</a></h4>
+<p>SpecEdge 形式化地分析 proactive drafting 的期望收益：</p>
+<p>$$
+E(\text{Gain}) = P_{\text{align}} \cdot P_{\text{match}\mid\text{align}}
+\cdot \Big(\frac{T_{\text{draft}}}{H_{\text{expan}}} - 1\Big)
+$$</p>
+<ul>
+<li>$P_{\text{align}}$：前 n 个 token 验证通过且与 proactive 路径对齐的概率；</li>
+<li>$P_{\text{match}\mid\text{align}}$：在对齐条件下 server bonus token 与 proactive 首 token 匹配的条件概率；</li>
+<li>$T_{\text{draft}}$：边缘草稿生成时间；</li>
+<li>$H_{\text{expan}}$：proactive 扩展深度。</li>
+</ul>
+<p>若收益为正，则说明重叠计算可有效隐藏通信延迟。</p>
+<h4 id="通信-计算重叠分析">通信-计算重叠分析<a hidden class="anchor" aria-hidden="true" href="#通信-计算重叠分析">#</a></h4>
+<p>设网络往返延迟为 $T_{\text{net}}$，服务器验证耗时 $T_{\text{verify}}$，边缘 drafting 耗时 $T_{\text{draft}}$。
+SpecEdge 通过调节 $n$ 与 draft 深度 $k$ ，使得：</p>
+<p>$$
+T_{\text{verify}} \approx T_{\text{draft}} + T_{\text{net}}
+$$</p>
+<p>从而在时间轴上实现几乎完全重叠，无空闲阶段。</p>
+<h4 id="成功与失败场景">成功与失败场景<a hidden class="anchor" aria-hidden="true" href="#成功与失败场景">#</a></h4>
+<ul>
+<li><strong>Complete alignment</strong>：server bonus token 与 proactive 首 token 匹配，直接复用并继续向前。</li>
+<li><strong>Partial alignment 或 divergence</strong>：server 路径与 proactive 树分叉，丢弃 proactive 分支，回退到验证末端。</li>
+<li><strong>统计结果</strong>：论文实测 alignment 成功率随 draft 深度增长递减，通常 2–4 token 深度可在延迟与命中率间取得平衡。</li>
+</ul>
+<hr>
+<h3 id="43-server-side-pipeline-aware-scheduling">4.3 Server-Side Pipeline-Aware Scheduling<a hidden class="anchor" aria-hidden="true" href="#43-server-side-pipeline-aware-scheduling">#</a></h3>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure2.png"></p>
+<p>SpecEdge 将服务器职责限定为 <strong>verification only</strong>。
+此设计释放了大量计算资源，但也带来调度挑战：
+当某个 edge 正在生成新草稿时，服务器可能暂时无任务可处理，出现空闲气泡（bubbles）。</p>
+<h4 id="pipeline-调度机制">Pipeline 调度机制<a hidden class="anchor" aria-hidden="true" href="#pipeline-调度机制">#</a></h4>
+<p>SpecEdge 通过交错不同用户请求的验证任务，<strong>构建跨请求流水线</strong>：</p>
+<ol>
+<li>服务器持续从多个 edge 设备接收已完成的 draft batches；</li>
+<li>对批内所有候选序列并行验证；</li>
+<li>验证完成后立即将结果发回对应 edge；</li>
+<li>服务器转而处理下一批来自其他 edge 的草稿。</li>
+</ol>
+<p>这种交错确保服务器 GPU 几乎持续满载，实现近似“双倍吞吐”。</p>
+<h4 id="动态深度校准">动态深度校准<a hidden class="anchor" aria-hidden="true" href="#动态深度校准">#</a></h4>
+<p>为最大化流水线效率，SpecEdge 实时测量 $T_{\text{verify}}$ 与 $T_{\text{draft}}$，并动态调整 draft 深度 $d$：</p>
+<p>$$
+T_{\text{verify}} \approx T_{\text{draft}} + T_{\text{net}}
+$$</p>
+<p>若服务器验证过快（$T_{\text{verify}} &lt; T_{\text{draft}} + T_{\text{net}}$），则减少 draft 深度；
+若服务器验证较慢（$T_{\text{verify}} &gt; T_{\text{draft}} + T_{\text{net}}$），则增加 draft 深度，
+以维持两者时长近似匹配，从而实现最佳计算–通信重叠。</p>
+<h4 id="异质请求处理heterogeneous-requests">异质请求处理（Heterogeneous Requests）<a hidden class="anchor" aria-hidden="true" href="#异质请求处理heterogeneous-requests">#</a></h4>
+<p>多用户处于不同生成阶段，序列长度差异大。为并行处理：</p>
+<ol>
+<li><strong>Custom Attention Masking</strong>：为每个序列生成独立注意力掩码，保证仅对有效 token 计算自注意；</li>
+<li><strong>KV Cache Padding</strong>：将所有序列填充至当前批次最长长度，避免频繁调整张量形状。</li>
+</ol>
+<p>这样，服务器可一次性在大 batch 内验证多个不同长度的请求，充分利用 GPU 并行能力而无交叉干扰。</p>
+<h2 id="5-evaluation">5. Evaluation<a hidden class="anchor" aria-hidden="true" href="#5-evaluation">#</a></h2>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/table1.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure6.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpecEdge/figure7to12.png"></p>
+<h3 id="实验设置">实验设置<a hidden class="anchor" aria-hidden="true" href="#实验设置">#</a></h3>
+<ul>
+<li>
+<p><strong>模型</strong>：LLaMA-2-13B 与 7B （作为 draft / verify 模型）。</p>
+</li>
+<li>
+<p><strong>边缘 GPU</strong>：RTX 4090（24 GB VRAM）；</p>
+</li>
+<li>
+<p><strong>服务器 GPU</strong>：A100 40 GB；</p>
+</li>
+<li>
+<p><strong>网络条件</strong>：WAN 仿真 10 Gbps 带宽、20–40 ms RTT。</p>
+</li>
+<li>
+<p><strong>比较基线</strong>：</p>
+<ol>
+<li><strong>Server-only inference</strong>（传统单端推理）；</li>
+<li><strong>Split computing baseline</strong>（层切分方案）；</li>
+<li><strong>Local speculative decoding</strong>（单机推测式解码，无分布式）。</li>
+</ol>
+</li>
+</ul>
+<h3 id="主要指标">主要指标<a hidden class="anchor" aria-hidden="true" href="#主要指标">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>指标</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Throughput</strong></td>
+          <td>单位时间内服务器验证的 token 数</td>
+      </tr>
+      <tr>
+          <td><strong>Latency per token</strong></td>
+          <td>端到端平均 token 延迟</td>
+      </tr>
+      <tr>
+          <td><strong>Cost Efficiency</strong></td>
+          <td>吞吐 ÷ 成本（以美元计）</td>
+      </tr>
+      <tr>
+          <td><strong>Server Utilization</strong></td>
+          <td>GPU 占用率</td>
+      </tr>
+      <tr>
+          <td><strong>Alignment Success Rate</strong></td>
+          <td>完全对齐概率</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="结果分析">结果分析<a hidden class="anchor" aria-hidden="true" href="#结果分析">#</a></h3>
+<ol>
+<li>
+<p><strong>Throughput ↑ 2.22×</strong>：
+由于服务器专注批验证且持续满载，吞吐翻倍；</p>
+</li>
+<li>
+<p><strong>Latency ↓ 11.24 %</strong>：
+Proactive drafting 成功率约 73 %，能有效隐藏 RTT；</p>
+</li>
+<li>
+<p><strong>Cost Efficiency ↑ 1.91×</strong>：
+边缘端硬件成本低，整体推理成本大幅下降；</p>
+</li>
+<li>
+<p><strong>Server Utilization 接近 98 %</strong>：
+Pipeline aware 调度避免了空闲；</p>
+</li>
+<li>
+<p><strong>Scalability</strong>：
+随 edge 数量增加，性能线性提升直至网络饱和。</p>
+</li>
+</ol>
+<h3 id="消融实验ablation">消融实验（Ablation）<a hidden class="anchor" aria-hidden="true" href="#消融实验ablation">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>模块</th>
+          <th>Throughput 变化</th>
+          <th>Latency 变化</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>– Proactive Drafting</td>
+          <td>↓ 35 %</td>
+          <td>↑ 18 %</td>
+      </tr>
+      <tr>
+          <td>– Pipeline Scheduling</td>
+          <td>↓ 42 %</td>
+          <td>↑ 10 %</td>
+      </tr>
+      <tr>
+          <td>– Both</td>
+          <td>↓ 63 %</td>
+          <td>↑ 28 %</td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p>两个模块缺一不可：主动草稿负责降低延迟，流水线调度保证吞吐。</p>
+</blockquote>
+<h3 id="sensitivity-study">Sensitivity Study<a hidden class="anchor" aria-hidden="true" href="#sensitivity-study">#</a></h3>
+<ul>
+<li><strong>Draft Depth d</strong>：过浅 → alignment 低；过深 → 无效草稿浪费 GPU；最佳 d≈4；</li>
+<li><strong>Network RTT</strong>：延迟越大，SpecEdge 相对优势越明显；</li>
+<li><strong>Edge/Server 比</strong>：1:4 至 1:6 可实现吞吐最优平衡。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion<a hidden class="anchor" aria-hidden="true" href="#6-conclusion">#</a></h2>
+<p>We have presented <strong>SpecEdge</strong>, an edge-assisted LLM inference framework leveraging user-side consumer GPUs for drafting candidate tokens, while the server focuses on final verification.</p>
+<blockquote>
+<p>SpecEdge 通过仅传输最终 token 输出，在典型 WAN 环境下实现高效的分布式 LLM 推理。
+边缘端的 <strong>Proactive Drafting</strong> 最大化利用本地算力并隐藏网络延迟；
+服务器端的 <strong>Pipeline-aware Scheduling</strong> 保证 GPU 持续饱和并显著提升吞吐。</p>
+</blockquote>
+<p>实验结果表明：SpecEdge 在保证交互延迟可接受的前提下，
+可使服务器吞吐提高 2.22×，运营成本降低 1.91×。</p>
+<hr>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="http://localhost:1313/blog/tags/speculative-decoding.html">Speculative Decoding</a></li>
+      <li><a href="http://localhost:1313/blog/tags/cloud-edge.html">Cloud-Edge</a></li>
+      <li><a href="http://localhost:1313/blog/tags/paper-note.html">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="http://localhost:1313/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
