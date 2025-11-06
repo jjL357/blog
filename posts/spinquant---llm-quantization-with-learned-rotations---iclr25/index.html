@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS | JJ&#39;s Blog</title>
+<title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS | JJ&#39;s Blog</title>
 <meta name="keywords" content="Quantization, Paper Note">
 <meta name="description" content="
 Conference: ICLR&#39;25
@@ -121,7 +121,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
+  <meta property="og:title" content="📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
   <meta property="og:description" content="
 Conference: ICLR&#39;25
 Github: https://github.com/facebookresearch/SpinQuant
@@ -138,7 +138,7 @@ My Thoughts 这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2
     <meta property="article:tag" content="Quantization">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
+<meta name="twitter:title" content="📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
 <meta name="twitter:description" content="
 Conference: ICLR&#39;25
 Github: https://github.com/facebookresearch/SpinQuant
@@ -170,7 +170,7 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
+      "name": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
       "item": "https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/"
     }
   ]
@@ -180,8 +180,8 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
-  "name": "SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
+  "headline": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
+  "name": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
   "description": "\nConference: ICLR'25\nGithub: https://github.com/facebookresearch/SpinQuant\nMy Thoughts 这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。\n就像论文中提到的：\n“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived\u0026hellip;”\n作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。\n1. Motivation Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。\n",
   "keywords": [
     "Quantization", "Paper Note"
@@ -249,7 +249,7 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS
+      📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS
     </h1>
     <div class="post-meta"><span title='2025-11-06 00:00:00 +0000 UTC'>November 6, 2025</span>
 

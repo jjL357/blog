@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding   | JJ&#39;s Blog</title>
+<title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding   | JJ&#39;s Blog</title>
 <meta name="keywords" content="Speculative Decoding, MLLM, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25
@@ -131,7 +131,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ">
+  <meta property="og:title" content="📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25
 GitHub: https://github.com/KangJialiang/ViSpec
@@ -153,7 +153,7 @@ ViSpec 的核心动机在于突破当前 VLM 加速的瓶颈：现有推测式�
     <meta property="article:tag" content="MLLM">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ">
+<meta name="twitter:title" content="📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25
 GitHub: https://github.com/KangJialiang/ViSpec
@@ -195,7 +195,7 @@ ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
+      "name": "📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
       "item": "https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/"
     }
   ]
@@ -205,8 +205,8 @@ ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
-  "name": "ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
+  "headline": "📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
+  "name": "📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  ",
   "description": "\nConference: NeurIPS'25\nGitHub: https://github.com/KangJialiang/ViSpec\nMy Thoughts 个人感觉这篇工作是将Eagle应用于VLM， 并针对VLM带来的问题进行了解决。\n但这篇工作也是需要training，构造数据集和进行训练花销还是挺大的， 好奇能否有更efficient甚至是training-free的method来实现Vision-Aware Speculative Decoding。\n1. Motivation Speculative Decoding（推测解码）是一种在大型语言模型（LLM）中被广泛采用的推理加速技术。然而，其在视觉语言模型（Vision-Language Models, VLMs）中的应用仍然非常有限，已有方法的加速收益通常不足 1.5×。\n随着多模态能力逐渐成为大规模模型的核心能力，这一加速差距变得愈发显著。\nViSpec 的核心动机在于突破当前 VLM 加速的瓶颈：现有推测式解码方法主要针对纯文本推理设计，在视觉输入冗余较高的多模态场景下，小型草稿（draft）模型在生成过程中难以高效处理图像特征，从而限制了整体加速效率。\n2. Challenge 目前针对 Vision-Language Models 的 Speculative Decoding 工作非常少。仅有的尝试[7] 在 LLaVA-7B 上应用了一个小型仅语言模型的 draft 模型，获得了大约 1.5× 的加速。当他们将 image encoder 融入小型多模态草稿模型中时，加速效果并未显著提升，主要原因包括：\n图像信息冗余较高：大量重复或低信息密度的视觉块（patch）对小模型造成干扰； 多模态处理复杂性高：视觉 token 的嵌入维度高、数量多，导致 draft 模型计算成本上升而收益有限。 这些问题说明：在现有的 speculative decoding 框架中，草稿模型无法充分理解和整合图像特征信息。因此，作者需要一个 能高效处理视觉与语言双模态特征并保持高预测精度 的专门框架。ViSpec 即是在此背景下提出。\n3. Contribution ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面的弱点。作者观察到，大型 VLM 能逐层过滤图像中冗余信息而保持语义理解，但小模型无法做到这一点。\n为解决这一问题，ViSpec 提出了 Vision-Aware Speculative Decoding 框架，核心贡献如下：\n",
   "keywords": [
     "Speculative Decoding", "MLLM", "Paper Note"
@@ -274,7 +274,7 @@ ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  
+      📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  
     </h1>
     <div class="post-meta"><span title='2025-11-05 00:00:00 +0000 UTC'>November 5, 2025</span>
 

@@ -9,7 +9,7 @@
     <lastBuildDate>Thu, 06 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/quantization/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
+      <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
       <link>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
       <pubDate>Thu, 06 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
@@ -30,7 +30,7 @@
 &lt;p&gt;Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
+      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>

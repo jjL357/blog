@@ -9,7 +9,7 @@
     <lastBuildDate>Thu, 06 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/paper-note/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
+      <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
       <link>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
       <pubDate>Thu, 06 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
@@ -30,7 +30,7 @@
 &lt;p&gt;Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
+      <title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
       <link>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
       <pubDate>Wed, 05 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
@@ -61,7 +61,7 @@
 为解决这一问题，ViSpec 提出了 &lt;strong&gt;Vision-Aware Speculative Decoding&lt;/strong&gt; 框架，核心贡献如下：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
+      <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
       <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
@@ -82,7 +82,7 @@
 The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;/strong&gt;, even exceeding the &lt;strong&gt;312 TFLOPS&lt;/strong&gt; of data-center-class A100, while costing &lt;strong&gt;14.43× less&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference </title>
+      <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference </title>
       <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
       <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
@@ -107,7 +107,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;p&gt;稀疏注意力方法与 KV cache驱逐在根本上不同：前者保留所有cache，但在计算时只选择性地使用关键子集，因此&lt;strong&gt;不减少内存占用&lt;/strong&gt;。而 KV cache驱逐直接移除非关键条目，从而减小内存占用。这两种技术是正orthogonal的，未来可以结合使用。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
+      <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
       <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
       <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
@@ -125,7 +125,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;p&gt;回顾了对多头注意力中 head 功能的研究（Voita et al., Olsson et al., Wu et al., Zheng et al. 等），并指出不同 head 在词法、结构、复制（induction）、检索等方面扮演不同角色。这些观察为按 head 分配 KV cache 提供理论基础。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
+      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
@@ -166,7 +166,7 @@ W \approx U_r \Sigma_r V_r^T
 $$&lt;/p&gt;</description>
     </item>
     <item>
-      <title>SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
+      <title>📝 SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
       <link>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
@@ -187,7 +187,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;p&gt;在 autoregressive 生成过程中，每步生成的 KV cache 都必须与模型参数一起加载与存储于 GPU 显存，导致显著的 memory-bound 现象。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
+      <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
       <link>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
       <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
@@ -205,7 +205,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+      <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
       <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
@@ -222,7 +222,7 @@ However, they often produce excessively long outputs, leading to prohibitively l
 This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
@@ -247,7 +247,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
+      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
       <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
       <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
