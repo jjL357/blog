@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation | JJ&#39;s Blog</title>
+<meta name="keywords" content="MLLM, Knowledge Distillation, Paper Note">
+<meta name="description" content="
+Conference： NeurIPS 2025
+Github： https://github.com/ZichenWen1/EPIC
+
+My Thoughts
+EPIC 这篇论文的核心思想是在不改动模型结构的前提下，通过渐进式一致性蒸馏（Progressive Consistency Distillation），让多模态大语言模型在token 层面（Token Consistency Distillation, TCD） 和 层级层面（Layer Consistency Distillation, LCD） 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。
+日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。
+1. Motivation
+多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的计算负担与存储压力，尤其在推理时对 KV cache 和显存的占用极大。
+因此，如何在不显著降低性能的前提下减少视觉 token 的数量，成为提升 MLLM 效率的核心问题。
+
+2. Challenge
+视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：
+
+
+Training-free 方法： 不需要额外训练，通过简单的启发式规则压缩视觉 token。
+
+基于重要性（importance-based）：如 FastV、SparseVLM，依据注意力得分筛选重要 token。
+基于冗余（redundancy-based）：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。
+
+
+
+Training-aware 方法： 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。
+典型工作包括：">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation">
+  <meta property="og:description" content="
+Conference： NeurIPS 2025
+Github： https://github.com/ZichenWen1/EPIC
+My Thoughts EPIC 这篇论文的核心思想是在不改动模型结构的前提下，通过渐进式一致性蒸馏（Progressive Consistency Distillation），让多模态大语言模型在token 层面（Token Consistency Distillation, TCD） 和 层级层面（Layer Consistency Distillation, LCD） 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。
+日后如果有需要用到 Knowledge Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。
+1. Motivation 多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的计算负担与存储压力，尤其在推理时对 KV cache 和显存的占用极大。
+因此，如何在不显著降低性能的前提下减少视觉 token 的数量，成为提升 MLLM 效率的核心问题。
+2. Challenge 视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：
+Training-free 方法： 不需要额外训练，通过简单的启发式规则压缩视觉 token。
+基于重要性（importance-based）：如 FastV、SparseVLM，依据注意力得分筛选重要 token。 基于冗余（redundancy-based）：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。 Training-aware 方法： 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。 典型工作包括：">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-11-07T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-11-07T00:00:00+00:00">
+    <meta property="article:tag" content="MLLM">
+    <meta property="article:tag" content="Knowledge Distillation">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation">
+<meta name="twitter:description" content="
+Conference： NeurIPS 2025
+Github： https://github.com/ZichenWen1/EPIC
+
+My Thoughts
+EPIC 这篇论文的核心思想是在不改动模型结构的前提下，通过渐进式一致性蒸馏（Progressive Consistency Distillation），让多模态大语言模型在token 层面（Token Consistency Distillation, TCD） 和 层级层面（Layer Consistency Distillation, LCD） 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。
+日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。
+1. Motivation
+多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的计算负担与存储压力，尤其在推理时对 KV cache 和显存的占用极大。
+因此，如何在不显著降低性能的前提下减少视觉 token 的数量，成为提升 MLLM 效率的核心问题。
+
+2. Challenge
+视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：
+
+
+Training-free 方法： 不需要额外训练，通过简单的启发式规则压缩视觉 token。
+
+基于重要性（importance-based）：如 FastV、SparseVLM，依据注意力得分筛选重要 token。
+基于冗余（redundancy-based）：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。
+
+
+
+Training-aware 方法： 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。
+典型工作包括：">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation",
+      "item": "https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation",
+  "name": "📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation",
+  "description": "\nConference： NeurIPS 2025\nGithub： https://github.com/ZichenWen1/EPIC\nMy Thoughts EPIC 这篇论文的核心思想是在不改动模型结构的前提下，通过渐进式一致性蒸馏（Progressive Consistency Distillation），让多模态大语言模型在token 层面（Token Consistency Distillation, TCD） 和 层级层面（Layer Consistency Distillation, LCD） 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。\n日后如果有需要用到 Knowledge Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。\n1. Motivation 多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的计算负担与存储压力，尤其在推理时对 KV cache 和显存的占用极大。\n因此，如何在不显著降低性能的前提下减少视觉 token 的数量，成为提升 MLLM 效率的核心问题。\n2. Challenge 视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：\nTraining-free 方法： 不需要额外训练，通过简单的启发式规则压缩视觉 token。\n基于重要性（importance-based）：如 FastV、SparseVLM，依据注意力得分筛选重要 token。 基于冗余（redundancy-based）：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。 Training-aware 方法： 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。 典型工作包括：\n",
+  "keywords": [
+    "MLLM", "Knowledge Distillation", "Paper Note"
+  ],
+  "articleBody": "\nConference： NeurIPS 2025\nGithub： https://github.com/ZichenWen1/EPIC\nMy Thoughts EPIC 这篇论文的核心思想是在不改动模型结构的前提下，通过渐进式一致性蒸馏（Progressive Consistency Distillation），让多模态大语言模型在token 层面（Token Consistency Distillation, TCD） 和 层级层面（Layer Consistency Distillation, LCD） 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。\n日后如果有需要用到 Knowledge Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。\n1. Motivation 多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的计算负担与存储压力，尤其在推理时对 KV cache 和显存的占用极大。\n因此，如何在不显著降低性能的前提下减少视觉 token 的数量，成为提升 MLLM 效率的核心问题。\n2. Challenge 视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：\nTraining-free 方法： 不需要额外训练，通过简单的启发式规则压缩视觉 token。\n基于重要性（importance-based）：如 FastV、SparseVLM，依据注意力得分筛选重要 token。 基于冗余（redundancy-based）：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。 Training-aware 方法： 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。 典型工作包括：\nLLaVA-PruMerge（基于注意力的合并） VoCo-LLaMA（压缩 VoCo token） MQT-LLaVA（动态 Q-Former 编码） TokenPacker（粗到细迭代压缩） LLaVA-Mini（利用辅助模块实现近无损压缩） 然而问题在于： 在训练过程中进行 token 压缩时，压缩后的特征分布会与原始分布产生偏移（即特征空间扰动，feature-space perturbation）。这种扰动会使模型参数空间中的最优点发生漂移。压缩越激进，漂移越大，从而导致模型更容易陷入局部最优，训练收敛困难。\n因此，核心挑战在于： 如何在高压缩率下仍能保持稳定的训练与性能一致性。\n3. Contribution 本文提出了一种渐进一致性蒸馏学习框架（Progressive Consistency Distillation Learning Framework） —— EPIC，用于解决 token 压缩带来的训练扰动问题。\n核心思想是： 通过渐进学习（progressive learning）和一致性蒸馏（consistency distillation），让模型从“低压缩、易学习”的状态逐步适应“高压缩、难优化”的场景，从而实现平滑过渡。\n核心贡献包括： Token Consistency Distillation (TCD)： 从 token 维度进行渐进蒸馏。 在训练初期，teacher 与 student 使用较低压缩率；随着训练推进，压缩率逐步提高。teacher 始终比 student 稍微“容易”一些，从而提供稳定的蒸馏指导。\nLayer Consistency Distillation (LCD)： 从层级维度进行渐进蒸馏。 视觉 token 在模型深层的贡献较小，因此训练初期在深层执行压缩影响较小，随后逐渐将压缩迁移到浅层，实现“由易到难”的层级学习。\n统一框架与兼容性： EPIC 不需要修改模型结构，也不依赖特定的 token 压缩算法，可与 DART、FastV、Random 等方法兼容。\n4. Method 4.1 Progressive Consistency Distillation Learning 在高压缩训练中，视觉特征分布的扰动会导致模型收敛困难。EPIC 提出的**渐进一致性蒸馏学习（PCDL）**框架，旨在通过逐步增加压缩难度，让模型平滑过渡至最终目标。\n该框架包含两个主要部分：\nToken Consistency Distillation (TCD)：从 token 维度逐步提高压缩率； Layer Consistency Distillation (LCD)：从层级维度逐步从深层过渡到浅层进行压缩。 两者均通过共享权重的 teacher-student 架构实现一致性蒸馏。teacher 使用略低压缩率（如低 5%）指导 student，随着训练进行逐渐拉大 gap（如 10%），实现阶段式指导。\n4.2 Theoretical Intuition: A 1D Prototype for Progressive Consistency Distillation Learning 为理解 PCDL 的有效性，论文构建了一个一维标量模型。假设模型输出为 $\\theta \\in \\mathbb{R}$，每个压缩率 $r \\in [0, r_{\\max}]$ 对应一个目标中心 $c_r$。设函数 $c(r)$ 满足：\n单调递增：$c’(r) \\ge 0$ Lipschitz 连续：存在常数 $\\gamma \u003e 0$，使得 $|c’(r)| \\le \\gamma$ 凸性：$c’’(r) \\ge 0$ 定义两种训练目标：\n直接训练： $$ L_{\\text{dir}}(r,\\theta) = \\frac{1}{2}(\\theta - c_r)^2 $$ 渐进蒸馏： $$ L_{\\text{prog}}(r,\\theta) = \\frac{1}{2}(\\theta - c_r)^2 + \\frac{\\lambda}{2}(\\theta - c_{r-\\Delta})^2 $$ 第二项表示来自压缩率更低的 teacher 的蒸馏约束。该设计能平滑学习轨迹，避免参数在压缩率变化时剧烈振荡。\n理论上可证明，在满足上述条件时，渐进路径的总变化量（Total Variation）严格小于直接训练路径，即学习过程更平滑、更稳定。\n4.3 Token Consistency Distillation (TCD) TCD 从 token 维度 逐步增加压缩比，实现模型对视觉 token 压缩的渐进适应。\n设模型为 $f_\\theta$（teacher 与 student 共享参数），图像输入 $I$，文本提示 $P$。\n定义压缩算子 $C(I, r, \\ell)$ 表示在第 $\\ell$ 层以比例 $r$ 压缩视觉 token（保留 $1-r$ 的比例）。\n在训练第 $t$ 步时：\n从一个随时间变化的区间中随机采样 student 压缩率： $$ r_t^{\\text{stu}} \\sim \\mathcal{U}(R_{\\min,t}^{\\text{stu}}, R_{\\max,t}^{\\text{stu}}) $$ 随着训练进行，$R_{\\max,t}$ 逐渐增大（压缩率提高）。\nteacher 压缩率略低： $$ r_t^{\\text{tea}} = \\max(0, r_t^{\\text{stu}} - \\Delta_t) $$ gap $\\Delta_t$ 也随时间逐步增大（防止初期蒸馏难度过大）。\nteacher 与 student 的前向输出分别为： $$ h_{\\text{tea}} = f_\\theta(C(I, r_t^{\\text{tea}}, \\ell); P),\\quad h_{\\text{stu}} = f_\\theta(C(I, r_t^{\\text{stu}}, \\ell); P) $$\n定义蒸馏损失（KL 散度）： $$ L_{\\text{TCD}} = \\mathrm{KL}(p_{\\text{tea}} \\Vert p_{\\text{stu}}),\\quad p = \\mathrm{Softmax}(h / \\tau) $$ 其中 $\\tau$ 为温度参数。\n总损失为： $$ L_{\\text{total}} = (1 - \\lambda)L_{\\text{SFT}} + \\lambda L_{\\text{TCD}} $$\n直观理解： teacher 使用轻度压缩得到平滑特征分布，student 使用更高压缩率学习在更困难分布下保持一致性。随着训练推进，teacher 与 student 的压缩率差距增大，学习难度逐步提升，形成稳定的“课程学习（curriculum learning）”路径。\n4.4 Layer Consistency Distillation (LCD) 先前研究发现，视觉 token 在模型深层的注意力权重较低，而浅层特征对视觉语义贡献更大。 基于此，LCD 采用一种从深层向浅层逐步压缩的策略。\n定义模型总层数为 $L$，训练步数为 $T$，当前步 $t$ 的归一化进度为 $\\beta_t = t / T$。 选择压缩层： $$ \\ell_t = \\text{Round}(L - \\beta_t(L - \\ell_{\\min})) $$\n即在训练初期仅压缩最深层（影响最小），随后逐渐向浅层推进。\n其损失函数与 TCD 类似，也采用 KL 散度形式： $$ L_{\\text{LCD}} = \\mathrm{KL}(p_{\\text{tea}} \\Vert p_{\\text{stu}}) $$\n最终训练目标： $$ L_{\\text{total}} = (1 - \\lambda)L_{\\text{SFT}} + \\lambda L_{\\text{LCD}} $$\n总结： TCD 聚焦 token 数量层面，LCD 聚焦层级深度，两者结合构成完整的渐进一致性蒸馏框架。\n5. Evaluation 论文在多个视觉理解基准上进行了实验，包括 VQAv2、GQA、VizWiz、MME、MMBench、VQAT、POPE 等。\n5.1 实验结果 当保留 128 个视觉 token 时，EPIC 模型的性能与原始 LLaVA-v1.5-7B 几乎持平；当 token 数为 192 以上时甚至超越原始模型。这表明视觉 token 中存在大量冗余，压缩并不会显著损害性能。\n在 MME、MMBench、VQA V2 等视觉密集型任务上，EPIC 的性能提升最为明显。 此外，模型在不同压缩率下表现稳定：当仅保留 64 个 token 时，性能下降不到 2%，128~256 token 区间几乎无损。\n5.2 效率分析 EPIC 在训练和推理效率上均优于其他方法。\n训练阶段： 由于 EPIC 不修改模型结构，只需一次监督微调（Supervised Fine-tuning），在 8×A100 上训练约 12 小时。 而如 MQT-LLaVA、TokenPacker 等架构改造型方法需 30~48 小时。\n推理阶段： 在 64 个 token 情况下，KV cache 占用下降约 90%，FLOPs 减少 80% 以上，推理速度提升约 1.6×。 即使采用最简单的 Random 压缩策略，也能显著降低延迟和显存消耗。\nEPIC 的主要收益来自训练策略优化，而非复杂架构修改。\n6. Analysis 6.1 消融实验 无蒸馏 (w/o TCD/LCD)： 性能显著下降，验证 teacher guidance 的必要性。 无渐进策略 (no progression)： 直接使用固定压缩率训练时收敛不稳定，验证 progressive 学习的重要性。 跨压缩方法泛化性： 用 DART 训练、FastV 推理仍能保持性能，说明 EPIC 具备良好的跨策略鲁棒性。 6.2 是否需要极端压缩 论文指出，虽然极端压缩（1 ~ 2 token）可进一步降低计算量，但性能下降剧烈，且 GPU 延迟收益有限。最佳权衡点通常在 64 ~128 tokens 区间，兼顾性能与速度。\n7. Conclusion 本文提出的 EPIC 框架 在不改变模型结构的情况下，通过渐进一致性蒸馏实现了对视觉 token 压缩的高效训练。 其主要优势包括：\n无需额外模块，直接与现有 MLLM 兼容； 训练稳定、收敛快速（12 小时即可完成）； 在多项视觉基准上性能与原始模型持平或更优； 在 64~128 token 区间显著提升推理效率与资源利用率。 实验结果表明，合理的渐进蒸馏策略能够在不牺牲性能的前提下，大幅度提升多模态大语言模型的效率与鲁棒性。\n",
+  "wordCount" : "529",
+  "inLanguage": "zh-cn",
+  "datePublished": "2025-11-07T00:00:00Z",
+  "dateModified": "2025-11-07T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation
+    </h1>
+    <div class="post-meta"><span title='2025-11-07 00:00:00 +0000 UTC'>November 7, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/title.png"></p>
+<p><strong>Conference：</strong> NeurIPS 2025</p>
+<p><strong>Github：</strong> <a href="https://github.com/ZichenWen1/EPIC">https://github.com/ZichenWen1/EPIC</a></p>
+<h2><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/figure3.png"></h2>
+<h2 id="my-thoughts">My Thoughts<a hidden class="anchor" aria-hidden="true" href="#my-thoughts">#</a></h2>
+<p>EPIC 这篇论文的核心思想是在<strong>不改动模型结构</strong>的前提下，通过<strong>渐进式一致性蒸馏（Progressive Consistency Distillation）</strong>，让多模态大语言模型在<strong>token 层面（Token Consistency Distillation, TCD）</strong> 和 <strong>层级层面（Layer Consistency Distillation, LCD）</strong> 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。</p>
+<p>日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。</p>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<p>多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的<strong>计算负担与存储压力</strong>，尤其在推理时对 KV cache 和显存的占用极大。</p>
+<p>因此，如何在不显著降低性能的前提下<strong>减少视觉 token 的数量</strong>，成为提升 MLLM 效率的核心问题。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge<a hidden class="anchor" aria-hidden="true" href="#2-challenge">#</a></h2>
+<p>视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：</p>
+<ol>
+<li>
+<p><strong>Training-free 方法：</strong> 不需要额外训练，通过简单的启发式规则压缩视觉 token。</p>
+<ul>
+<li><strong>基于重要性（importance-based）</strong>：如 FastV、SparseVLM，依据注意力得分筛选重要 token。</li>
+<li><strong>基于冗余（redundancy-based）</strong>：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。</li>
+</ul>
+</li>
+<li>
+<p><strong>Training-aware 方法：</strong> 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。
+典型工作包括：</p>
+<ul>
+<li>LLaVA-PruMerge（基于注意力的合并）</li>
+<li>VoCo-LLaMA（压缩 VoCo token）</li>
+<li>MQT-LLaVA（动态 Q-Former 编码）</li>
+<li>TokenPacker（粗到细迭代压缩）</li>
+<li>LLaVA-Mini（利用辅助模块实现近无损压缩）</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/figure1.png"></p>
+<p><strong>然而问题在于：</strong>
+在训练过程中进行 token 压缩时，压缩后的特征分布会与原始分布产生偏移（即特征空间扰动，feature-space perturbation）。这种扰动会使模型参数空间中的最优点发生漂移。压缩越激进，漂移越大，从而导致模型更容易陷入局部最优，训练收敛困难。</p>
+<p>因此，核心挑战在于：
+如何在<strong>高压缩率下</strong>仍能保持<strong>稳定的训练与性能一致性</strong>。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution<a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/figure2.png"></p>
+<p>本文提出了一种<strong>渐进一致性蒸馏学习框架（Progressive Consistency Distillation Learning Framework）</strong> —— <strong>EPIC</strong>，用于解决 token 压缩带来的训练扰动问题。</p>
+<p>核心思想是：
+通过<strong>渐进学习（progressive learning）<strong>和</strong>一致性蒸馏（consistency distillation）</strong>，让模型从“低压缩、易学习”的状态逐步适应“高压缩、难优化”的场景，从而实现平滑过渡。</p>
+<h3 id="核心贡献包括">核心贡献包括：<a hidden class="anchor" aria-hidden="true" href="#核心贡献包括">#</a></h3>
+<ol>
+<li>
+<p><strong>Token Consistency Distillation (TCD)：</strong>
+从 token 维度进行渐进蒸馏。
+在训练初期，teacher 与 student 使用较低压缩率；随着训练推进，压缩率逐步提高。teacher 始终比 student 稍微“容易”一些，从而提供稳定的蒸馏指导。</p>
+</li>
+<li>
+<p><strong>Layer Consistency Distillation (LCD)：</strong>
+从层级维度进行渐进蒸馏。
+视觉 token 在模型深层的贡献较小，因此训练初期在深层执行压缩影响较小，随后逐渐将压缩迁移到浅层，实现“由易到难”的层级学习。</p>
+</li>
+<li>
+<p><strong>统一框架与兼容性：</strong>
+EPIC 不需要修改模型结构，也不依赖特定的 token 压缩算法，可与 DART、FastV、Random 等方法兼容。</p>
+</li>
+</ol>
+<hr>
+<h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/figure3.png"></p>
+<h3 id="41-progressive-consistency-distillation-learning">4.1 Progressive Consistency Distillation Learning<a hidden class="anchor" aria-hidden="true" href="#41-progressive-consistency-distillation-learning">#</a></h3>
+<p>在高压缩训练中，视觉特征分布的扰动会导致模型收敛困难。EPIC 提出的**渐进一致性蒸馏学习（PCDL）**框架，旨在通过逐步增加压缩难度，让模型平滑过渡至最终目标。</p>
+<p>该框架包含两个主要部分：</p>
+<ul>
+<li><strong>Token Consistency Distillation (TCD)</strong>：从 token 维度逐步提高压缩率；</li>
+<li><strong>Layer Consistency Distillation (LCD)</strong>：从层级维度逐步从深层过渡到浅层进行压缩。</li>
+</ul>
+<p>两者均通过<strong>共享权重的 teacher-student 架构</strong>实现一致性蒸馏。teacher 使用略低压缩率（如低 5%）指导 student，随着训练进行逐渐拉大 gap（如 10%），实现阶段式指导。</p>
+<hr>
+<h3 id="42-theoretical-intuition-a-1d-prototype-for-progressive-consistency-distillation-learning">4.2 Theoretical Intuition: A 1D Prototype for Progressive Consistency Distillation Learning<a hidden class="anchor" aria-hidden="true" href="#42-theoretical-intuition-a-1d-prototype-for-progressive-consistency-distillation-learning">#</a></h3>
+<p>为理解 PCDL 的有效性，论文构建了一个一维标量模型。假设模型输出为 $\theta \in \mathbb{R}$，每个压缩率 $r \in [0, r_{\max}]$ 对应一个目标中心 $c_r$。设函数 $c(r)$ 满足：</p>
+<ul>
+<li>单调递增：$c&rsquo;(r) \ge 0$</li>
+<li>Lipschitz 连续：存在常数 $\gamma &gt; 0$，使得 $|c&rsquo;(r)| \le \gamma$</li>
+<li>凸性：$c&rsquo;&rsquo;(r) \ge 0$</li>
+</ul>
+<p>定义两种训练目标：</p>
+<ul>
+<li><strong>直接训练：</strong>
+$$
+L_{\text{dir}}(r,\theta) = \frac{1}{2}(\theta - c_r)^2
+$$</li>
+<li><strong>渐进蒸馏：</strong>
+$$
+L_{\text{prog}}(r,\theta) = \frac{1}{2}(\theta - c_r)^2 + \frac{\lambda}{2}(\theta - c_{r-\Delta})^2
+$$</li>
+</ul>
+<p>第二项表示来自压缩率更低的 teacher 的蒸馏约束。该设计能平滑学习轨迹，避免参数在压缩率变化时剧烈振荡。</p>
+<p>理论上可证明，在满足上述条件时，渐进路径的总变化量（Total Variation）严格小于直接训练路径，即学习过程更平滑、更稳定。</p>
+<hr>
+<h3 id="43-token-consistency-distillation-tcd">4.3 Token Consistency Distillation (TCD)<a hidden class="anchor" aria-hidden="true" href="#43-token-consistency-distillation-tcd">#</a></h3>
+<p>TCD 从 <strong>token 维度</strong> 逐步增加压缩比，实现模型对视觉 token 压缩的渐进适应。</p>
+<p>设模型为 $f_\theta$（teacher 与 student 共享参数），图像输入 $I$，文本提示 $P$。</p>
+<p>定义压缩算子 $C(I, r, \ell)$ 表示在第 $\ell$ 层以比例 $r$ 压缩视觉 token（保留 $1-r$ 的比例）。</p>
+<p>在训练第 $t$ 步时：</p>
+<ol>
+<li>
+<p>从一个随时间变化的区间中随机采样 student 压缩率：
+$$
+r_t^{\text{stu}} \sim \mathcal{U}(R_{\min,t}^{\text{stu}}, R_{\max,t}^{\text{stu}})
+$$
+随着训练进行，$R_{\max,t}$ 逐渐增大（压缩率提高）。</p>
+</li>
+<li>
+<p>teacher 压缩率略低：
+$$
+r_t^{\text{tea}} = \max(0, r_t^{\text{stu}} - \Delta_t)
+$$
+gap $\Delta_t$ 也随时间逐步增大（防止初期蒸馏难度过大）。</p>
+</li>
+<li>
+<p>teacher 与 student 的前向输出分别为：
+$$
+h_{\text{tea}} = f_\theta(C(I, r_t^{\text{tea}}, \ell); P),\quad
+h_{\text{stu}} = f_\theta(C(I, r_t^{\text{stu}}, \ell); P)
+$$</p>
+</li>
+<li>
+<p>定义蒸馏损失（KL 散度）：
+$$
+L_{\text{TCD}} = \mathrm{KL}(p_{\text{tea}} \Vert p_{\text{stu}}),\quad
+p = \mathrm{Softmax}(h / \tau)
+$$
+其中 $\tau$ 为温度参数。</p>
+</li>
+<li>
+<p>总损失为：
+$$
+L_{\text{total}} = (1 - \lambda)L_{\text{SFT}} + \lambda L_{\text{TCD}}
+$$</p>
+</li>
+</ol>
+<p><strong>直观理解：</strong>
+teacher 使用轻度压缩得到平滑特征分布，student 使用更高压缩率学习在更困难分布下保持一致性。随着训练推进，teacher 与 student 的压缩率差距增大，学习难度逐步提升，形成稳定的“课程学习（curriculum learning）”路径。</p>
+<hr>
+<h3 id="44-layer-consistency-distillation-lcd">4.4 Layer Consistency Distillation (LCD)<a hidden class="anchor" aria-hidden="true" href="#44-layer-consistency-distillation-lcd">#</a></h3>
+<p>先前研究发现，<strong>视觉 token 在模型深层的注意力权重较低，而浅层特征对视觉语义贡献更大</strong>。
+基于此，LCD 采用一种<strong>从深层向浅层逐步压缩</strong>的策略。</p>
+<p>定义模型总层数为 $L$，训练步数为 $T$，当前步 $t$ 的归一化进度为 $\beta_t = t / T$。
+选择压缩层：
+$$
+\ell_t = \text{Round}(L - \beta_t(L - \ell_{\min}))
+$$</p>
+<p>即在训练初期仅压缩最深层（影响最小），随后逐渐向浅层推进。</p>
+<p>其损失函数与 TCD 类似，也采用 KL 散度形式：
+$$
+L_{\text{LCD}} = \mathrm{KL}(p_{\text{tea}} \Vert p_{\text{stu}})
+$$</p>
+<p><strong>最终训练目标：</strong>
+$$
+L_{\text{total}} = (1 - \lambda)L_{\text{SFT}} + \lambda L_{\text{LCD}}
+$$</p>
+<p><strong>总结：</strong>
+TCD 聚焦 token 数量层面，LCD 聚焦层级深度，两者结合构成完整的渐进一致性蒸馏框架。</p>
+<hr>
+<h2 id="5-evaluation">5. Evaluation<a hidden class="anchor" aria-hidden="true" href="#5-evaluation">#</a></h2>
+<p>论文在多个视觉理解基准上进行了实验，包括 <strong>VQAv2、GQA、VizWiz、MME、MMBench、VQAT、POPE</strong> 等。</p>
+<h3 id="51-实验结果">5.1 实验结果<a hidden class="anchor" aria-hidden="true" href="#51-实验结果">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/table1.png"></p>
+<p>当保留 128 个视觉 token 时，EPIC 模型的性能与原始 LLaVA-v1.5-7B 几乎持平；<strong>当 token 数为 192 以上时甚至超越原始模型</strong>。这表明视觉 token 中存在大量冗余，压缩并不会显著损害性能。</p>
+<p>在 MME、MMBench、VQA V2 等视觉密集型任务上，EPIC 的性能提升最为明显。
+此外，模型在不同压缩率下表现稳定：当仅保留 64 个 token 时，性能下降不到 2%，128~256 token 区间几乎无损。</p>
+<hr>
+<h3 id="52-效率分析">5.2 效率分析<a hidden class="anchor" aria-hidden="true" href="#52-效率分析">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/table2.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/table6.png"></p>
+<p>EPIC 在训练和推理效率上均优于其他方法。</p>
+<ul>
+<li>
+<p><strong>训练阶段：</strong>
+由于 EPIC 不修改模型结构，只需一次监督微调（Supervised Fine-tuning），在 8×A100 上训练约 12 小时。
+而如 MQT-LLaVA、TokenPacker 等架构改造型方法需 30~48 小时。</p>
+</li>
+<li>
+<p><strong>推理阶段：</strong>
+在 64 个 token 情况下，KV cache 占用下降约 90%，FLOPs 减少 80% 以上，推理速度提升约 1.6×。
+即使采用最简单的 Random 压缩策略，也能显著降低延迟和显存消耗。</p>
+</li>
+</ul>
+<p>EPIC 的主要收益来自训练策略优化，而非复杂架构修改。</p>
+<hr>
+<h2 id="6-analysis">6. Analysis<a hidden class="anchor" aria-hidden="true" href="#6-analysis">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/table3.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/table4.png"></p>
+<h3 id="61-消融实验">6.1 消融实验<a hidden class="anchor" aria-hidden="true" href="#61-消融实验">#</a></h3>
+<ul>
+<li><strong>无蒸馏 (w/o TCD/LCD)：</strong> 性能显著下降，验证 teacher guidance 的必要性。</li>
+<li><strong>无渐进策略 (no progression)：</strong> 直接使用固定压缩率训练时收敛不稳定，验证 progressive 学习的重要性。</li>
+<li><strong>跨压缩方法泛化性：</strong> 用 DART 训练、FastV 推理仍能保持性能，说明 EPIC 具备良好的跨策略鲁棒性。</li>
+</ul>
+<h3 id="62-是否需要极端压缩">6.2 是否需要极端压缩<a hidden class="anchor" aria-hidden="true" href="#62-是否需要极端压缩">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC/figure5.png"></p>
+<p>论文指出，虽然极端压缩（1 ~ 2 token）可进一步降低计算量，但性能下降剧烈，且 GPU 延迟收益有限。最佳权衡点通常在 64 ~128 tokens 区间，兼顾性能与速度。</p>
+<hr>
+<h2 id="7-conclusion">7. Conclusion<a hidden class="anchor" aria-hidden="true" href="#7-conclusion">#</a></h2>
+<p>本文提出的 <strong>EPIC 框架</strong> 在不改变模型结构的情况下，通过渐进一致性蒸馏实现了对视觉 token 压缩的高效训练。
+其主要优势包括：</p>
+<ul>
+<li>无需额外模块，直接与现有 MLLM 兼容；</li>
+<li>训练稳定、收敛快速（12 小时即可完成）；</li>
+<li>在多项视觉基准上性能与原始模型持平或更优；</li>
+<li>在 64~128 token 区间显著提升推理效率与资源利用率。</li>
+</ul>
+<p>实验结果表明，合理的渐进蒸馏策略能够在不牺牲性能的前提下，大幅度提升多模态大语言模型的效率与鲁棒性。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/knowledge-distillation/">Knowledge Distillation</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

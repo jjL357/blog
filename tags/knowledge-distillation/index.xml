@@ -6,8 +6,38 @@
     <description>Recent content in Knowledge Distillation on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 27 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 07 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/knowledge-distillation/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation</title>
+      <link>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</link>
+      <pubDate>Fri, 07 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference：&lt;/strong&gt; NeurIPS 2025&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github：&lt;/strong&gt; &lt;a href=&#34;https://github.com/ZichenWen1/EPIC&#34;&gt;https://github.com/ZichenWen1/EPIC&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC/figure3.png&#34;&gt;&lt;/h2&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;EPIC 这篇论文的核心思想是在&lt;strong&gt;不改动模型结构&lt;/strong&gt;的前提下，通过&lt;strong&gt;渐进式一致性蒸馏（Progressive Consistency Distillation）&lt;/strong&gt;，让多模态大语言模型在&lt;strong&gt;token 层面（Token Consistency Distillation, TCD）&lt;/strong&gt; 和 &lt;strong&gt;层级层面（Layer Consistency Distillation, LCD）&lt;/strong&gt; 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。&lt;/p&gt;
+&lt;p&gt;日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的&lt;strong&gt;计算负担与存储压力&lt;/strong&gt;，尤其在推理时对 KV cache 和显存的占用极大。&lt;/p&gt;
+&lt;p&gt;因此，如何在不显著降低性能的前提下&lt;strong&gt;减少视觉 token 的数量&lt;/strong&gt;，成为提升 MLLM 效率的核心问题。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
+&lt;p&gt;视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Training-free 方法：&lt;/strong&gt; 不需要额外训练，通过简单的启发式规则压缩视觉 token。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;基于重要性（importance-based）&lt;/strong&gt;：如 FastV、SparseVLM，依据注意力得分筛选重要 token。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;基于冗余（redundancy-based）&lt;/strong&gt;：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Training-aware 方法：&lt;/strong&gt; 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。
+典型工作包括：&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
       <link>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
