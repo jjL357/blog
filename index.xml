@@ -9,6 +9,38 @@
     <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization</title>
+      <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
+      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;当时在复现 &lt;strong&gt;SpinQuant&lt;/strong&gt; 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都要很久，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：&lt;strong&gt;针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;结果果然别人的手速很快，NeurIPS’25 上就出现了这个 &lt;strong&gt;DartQuant&lt;/strong&gt; 工作，它不仅加速了旋转矩阵的优化过程，还能缓解 calibration 阶段的 &lt;strong&gt;task-specific overfitting&lt;/strong&gt; 问题和通过QR分解解决必须正交的问题，非常巧妙。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;近年来，大型语言模型（LLMs）在多种 NLP 任务上表现卓越，如文本生成、翻译、问答系统等。然而，其推理阶段的计算与内存开销极高，限制了在边缘设备或资源受限场景下的部署。&lt;/p&gt;
+&lt;p&gt;在各种模型压缩方法中（剪枝、蒸馏、参数共享、量化等），&lt;strong&gt;后训练量化（Post-Training Quantization, PTQ）&lt;/strong&gt; 因为不需要重新训练、可直接作用于现成模型，而在实际部署中最具实用价值。&lt;/p&gt;
+&lt;p&gt;不过，激活分布中存在的极端值（outliers）严重影响了低比特量化效果。为了解决这一问题，研究者提出了 &lt;strong&gt;旋转变换（rotation transformation）&lt;/strong&gt; 来改变激活分布，使其更适合量化。旋转矩阵具有以下优势：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;保持范数不变；&lt;/li&gt;
+&lt;li&gt;可逆；&lt;/li&gt;
+&lt;li&gt;能在推理阶段与权重线性层融合，不增加推理时延。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;例如，&lt;strong&gt;QuaRot&lt;/strong&gt; 和 &lt;strong&gt;SpinQuant&lt;/strong&gt; 分别使用随机或可训练旋转矩阵来削弱 outlier 的影响。然而，SpinQuant 的 end-to-end 旋转训练开销巨大（显存、时间都极高），同时容易在小规模 calibration set 上 &lt;strong&gt;过拟合&lt;/strong&gt;。
+这正是 DartQuant 要解决的痛点：&lt;strong&gt;如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。&lt;/strong&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;计算与显存开销过大&lt;/strong&gt;：
+对 70B 模型进行旋转矩阵优化需要上百 GiB 显存与数十 GPU 小时，完全不符合 PTQ 快速部署的目标。&lt;/p&gt;</description>
+    </item>
+    <item>
       <title>📝 HEADINFER: Memory-Efficient LLM Inference by Head-wise Offloading</title>
       <link>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
