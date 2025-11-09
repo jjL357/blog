@@ -6,8 +6,26 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 07 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 HEADINFER: Memory-Efficient LLM Inference by Head-wise Offloading</title>
+      <link>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</link>
+      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadInfer/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25 Workshop on Long-Context Foundation Models&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/wdlctc/headinfer&#34;&gt;https://github.com/wdlctc/headinfer&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadInfer/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Transformer-based LLM 在长上下文场景下的推理性能显著，但随着上下文长度的扩展，&lt;strong&gt;KV cache&lt;/strong&gt;（key-value cache）迅速成为内存占用的主要瓶颈。论文指出：例如对 Llama-3-8B 进行 1M token 推理时，KV cache 可达 128 GB，整体内存可达 207 GB（权重 + activation + KV cache），这是在常见 BF16 设置下的估算，使得在消费级 GPU（如 RTX-4090，24GB）上无法直接执行长上下文推理。为解决此类问题，作者提出 HEADINFER —— 通过&lt;strong&gt;按 attention head 维度进行细粒度 KV cache 离线/回传（offload）&lt;/strong&gt;，仅在 GPU 上保留部分 attention heads 的 KV，从而极大地压缩 GPU 端 KV 的占用，同时保证数学等价性（lossless）和兼容各种 attention 形式（dense / sparse）。论文摘要与引言的核心论点与数据来自原文说明。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-relative-work&#34;&gt;2. Relative Work&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;生成式推理与 KV 缓存（Generative Inference &amp;amp; KV Caching）&lt;/strong&gt;：预填（prefill）和解码（decoding）阶段的概念与常用 chunked prefill 思路（将长输入切为若干 chunk 逐步构建 KV cache）被回顾，用以说明激活内存与 KV cache 在不同阶段的不同开销特征。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation</title>
       <link>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</link>
@@ -160,7 +178,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25 Spotlight&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;

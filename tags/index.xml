@@ -6,8 +6,29 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 07 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>KV Cache</title>
+      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
+      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Offload</title>
+      <link>https://jjl357.github.io/blog/tags/offload/</link>
+      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/offload/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Paper Note</title>
+      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
+      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
     <item>
       <title>Knowledge Distillation</title>
       <link>https://jjl357.github.io/blog/tags/knowledge-distillation/</link>
@@ -20,13 +41,6 @@
       <link>https://jjl357.github.io/blog/tags/mllm/</link>
       <pubDate>Fri, 07 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Paper Note</title>
-      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Fri, 07 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
       <description></description>
     </item>
     <item>
@@ -48,13 +62,6 @@
       <link>https://jjl357.github.io/blog/tags/cloud-edge/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/cloud-edge/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>KV Cache</title>
-      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
-      <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
       <description></description>
     </item>
     <item>
