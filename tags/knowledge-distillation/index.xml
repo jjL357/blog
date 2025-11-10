@@ -48,13 +48,14 @@
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
-&lt;p&gt;这篇论文的 methods 挺简明的，感觉可以有个新 idea:&lt;br&gt;
-&lt;strong&gt;将 MoSD 和 AdaSPEC 结合起来&lt;/strong&gt; —— 针对不同难度的 tokens distill 出不同的 draft models，利用 router 将不同难度的 tokens 选择最适合的对应 draft model 来进行 SD。&lt;/p&gt;
-&lt;p&gt;问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？&lt;br&gt;
-论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此需要新的方式来改进这一部分的蒸馏与利用机制。&lt;/p&gt;
+&lt;p&gt;有个问题在于：对于论文中提到的“hard tokens”，是否能 distill 出一个合适且有用的 draft model？&lt;br&gt;
+论文结果显示当前方法对这些 token 效果较差（甚至比 reference model 还差），  因此好奇是否可能需要新的方式来改进这一部分的蒸馏与利用机制。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;</description>
+&lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;SD 的加速性能依赖于 draft 与 target 模型的&lt;strong&gt;对齐度（alignment）&lt;/strong&gt;。传统 Knowledge Distillation (KD) 的目标是最小化 KL 散度，但这与 SD 的最终目标——&lt;strong&gt;最大化 token acceptance rate（被 target 接受的比例）&lt;/strong&gt;——并不一致。&lt;/p&gt;
+&lt;p&gt;因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。&lt;/p&gt;</description>
     </item>
   </channel>
 </rss>
