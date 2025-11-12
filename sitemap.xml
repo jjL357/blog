@@ -5,6 +5,9 @@
     <loc>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</loc>
     <lastmod>2025-11-12T00:00:00+00:00</lastmod>
   </url><url>
+    <loc>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</loc>
+    <lastmod>2025-11-12T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/categories/</loc>
     <lastmod>2025-11-12T00:00:00+00:00</lastmod>
   </url><url>
@@ -12,6 +15,9 @@
     <lastmod>2025-11-12T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2025-11-12T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/mllm/</loc>
     <lastmod>2025-11-12T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
@@ -26,6 +32,9 @@
     <loc>https://jjl357.github.io/blog/tags/</loc>
     <lastmod>2025-11-12T00:00:00+00:00</lastmod>
   </url><url>
+    <loc>https://jjl357.github.io/blog/tags/token-pruning/</loc>
+    <lastmod>2025-11-12T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</loc>
     <lastmod>2025-11-10T00:00:00+00:00</lastmod>
   </url><url>
@@ -33,9 +42,6 @@
     <lastmod>2025-11-10T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/lora/</loc>
-    <lastmod>2025-11-10T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/mllm/</loc>
     <lastmod>2025-11-10T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/moe/</loc>
@@ -105,9 +111,6 @@
     <lastmod>2025-10-25T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</loc>
-    <lastmod>2025-10-24T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/token-pruning/</loc>
     <lastmod>2025-10-24T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</loc>

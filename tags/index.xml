@@ -16,10 +16,24 @@
       <description></description>
     </item>
     <item>
+      <title>MLLM</title>
+      <link>https://jjl357.github.io/blog/tags/mllm/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
+      <description></description>
+    </item>
+    <item>
       <title>Paper Note</title>
       <link>https://jjl357.github.io/blog/tags/paper-note/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Token Pruning</title>
+      <link>https://jjl357.github.io/blog/tags/token-pruning/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/token-pruning/</guid>
       <description></description>
     </item>
     <item>
@@ -34,13 +48,6 @@
       <link>https://jjl357.github.io/blog/tags/lora/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/lora/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>MLLM</title>
-      <link>https://jjl357.github.io/blog/tags/mllm/</link>
-      <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
       <description></description>
     </item>
     <item>
@@ -111,13 +118,6 @@
       <link>https://jjl357.github.io/blog/tags/reasoning-model/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/reasoning-model/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Token Pruning</title>
-      <link>https://jjl357.github.io/blog/tags/token-pruning/</link>
-      <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/token-pruning/</guid>
       <description></description>
     </item>
   </channel>

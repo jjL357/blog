@@ -6,8 +6,29 @@
     <description>Recent content in Token Pruning on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 24 Oct 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 12 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/token-pruning/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More</title>
+      <link>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Dart/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ZichenWen1/DART&#34;&gt;https://github.com/ZichenWen1/DART&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Vision tokens 在多模态大模型（MLLMs）中因数量巨大而成为主要计算瓶颈，尤其是高分辨率图像或多帧视频，会将图像编码为成千上万的视觉 token，使得模型推理的时间和内存成本迅速上升。为此，许多近期工作提出了&lt;strong&gt;训练免费（training-free）&lt;strong&gt;的 token pruning 方法，通常采用“先度量每个 token 的importance，再删除importance低的 token”的范式来加速推理。论文指出并实证了：以 attention-score 作为 importance 的方式&lt;/strong&gt;存在严重缺陷&lt;/strong&gt;，在某些场景下竟然&lt;strong&gt;比随机丢弃（random pruning）更差&lt;/strong&gt;，并且与硬件加速（如 FlashAttention）不兼容，从而无法在实际部署时取得理想的速度-性能折中。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;直觉动机&lt;/strong&gt;：论文提出另一种思路——&lt;strong&gt;把重复（duplication）作为 token reduction 的主要考虑因素&lt;/strong&gt;。当多个视觉 token 表示高度相似时，保留其中一个便足以维持信息完整度；相反，删除“重复”token 不但能大幅削减计算，也更不容易损害下游性能。基于该想法，作者提出了 DART（Duplication-Aware Reduction of Tokens）这一简单、训练免费、对硬件友好的 token 削减 Pipeline。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
+&lt;p&gt;论文系统性地列举并分析了当前 importance-based token pruning 的问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;(I) 忽略 token 间的交互（dynamic interaction）&lt;/strong&gt;：importance-based 方法往往把每个 token 的分数当作对全集 $X$ 的函数 $s_i=F(x_i\mid X)$ 并进行静态选择，但当某些 token 被移除后，剩下 token 的“重要性”应发生改变（例如两近似 token 存在互补性，移除其中之一会提高另一个的相对重要性），而静态评分忽略了这一点。论文通过形式化说明和实证展示了该偏差来源（见式 (4)-(6)）。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;(II) 与高效注意力算子（FlashAttention）不兼容&lt;/strong&gt;：许多 importance-based 方法需要访问 attention scores，但高效实现（FlashAttention / FlashAttention-2）在内部并不暴露中间 attention map，这就迫使要么禁用高效实现（带来速度和内存损失），要么放弃这些方法。论文强调在保持 FlashAttention 的同时设计 pruning 方法的重要性。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
