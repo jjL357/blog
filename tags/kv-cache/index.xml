@@ -6,8 +6,51 @@
     <description>Recent content in KV Cache on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 12 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/kv-cache/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference</title>
+      <link>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: NeurIPS&#39;25&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/NVIDIA/kvpress&#34;&gt;https://github.com/NVIDIA/kvpress&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;ChunkKV 假定“删除部分 token 不会丢失极其关键的细节”，在&lt;strong&gt;法律/医疗等需要逐字级别保真&lt;/strong&gt;的场景可能不合适（论文明确指出）。&lt;/li&gt;
+&lt;li&gt;当前实现使用固定 size chunk（效率高但语义边界未显式对齐）；未来可以尝试基于句法/语义边界的 adaptive chunk（但需权衡额外开销）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;随着 LLM 处理超长上下文（tens of thousands tokens），KV cache 的内存成为推理阶段的主要瓶颈——例如 7B 模型单 token 的 KV cache 大约占 0.5MB，导致 10k token 的 prompt 消耗约 5GB GPU 内存。&lt;/li&gt;
+&lt;li&gt;现有压缩方法（H2O、SnapKV 等）通过删除被认为“不重要”的离散 token 来减少 KV 大小，但&lt;strong&gt;孤立地评估 token 重要度&lt;/strong&gt;会破坏语义连贯性（会把主语或宾语切碎），从而在一些需要语义完整的任务上产生明显性能下降。论文通过示例强调：按 token 剪枝会保留与问题相关的某些词但漏掉关键对象信息，导致语义丢失。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;问题&lt;/strong&gt;：如何避免孤立 token 重要度评估，并在 KV cache 压缩时最大限度保存语义信息？&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;以往方法在 token 维度上进行稀疏化/删减，忽略了自然语言语义通常以连续片段（chunk）出现的事实；因此需要一个&lt;strong&gt;按语义连续段（chunk）作为压缩单位&lt;/strong&gt;的方法以保留“完整的语义单元”。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/table1.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;发现并量化了“离散 token 压缩会破坏语义”的现象&lt;/li&gt;
+&lt;li&gt;提出 &lt;strong&gt;ChunkKV&lt;/strong&gt;：以固定大小（或可调整）chunk 为单位做 KV 压缩，保留最有信息量的 chunk，尽可能保留主谓宾等语义完整性，并设计了&lt;strong&gt;layer-wise index reuse&lt;/strong&gt; 技术来复用所选索引，从而显著降低额外计算开销。&lt;/li&gt;
+&lt;li&gt;在 LongBench、NIAH、GSM8K、JailbreakV 等多项 benchmark 以及多个模型（DeepSeek-R1、LLaMA-3、Qwen2、Mistral）上进行大规模评测，展示在相同压缩率下 ChunkKV 在准确率/召回/检索等方面优于现有方法，且在 latency/throughput 上得益于索引复用与向量化实现。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;4-method&#34;&gt;4. Method&lt;/h2&gt;
+&lt;h3 id=&#34;41-chunk-level-compression&#34;&gt;4.1 Chunk-level compression&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;核心假设&lt;/strong&gt;：自然语言中的“完整语义信息”通常由一段连续 token 构成（例如主语 + 谓语 + 宾语或整个短语）。将这些 token 作为整体（chunk）保留或删除，比以 token 为单位做稀疏更能保留语义。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Chunk 的定义&lt;/strong&gt;：论文采用&lt;strong&gt;固定大小滑窗分块&lt;/strong&gt;（chunk size = $c$），将整个 Key/Value 序列按顺序分为 $C=\lceil T_k / c\rceil$ 个 chunk（最后一个 chunk 可能不足 $c$）。保留策略基于 chunk 的“重要性分数”（由 observe window 的 attention 得到）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;算法伪码:&lt;/strong&gt;&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 HEADINFER: Memory-Efficient LLM Inference by Head-wise Offloading</title>
       <link>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</link>

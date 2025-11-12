@@ -6,8 +6,22 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 10 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 12 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>KV Cache</title>
+      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Paper Note</title>
+      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
+      <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
     <item>
       <title>Knowledge Distillation</title>
       <link>https://jjl357.github.io/blog/tags/knowledge-distillation/</link>
@@ -37,13 +51,6 @@
       <description></description>
     </item>
     <item>
-      <title>Paper Note</title>
-      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
-      <description></description>
-    </item>
-    <item>
       <title>Vision Encoder</title>
       <link>https://jjl357.github.io/blog/tags/vision-encoder/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
@@ -55,13 +62,6 @@
       <link>https://jjl357.github.io/blog/tags/efficient-calibration/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/efficient-calibration/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>KV Cache</title>
-      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
-      <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
       <description></description>
     </item>
     <item>
