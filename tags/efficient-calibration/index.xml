@@ -17,7 +17,7 @@
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
-&lt;p&gt;当时在复现 &lt;strong&gt;SpinQuant&lt;/strong&gt; 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都要很久，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：&lt;strong&gt;针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;当时在复现 &lt;strong&gt;SpinQuant&lt;/strong&gt; 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都一些时间，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：&lt;strong&gt;针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式&lt;/strong&gt;。&lt;/p&gt;
 &lt;p&gt;结果果然别人的手速很快，NeurIPS’25 上就出现了这个 &lt;strong&gt;DartQuant&lt;/strong&gt; 工作，它不仅加速了旋转矩阵的优化过程，还能缓解 calibration 阶段的 &lt;strong&gt;task-specific overfitting&lt;/strong&gt; 问题和通过QR分解解决必须正交的问题，非常巧妙。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;

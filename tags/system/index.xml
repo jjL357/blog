@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>System on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/system/</link>
+    <description>Recent content in System on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 13 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/system/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
+      <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
+      <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Oral&lt;/strong&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-background-and-motivation&#34;&gt;1. Background and Motivation&lt;/h2&gt;
+&lt;p&gt;多模态大语言模型（Multimodal Large Language Models, MLLMs）在传统 LLM 的基础上扩展了图像、视频、音频等输入模态，使模型能够进行跨模态理解与推理。然而，这些额外组件（如视觉编码器、投影模块等）带来了显著的推理开销。由于多模态推理流程复杂、任务异构，MLLM 的高效部署成为一个重大挑战。&lt;/p&gt;
+&lt;p&gt;现有的大多数推理服务架构（serving architecture）采用紧耦合（tightly coupled）设计，无法区分不同请求类型，也无法在不同阶段灵活地调整并行策略，导致 &lt;strong&gt;time-to-first-token (TTFT)&lt;/strong&gt; 延迟增大、GPU 资源利用率低下。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;与传统仅处理文本的 LLM 不同，MLLM 需要同时处理多种模态的输入，因此推理流程更复杂，通常包括：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Image Preprocessing&lt;/strong&gt;：对原始图像进行裁剪、缩放、分块；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Image Encoding&lt;/strong&gt;：通过视觉编码器提取特征并转化为 vision token；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Text Generation&lt;/strong&gt;：将 vision token 与文本 prompt 拼接后输入语言模型，经过 prefill 和 decode 阶段生成输出。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这些额外阶段显著增加了推理复杂度和平均上下文长度，从而导致计算与内存开销的上升。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h3 id=&#34;11-multimodal-large-language-models-inference&#34;&gt;1.1 Multimodal Large Language Models Inference&lt;/h3&gt;
+&lt;p&gt;MLLM 的推理流水线可以拆分为三个关键阶段：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图像预处理&lt;/strong&gt;：原图像被缩放或分块；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图像编码&lt;/strong&gt;：视觉编码器提取视觉 token；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文本生成阶段&lt;/strong&gt;：LLM 同时处理视觉与文本 token 并生成响应。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;现代 MLLM 的架构可分为两类：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Decoder-only (DecOnly)&lt;/strong&gt;：如 LLaVA-OneVision、Qwen-VL、Janus、InternVL。视觉与文本 token 拼接后共同输入模型，视觉 token 参与每一步生成；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Encoder-decoder (EncDec)&lt;/strong&gt;：如 LLaMA-3.2 Vision、NVLM-X、Flamingo。视觉 token 通过 cross-attention 与文本 token 交互，仅在 cross-attention 层中出现。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;两者的主要差异在于视觉 token 的交互方式：前者在每一步生成都参与计算，后者仅在交叉注意力阶段出现。
+由于视觉 token 的数量通常远大于文本 token，这两种架构都在推理中引入了大量的额外开销，包括更长的上下文、更高的显存使用率和更慢的推理速度。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
