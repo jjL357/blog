@@ -6,8 +6,38 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 13 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 15 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
+      <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
+      <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/vbdi/epdserve&#34;&gt;https://github.com/vbdi/epdserve&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;Large Multimodal Models (LMMs) 将视觉/音频/视频等感知模态引入到 LLM 的推理流程中，从而带来更强的能力，但随之而来的是&lt;strong&gt;额外的编码（encoding）阶段&lt;/strong&gt;，该阶段会产生大量视觉（或音频）token，显著增加计算与内存消耗，并对关键的 SLO（如 TTFT、TPOT）造成负面影响。当前主流的 LLM-serving 系统（如 vLLM、DistServe 等）要么将编码与 prefill 聚合在同一资源上导致干扰与内存竞争，要么只对 LLM 的 prefill/decode 做优化，无法从根本上缓解 LMM 的编码瓶颈。因此论文提出通过**将 Encoding / Prefill / Decode 三阶段进行严格分离（EPD Disaggregation）**来重新设计服务架构，以解耦资源、并提供针对每阶段的定制优化，从而减少延迟、提升 SLO 达成率并大幅节省内存。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;现有 LLM 服务（vLLM、SARATHI、Orca 等）与 Disaggregated-serving（SplitWise、DistServe、DéjàVu 等）对 LLM 的 prefill/decode 分离带来了可观改进，但这些工作&lt;strong&gt;通常忽略或未充分优化编码（encoding）阶段&lt;/strong&gt;，因此不适用于 LMM 的编码密集型工作负载。相较之下，本文填补该空白，提出将编码也作为独立可调度阶段，从而开启新的并行化、缓存与资源分配策略。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;3-method&#34;&gt;3. Method&lt;/h2&gt;
+&lt;h3 id=&#34;31-epd-disaggregation&#34;&gt;3.1. EPD Disaggregation&lt;/h3&gt;
+&lt;p&gt;EPD 把推理流程明确划分为三个独立阶段：&lt;strong&gt;Encoding (E)&lt;/strong&gt;、&lt;strong&gt;Prefill (P)&lt;/strong&gt;、&lt;strong&gt;Decode (D)&lt;/strong&gt;，并定义两类跨阶段迁移（migration）函数：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;EP-migration&lt;/strong&gt;：编码阶段生成的 multimodal tokens $v^e_t$ 被传递到 prefill：
+$$v^p_t = \psi_{EP}(v^e_t)$$&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;PD-migration&lt;/strong&gt;：prefill 生成的初始 KV cache 与首个 token 经迁移至 decode：
+$$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;阶段内部流程：&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
       <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>

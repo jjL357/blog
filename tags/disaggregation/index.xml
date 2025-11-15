@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
-    <title>System on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/system/</link>
-    <description>Recent content in System on JJ&#39;s Blog</description>
+    <title>Disaggregation on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/disaggregation/</link>
+    <description>Recent content in Disaggregation on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Sat, 15 Nov 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/system/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://jjl357.github.io/blog/tags/disaggregation/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
       <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
