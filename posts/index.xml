@@ -9,6 +9,35 @@
     <lastBuildDate>Mon, 17 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
     <item>
+      <title>📝 Breaking the Wall: Unifying Edge GPUs and NPUs into Pipeline Parallelism for Efficient LLM Fine-Tuning</title>
+      <link>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</link>
+      <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</guid>
+      <description>&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;目前边缘GPU（e-GPUs）和边缘NPU（e-NPUs）在硬件架构上存在显著差异，导致运行性能上有很大不同。例如，研究测量显示，某些e-NPUs仅进行前向传播的计算能力在进行反向传播时会降低10倍。具体来说，大多数边缘NPU（e-NPU）设备专为推理任务设计，只支持前向传播（FP），缺乏反向传播（BP）所需的BroadcastGradient和ReluGrad操作，这使得它们不兼容训练或微调任务。以Atlas 200I（e-NPU）的测量结果为例，如图1所示，其仅进行前向传播的计算能力为20 TOPS，而在进行反向传播时会降低约10倍至2.4 TOPS。这与Jetson Orin Nano等e-GPUs形成鲜明对比，后者的前向传播（FP）和反向传播（BP）计算能力保持相同的34 TOPS。因此，当使用现有并行方法将e-NPUs和e-GPUs统一用于LLMs微调时，e-NPUs上的慢速反向传播必然会增加整体延迟，如图5a所示。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;因此，如何将e-GPUs和e-NPUs统一到单一的流水线并行中，以实现高效的LLMs微调，是一个尚未充分探索且具有挑战性的问题。&lt;/p&gt;
+&lt;h2 id=&#34;2-preliminary&#34;&gt;2. Preliminary&lt;/h2&gt;
+&lt;p&gt;与通过反向传播计算梯度的BP-enable设备（e-GPUs）不同，BP-free设备（e-NPUs）仅使用前向传播基于方向导数估计梯度。具体来说，当使用参数高效方法如LoRA微调LLM $\Theta$时，带有可训练参数$\theta$和损失函数$L$的$\Theta$，在小批量$B = {b_1, &amp;hellip;, b_M}$上的估计梯度可计算如下：&lt;/p&gt;
+&lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{L(\theta + \epsilon\mathbf{z}|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z} = g(\mathbf{z})\mathbf{z},$$&lt;/p&gt;
+&lt;p&gt;其中$L(\theta + \epsilon\mathbf{z}|\Theta)$表示可训练参数$\theta$在方向$\mathbf{z} \sim \mathcal{N}(0, I_d)$上扰动后的损失，这是对可训练参数的随机扰动。$d$表示可训练参数的大小，$\epsilon$表示标量步长。$g(\mathbf{z}) = \frac{L(\theta+\epsilon\mathbf{z}|\Theta;B) - L(\theta|\Theta;B)}{\epsilon}$表示随机方向$\mathbf{z}$的方向导数。因此，基于两次前向传播，作者可以获得$\theta$在方向$\mathbf{z}$上的下降尺度。&lt;/p&gt;
+&lt;p&gt;图2a显示了估计梯度与通过带反向传播的一阶优化计算的梯度之间的相似性。作者观察到，添加扰动可以使估计梯度更接近BP梯度，同时仍比一阶优化实现更低的执行时间，如图2a所示。因此，为进一步减少估计方差并稳定微调，估计梯度可以通过对$Q$个独立采样方向$\mathbf{z}_q \sim \mathcal{N}(0, I_d)$取平均来计算：&lt;/p&gt;
+&lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$&lt;/p&gt;
+&lt;p&gt;此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;作者首次提出了一种统一e-GPUs和e-NPUs的单一pipeline并行方案，用于高效的LLMs微调，该方案融合了无BP的零阶优化和一阶优化，以加速整体微调收敛。&lt;/li&gt;
+&lt;li&gt;HybridOP的核心设计解决了两个关键挑战：跨异构e-GPUs和e-NPUs的LLM层划分和计算利用率提升。具体来说，作者开发了专用的成本模型来表征执行延迟和内存开销，这些模型专为HybridOP pipeline定制。分区规划器随后为e-NPUs和e-GPUs采用不同的搜索策略，以高效识别最优层分区方案，从而最小化执行延迟。&lt;/li&gt;
+&lt;li&gt;大量实验表明了HybridOP的收敛性和有效性。与最先进的基线Asteroid相比，HybridOP将计算利用率提高了0.8倍，吞吐量提高了27.7%，并减少了41.2%的收敛时间，用于使用4个e-NPUs和6个e-GPUs微调LLaMA-3.1-8B模型。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;4-hybridop-system-design&#34;&gt;4. HYBRIDOP SYSTEM DESIGN&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;h3 id=&#34;41-overview&#34;&gt;4.1 Overview&lt;/h3&gt;
+&lt;p&gt;在HybridOP并行方案中，e-GPUs使用反向传播计算BP梯度，而e-NPUs使用多次前向传播计算估计梯度。首先，这些e-GPUs和e-NPUs协作执行第一次前向传播，并获取相应的无扰动基础损失（蓝色箭头）。然后，e-NPU设备生成可训练参数的随机扰动，并基于这些扰动参数执行前向传播（绿色箭头）。同时，e-GPU设备执行反向传播以计算BP梯度（橙色箭头）。流水线的最后一个设备计算损失和对应于随机扰动的方向导数$g(\mathbf{z})$，并将$g(\mathbf{z})$传输到所有e-NPU设备。e-NPU设备基于公式(10)计算估计梯度。最后，所有异构设备在流水线中获取小批量$b_i$的梯度。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
+    </item>
+    <item>
       <title>📝 TINY BUT MIGHTY: A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES</title>
       <link>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
