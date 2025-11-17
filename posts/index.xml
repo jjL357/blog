@@ -6,8 +6,24 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 15 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 17 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 TINY BUT MIGHTY: A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES</title>
+      <link>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</link>
+      <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/NANOMIND/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 submitted&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;在设备端运行大语言模型（On-device LLMs）通过将数据保留在本地，显著增强了安全性，降低了数据泄露风险，同时支持实时智能和用户隐私保护。然而，其实际部署仍受到紧凑系统严苛的功耗与计算预算限制。随着对高级模型需求的增长——尤其是在离线或弱连接场景下——亟需在资源效率与隐私之间取得平衡的解决方案。当前这些模型已被广泛部署于智能手机、桌面设备与机器人，以支持自然语言交互、实时任务执行以及更强的用户隐私保障。&lt;/p&gt;
+&lt;p&gt;然而，现有方法几乎完全聚焦于&lt;strong&gt;软件或算法层面的优化&lt;/strong&gt;——主要是低比特量化（low-bit quantization）——却缺乏对碎片化多样的移动 GPU 与新兴 NPU 的支持，也无法很好地跨不同硬件平台适配。大多数先前工作仅尝试解决该问题的一两个方面，尚无端到端的完整解决方案。尤其重要的是，它们常常忽略了&lt;strong&gt;软硬件联合设计&lt;/strong&gt;（joint design of software and hardware）。其结果是，设备无法充分利用可用资源，且功耗问题很少被系统性地考虑。&lt;/p&gt;
+&lt;p&gt;大型多模态模型（LMMs）具有天然的模块化结构，通常由视觉编码器、嵌入层、投影器（projector）和语言解码器等组件组成，每个组件具有独特的计算特性。同时，不同硬件加速器也具备各自的优势：例如，&lt;strong&gt;NPU 在低比特张量运算&lt;/strong&gt;（如 INT4/INT8），而 &lt;strong&gt;GPU 则擅长大规模并行浮点计算&lt;/strong&gt;。然而，目前 LMMs 通常被当作单体（monolithic）工作负载部署在单一加速器上，无视这些架构差异。这种错配导致硬件利用率低下、端到端延迟增加、推理效率低下。若无法将不同组件动态卸载到最适合的计算单元，大量宝贵的硬件资源将长期闲置。实验（见第 4 节）表明，&lt;strong&gt;NPU 在编码器推理任务上始终优于其他单元&lt;/strong&gt;，这凸显了动态、模块级卸载的重要性。&lt;/p&gt;
+&lt;p&gt;此外，尽管许多框架现已支持在边缘设备上部署 LLM，但它们大多源自服务器或传统 PC 架构，其中 CPU 与 GPU 拥有独立的内存空间。相比之下，现代边缘设备（包括手机）普遍采用&lt;strong&gt;统一内存架构&lt;/strong&gt;（Unified Memory Architecture, UMA），CPU、GPU（或 NPU）共享同一物理 DRAM。这一根本差异使得许多传统设计在边缘设备上效率低下。在 UMA 下，NPU 与 GPU 缺乏 DMA 隔离，必须协调对共享内存的访问，这就要求全新的系统级优化和精心的重新设计以确保高效运行。&lt;/p&gt;
+&lt;p&gt;现有方法主要聚焦于软件层面技术（如低比特量化和模型缩放）以减少内存占用，却常常忽视了硬件层面的关键优化，包括：对移动 GPU/NPU 低比特操作的驱动支持、高效电源管理、以及跨加速器利用率的提升。此外，将整个模型简单地部署在单一加速器上通常会导致高延迟，使得这些框架无法充分利用边缘和小型设备上有限的计算资源。&lt;/p&gt;
+&lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;推理系统&lt;/strong&gt;：在系统级优化方面，近期工作已开始利用现代 SoC 中的异构加速器。例如，&lt;code&gt;llm.npu&lt;/code&gt; (Xu et al., 2025) 在提示词、张量和块级别重构 NPU 上的执行流程，将异常值和浮点（FP）操作卸载到 CPU/GPU，并通过子图重排来提高利用率——解决了移动 NPU 仅支持静态输入形状的限制。&lt;code&gt;PowerInfer-2&lt;/code&gt; (Xue et al., 2024) 提出了一种 NPU-CPU 协同框架，根据神经元激活密度卸载 LLM 推理，使手机能运行超出其内存容量的模型。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
       <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
