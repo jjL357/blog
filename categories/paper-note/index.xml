@@ -6,8 +6,46 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Tue, 18 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 21 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction</title>
+      <link>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</link>
+      <pubDate>Fri, 21 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeuIPS&#39;25 Oral&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;GIthub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/snu-mllab/KVzip&#34;&gt;https://github.com/snu-mllab/KVzip&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h1 id=&#34;1-motivation&#34;&gt;&lt;strong&gt;1. Motivation&lt;/strong&gt;&lt;/h1&gt;
+&lt;p&gt;大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;显存占用随 $n_c$ 线性扩张&lt;/strong&gt;
+例如 Qwen2.5-14B 在 120k context 下需 &lt;strong&gt;33GB&lt;/strong&gt; KV Cache（论文 Figure 1）。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;解码阶段 Attention 的延迟随 KV 数量线性增加&lt;/strong&gt;
+解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;已有 KV 压缩方法（如 &lt;strong&gt;SnapKV / PyramidKV&lt;/strong&gt;）依赖 &lt;strong&gt;query-aware importance&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;每个 query 都要重新 prefill 来获取 attention pattern。&lt;/li&gt;
+&lt;li&gt;得到的重要 token 只对当前 query 有效，不可复用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;论文的动机部分指出：&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;在 multi-query 复用场景中，query-aware 方法的性能快速退化。&lt;/strong&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;因此本论文目标是：&lt;/p&gt;
+&lt;h3 id=&#34;构建一种-query-agnostic一次预处理多-query-复用-的-kv-cache-压缩方法&#34;&gt;构建一种 &lt;strong&gt;query-agnostic、一次预处理、多 query 复用&lt;/strong&gt; 的 KV Cache 压缩方法。&lt;/h3&gt;
+&lt;hr&gt;
+&lt;h1 id=&#34;2-challenge&#34;&gt;&lt;strong&gt;2. Challenge&lt;/strong&gt;&lt;/h1&gt;
+&lt;h2 id=&#34;21-为什么-query-aware-kv-importance-无法泛化&#34;&gt;&lt;strong&gt;2.1 为什么 query-aware KV importance 无法泛化？&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure6.png&#34;&gt;&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications</title>
       <link>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Paper Note">
+<meta name="description" content="
+Conference: NeuIPS&#39;25 Oral
+GIthub: https://github.com/snu-mllab/KVzip
+
+1. Motivation
+大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：
+
+
+显存占用随 $n_c$ 线性扩张
+例如 Qwen2.5-14B 在 120k context 下需 33GB KV Cache（论文 Figure 1）。
+
+
+解码阶段 Attention 的延迟随 KV 数量线性增加
+解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。
+
+
+已有 KV 压缩方法（如 SnapKV / PyramidKV）依赖 query-aware importance：
+
+每个 query 都要重新 prefill 来获取 attention pattern。
+得到的重要 token 只对当前 query 有效，不可复用。
+
+论文的动机部分指出：
+
+
+在 multi-query 复用场景中，query-aware 方法的性能快速退化。
+
+因此本论文目标是：
+构建一种 query-agnostic、一次预处理、多 query 复用 的 KV Cache 压缩方法。
+
+2. Challenge
+2.1 为什么 query-aware KV importance 无法泛化？
+">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction">
+  <meta property="og:description" content="
+Conference: NeuIPS&#39;25 Oral
+GIthub: https://github.com/snu-mllab/KVzip
+1. Motivation 大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：
+显存占用随 $n_c$ 线性扩张 例如 Qwen2.5-14B 在 120k context 下需 33GB KV Cache（论文 Figure 1）。
+解码阶段 Attention 的延迟随 KV 数量线性增加 解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。
+已有 KV 压缩方法（如 SnapKV / PyramidKV）依赖 query-aware importance：
+每个 query 都要重新 prefill 来获取 attention pattern。 得到的重要 token 只对当前 query 有效，不可复用。 论文的动机部分指出：
+在 multi-query 复用场景中，query-aware 方法的性能快速退化。
+因此本论文目标是：
+构建一种 query-agnostic、一次预处理、多 query 复用 的 KV Cache 压缩方法。 2. Challenge 2.1 为什么 query-aware KV importance 无法泛化？ ">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2025-11-21T00:00:00+00:00">
+    <meta property="article:modified_time" content="2025-11-21T00:00:00+00:00">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction">
+<meta name="twitter:description" content="
+Conference: NeuIPS&#39;25 Oral
+GIthub: https://github.com/snu-mllab/KVzip
+
+1. Motivation
+大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：
+
+
+显存占用随 $n_c$ 线性扩张
+例如 Qwen2.5-14B 在 120k context 下需 33GB KV Cache（论文 Figure 1）。
+
+
+解码阶段 Attention 的延迟随 KV 数量线性增加
+解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。
+
+
+已有 KV 压缩方法（如 SnapKV / PyramidKV）依赖 query-aware importance：
+
+每个 query 都要重新 prefill 来获取 attention pattern。
+得到的重要 token 只对当前 query 有效，不可复用。
+
+论文的动机部分指出：
+
+
+在 multi-query 复用场景中，query-aware 方法的性能快速退化。
+
+因此本论文目标是：
+构建一种 query-agnostic、一次预处理、多 query 复用 的 KV Cache 压缩方法。
+
+2. Challenge
+2.1 为什么 query-aware KV importance 无法泛化？
+">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction",
+      "item": "https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction",
+  "name": "📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction",
+  "description": "\nConference: NeuIPS'25 Oral\nGIthub: https://github.com/snu-mllab/KVzip\n1. Motivation 大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：\n显存占用随 $n_c$ 线性扩张 例如 Qwen2.5-14B 在 120k context 下需 33GB KV Cache（论文 Figure 1）。\n解码阶段 Attention 的延迟随 KV 数量线性增加 解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。\n已有 KV 压缩方法（如 SnapKV / PyramidKV）依赖 query-aware importance：\n每个 query 都要重新 prefill 来获取 attention pattern。 得到的重要 token 只对当前 query 有效，不可复用。 论文的动机部分指出：\n在 multi-query 复用场景中，query-aware 方法的性能快速退化。\n因此本论文目标是：\n构建一种 query-agnostic、一次预处理、多 query 复用 的 KV Cache 压缩方法。 2. Challenge 2.1 为什么 query-aware KV importance 无法泛化？ ",
+  "keywords": [
+    "KV Cache", "Paper Note"
+  ],
+  "articleBody": "\nConference: NeuIPS'25 Oral\nGIthub: https://github.com/snu-mllab/KVzip\n1. Motivation 大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：\n显存占用随 $n_c$ 线性扩张 例如 Qwen2.5-14B 在 120k context 下需 33GB KV Cache（论文 Figure 1）。\n解码阶段 Attention 的延迟随 KV 数量线性增加 解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。\n已有 KV 压缩方法（如 SnapKV / PyramidKV）依赖 query-aware importance：\n每个 query 都要重新 prefill 来获取 attention pattern。 得到的重要 token 只对当前 query 有效，不可复用。 论文的动机部分指出：\n在 multi-query 复用场景中，query-aware 方法的性能快速退化。\n因此本论文目标是：\n构建一种 query-agnostic、一次预处理、多 query 复用 的 KV Cache 压缩方法。 2. Challenge 2.1 为什么 query-aware KV importance 无法泛化？ 同一 context，在 QA、Summarization、Reasoning 三个任务中重要 token 完全不同。 而且不同 query 的 cross-attention pattern 差异巨大。 论文通过对多个 query 的 attention map（Figure 6, “QA-1 vs QA-2”）展示：\n对同一段 context，两个相似的 QA query 也可能访问完全不同的 token。\n导致：\n基于 query 的 token scoring 难以复用到另一个 query。 每次 query 都需重新 prefill，代价巨大。 2.2 为什么 prefill attention 不能用于衡量 token 重要度？ Prefill attention 在 key 维度上几乎均匀分布（dense \u0026 flat）。 Prefill 的主要作用是在 decoder self-attention 中构建位置依赖，而非找到语义关键 token。 因此：\nPrefill attention 缺乏区分度，不能作为 token 重要性的 proxy。\n3. Contribution 提出 KVzip：一种基于 context reconstruction 的 query-agnostic KV cache compression 方法 KVzip 利用“重复 prompt + 重构任务”诱导模型自动暴露其“最稳定的语义路径”。\n提出 Reconstruction Attention Score（RAS）作为 token importance RAS 能跨不同任务、不同 query 保持一致性（。\n提出 Chunked Scoring 用分块避免构建 $O(n_c^2)$ 的稠密 attention 矩阵，实现线性复杂度的 scoring。\n完成系统级优化且与多种推理系统兼容\nKV quantization（如 QServe 的 KV4） Head-level eviction 与 DuoAttention 兼容或替代 在 LLaMA3.1 / Qwen2.5 / Gemma3 多种模型 + 12 类任务上验证 在 50–70% eviction 下几乎无损。\n4. Method 4.1 Method Overview Step 1. 执行普通 prefill： 得到 context 的 KV Cache：\n$K_c \\in \\mathbb{R}^{n_c \\times d}$ $V_c \\in \\mathbb{R}^{n_c \\times d}$ Step 2. 构造输入：\nRepeat Prompt + 原始 context\nRepeat Prompt 的作用是让模型执行 reconstruction：\n模型会尝试复原之前的 context 强迫模型访问其“核心语义路径” Step 3. 构造 reconstruction attention\n论文强调 reconstruction attention 的特殊性：\n类似语言建模，但目标是“模仿之前内容” 因而 attention 会更多地指向语义关键 token Step 4. 基于 reconstruction attention 计算 token importance\nStep 5. 依据 score 排序执行 eviction，得到压缩后的 KV。\n4.2 Repeat-Prompt-Based Reconstruction Attention 为什么是 Repeat Prompt？为什么有效？ 论文通过三组实验验证：\n（1）Prefill attention 对所有 context token 关注近似均匀 Attention 分布无明显峰值 无法识别哪些 token 在推理中被频繁访问 （2）Reconstruction Attention 与多任务 attention pattern 高重叠 论文 Figure 6 显示：\nTask Reconstruction Attention 重叠率 QA 高 Summarization 高 Reasoning 高 即：\nReconstruction attention 能稳定捕捉语义核心 token，且这些 token 也是多数任务所需的关键 token。\n（3）为什么“重复”而不是使用相同 prompt 一次？ 论文解释：\n单次 prompt 无法提供足够 signal 让模型完全重构上下文。 重复 prompt 等价于构造更多 query，使模型形成稳定 attention。 多次重复（论文默认为 $G=8$）可以：\n多个 query 共同投票得到更 robust 的 score 降低单个 query 带来的随机波动 4.3 KV Importance Scoring 4.3.1 Reconstruction Attention 在第 $l$ 层、第 $h$ 个 head：\nQuery： $$Q_{l,h} \\in \\mathbb{R}^{G \\times n_{in} \\times d}$$\nKV Cache（context 部分）： $$K_{l,h} \\in \\mathbb{R}^{n_c \\times d}$$\nReconstruction attention：\n$$ \\bar{A}{l,h} = \\mathrm{Softmax}\\left( Q{l,h} K_{l,h}^{\\top} \\right) $$\n这是标准 Attention，但我们只关心指向 context 的片段（跳过重复 prompt）。\n4.3.2 Importance Score 论文定义对 token $j$ 的重要度为：\n$$ S_{l,h}[j] = \\max_{g,i}, \\bar{A}_{l,h}[g, i, j] $$\n含义：\n对所有 Repeat Prompt（$g$ 个） 所有 query token（$i$ 个） 找该 token 被访问的最大 attention score 为什么取最大而非平均？ 论文理由：\n重构语义时某些 query 会特别强烈依赖某些 token 平均可能平滑掉重要 token 的峰值 最大值能更清晰反映“至少有一次非常重要” 论文在 Ablation（Figure 16）验证： Replacing max with mean 会显著下降性能。\n4.3.3 Layer Aggregation \u0026 Head Aggregation 论文使用：\nlayer-wise importance：可设某些层更重要（可选） head-wise importance：可配合 DuoAttention 做 head-level eviction 默认将所有 head importance 通过 max 聚合：\n$$ S[j] = \\max_{l,h} S_{l,h}[j] $$\n最终排序决定保留哪些 token。\n4.4 关键技术难点：Quadratic Attention Cost FlashAttention 的限制：\n它 block-wise 计算 attention，但不会保留完整的中间结果\nKVzip 必须获得完整归一化后的 attention 矩阵\n需 softmax 归一化 需按 query dimension 执行 $\\max$ FlashAttention 得不到：\n$$ \\max_{i} \\mathrm{Softmax}(QK^\\top) $$\n只能得到最终结果 $V$，不可恢复 attention。\n因此 KVzip 必须重新设计计算方式。\n4.5 Chunked Scoring 4.5.1 Chunking 原理 将 context 拆成大小为 $m$ 的块：\n$$ \\text{context} = [C_1, C_2, …, C_{n_c/m}] $$\n对每个 chunk $C_k$：\n构造只包含 $C_k$ 的局部 KV 执行 reconstruction attention 得到 chunk 内局部分数 最终合并所有 chunk 的 score 4.5.2 为什么 chunking 不会破坏语义？ 论文解释：\nReconstruction attention 的 key 是整个 context，但我们是做 重要度建模，非推理 为 token j 计算 score，只需其所在 chunk 内的查询访问情况 Reconstruction query 实际访问 token 时主要依赖其附近语义 实验（Figure 15）证明：\n只要 chunk ≥ 2048，其重要度几乎不变。\n4.5.3 Complexity Analysis 单个 chunk：\nreconstruction cost：$O(m^2)$ 总 chunk 数：\n$n_c/m$ 总成本：\n$$ O(m^2 \\times n_c/m) = O(m n_c) $$\n对于固定 $m$（论文默认 $m=2048$）：\n总成本随 context 长度线性增长，能轻松处理 128k–512k 长上下文。\n4.5.4 Memory Usage Chunked scoring 的额外显存 ≈ 1.8% 计算耗时 ≈ 2× prefill 对于 offline/online 初次压缩都可接受。\n5. Evaluation 5.1 实验设置概览 论文覆盖 12 类任务，包括：\nQA（TriviaQA, HotpotQA） Summarization（GovReport） Reasoning（GSM8K, MATH） Needle-in-a-Haystack（NIAH） QA retrieval（LongBench） 实验模型包括：\nLLaMA 3.1（8B / 70B） Qwen2.5（7B / 14B） Gemma 3 上下文长度测试：\n32k、64k、128k 所测 eviction ratio：\n30% / 50% / 70%（default）/ 90% 5.2 Cross-model Results（Figure 9–10） （1）同样 eviction 下，KVzip 在所有任务上均接近无损 在 70% eviction 下，所有任务下降 \u003c 2% SnapKV 在 30% eviction 下降超过 10–20% PyramidKV 在 50% retention 下就出现显著退化 （2）不同模型之间的稳定性 论文测试：\nLLaMA 3.1（decoder-only） Gemma 3（Google） Qwen2.5（阿里） 结论：\n无论架构、embedding 维度、attention 方式如何变化，reconstruction attention 均稳定有效。\n（3）多 query 场景中的能力 Figure 2（multi-query）证明：\nQuery-aware 方法几乎完全失效 KVzip 因 query-agnostic，可一次压缩、多次复用 5.3 KV Quantization Compatibility（QServe） 论文将 KVzip 与 QServe W8A8KV4 结合（Figure 10）：\n原 KV Cache：16.3 GB 经过 W8A8KV4：4.5 GB 再通过 KVzip 70% eviction：1.2 GB 性能损失 \u003c 2% 这是论文最具工程意义的结果：\nKVzip + Quantization = 边缘设备可运行超长上下文 LLM。\n5.4 与 DuoAttention 的关系 KVzip importance 可用于 head-level eviction：\n比 DuoAttention 更稳定，因为它不依赖大规模 profiling 在 70% eviction 下更高得分 论文说明 KVzip 即可替代 DuoAttention，也可作为其先验 score。\n5.5 Ablation Study 5.5.1 是否必须重构整个 context？（Figure 12） 论文测试：\n只重构部分同样上下文 仅使用前/后半部分 重构层数减少（只用 top layers） 结果：\nToken importance 显著下降 只 reconstruct 局部会丢失 global semantics 5.5.2 Repeat Prompt 数量 G 的影响（Figure 13） 当 $G \\ge 6$ 时 score 稳定 $G \u003c 4$ 会导致噪声较大 5.5.3 Reconstruction Prompt 长度 $n_{in}$（Figure 14） 当 $n_{in} \\ge 512$ 性能基本稳定 过短会导致模型难以重构完整 context 5.5.4 Chunk size（Figure 15） $m = 2048$ 是推荐值 $m \u003c 1024$ 会破坏 importance 5.5.5 Softmax 的必要性（Figure 16） 论文测试不用 softmax 的替代（如 raw logits）：\n性能急剧恶化 Softmax 是必须的归一化步骤 6. Conclusion 在不修改你原文的基础上进一步升华总结：\nKVzip 提出一种 query-agnostic、可泛化、可复用、成本可控、质量稳定 的 KV 压缩框架，其关键技术包括：\nRepeat-prompt-based context reconstruction 诱导稳定 attention pattern。\nReconstruction Attention Scoring（RAS） 获得跨任务一致的通用 token importance。\nChunked Scoring（线性复杂度） 支持 128k–512k 长上下文压缩。\n与量化、head-level eviction、speculative decoding 兼容\n在 50–70% eviction 下几乎无损 显著优于所有 query-aware baseline。\n这使得 KVzip 在：\n云数据中心（multi-query serving） 边缘部署（KV quantization + eviction） 长上下文应用（RAG、文档 QA） 等场景都具备实用价值。\n这是一个非常深入且切中要害的问题。KVzip 之所以不只使用 “Repeat Prompt”（复述提示词），而是将 Prompt + 原始 Context 拼接在一起作为输入，主要是出于**计算效率（并行化）和评分准确性（Teacher-Forcing）**的考虑。\n以下是基于论文的详细解释：\n1. 核心原因：利用 Teacher-Forcing 实现并行计算 如果只输入 “Repeat the previous context:” 让模型去生成，模型必须进行自回归生成（Autoregressive Generation），即生成第一个 token，再用它生成第二个… 如此循环。\n[cite_start]问题：对于长上下文（例如 100K tokens），逐个生成这 100K tokens 的速度极慢，且计算成本极高，这在实际应用中是不可接受的 [cite: 120]。 [cite_start]解决方案：通过将 Repeat Prompt 和 Context 拼接在一起作为输入（Input），KVzip 利用了 Teacher-Forcing 机制 [cite: 143]。 在这种模式下，模型在预测第 $t$ 个 token 时，已经能够看到真实的第 $t-1$ 个 token（因为它们就在输入里）。 [cite_start]因此，模型可以在**一次前向传播（Single Forward Pass）**中并行计算出所有位置的注意力分数，而不需要真的逐个生成文本 [cite: 143]。 2. 评分机制：模拟“向后看”的注意力 KVzip 的核心逻辑是计算**“为了重建上下文，当前的查询（Query）需要关注缓存中的哪些键值对（KV pairs）”**。\n[cite_start]输入构造：输入序列长度为 $n_{in} = n_{prompt} + n_c$（提示词长度 + 上下文长度）[cite: 145]。 交叉注意力：这个拼接后的输入经过模型时，其产生的 Query（$Q$）会去查询缓存中的 Key（$K$）。 [cite_start]具体的逻辑是：输入中拼接的 Context 部分实际上充当了“正在生成的 token”的角色，它们回头去关注 $KV_c$（缓存的上下文），由此产生的**最大交叉注意力分数（Max Cross-Attention Score）**即代表了该 KV 对的重要性 [cite: 144, 153]。 如果不加 Context，模型就没有具体的 Query 去“质询”缓存中的 Key，也就无法计算出准确的注意力分布来判断哪些 KV 对对于重建内容是必须的。 3. 实验验证：完整重建的必要性 论文作者在 Section 4.3 中专门分析了这一点，并进行了对比实验（见论文 Figure 12）：\n[cite_start]对比设置：作者尝试了只用 “Prompt”（仅提示词）、“First”（提示词+前10%内容）、“Last”（提示词+后10%内容）以及 “Recon”（提示词+完整内容）来进行评分 [cite: 486]。 [cite_start]结果：实验结果显示，只有 Recon（完整重建） 能够防止性能下降。仅使用 Prompt 或部分内容会导致模型无法准确识别关键 KV 对，从而在压缩后导致推理准确率大幅下跌 [cite: 487, 509]。 总结 简单来说，加上 Context 是为了作弊（Teacher-Forcing）：让模型在一次计算中假装自己正在生成整个上下文，从而快速地通过观测其注意力分布来“偷看”哪些记忆片段是它完成这项任务所真正需要的。\n",
+  "wordCount" : "992",
+  "inLanguage": "zh-cn",
+  "datePublished": "2025-11-21T00:00:00Z",
+  "dateModified": "2025-11-21T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction
+    </h1>
+    <div class="post-meta"><span title='2025-11-21 00:00:00 +0000 UTC'>November 21, 2025</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeuIPS'25 Oral</strong></p>
+<p><strong>GIthub:</strong> <a href="https://github.com/snu-mllab/KVzip">https://github.com/snu-mllab/KVzip</a></p>
+<hr>
+<h1 id="1-motivation"><strong>1. Motivation</strong><a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h1>
+<p>大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：</p>
+<ol>
+<li>
+<p><strong>显存占用随 $n_c$ 线性扩张</strong>
+例如 Qwen2.5-14B 在 120k context 下需 <strong>33GB</strong> KV Cache（论文 Figure 1）。</p>
+</li>
+<li>
+<p><strong>解码阶段 Attention 的延迟随 KV 数量线性增加</strong>
+解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。</p>
+</li>
+</ol>
+<p>已有 KV 压缩方法（如 <strong>SnapKV / PyramidKV</strong>）依赖 <strong>query-aware importance</strong>：</p>
+<ul>
+<li>每个 query 都要重新 prefill 来获取 attention pattern。</li>
+<li>得到的重要 token 只对当前 query 有效，不可复用。</li>
+</ul>
+<p>论文的动机部分指出：</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure2.png"></p>
+<blockquote>
+<p><strong>在 multi-query 复用场景中，query-aware 方法的性能快速退化。</strong></p>
+</blockquote>
+<p>因此本论文目标是：</p>
+<h3 id="构建一种-query-agnostic一次预处理多-query-复用-的-kv-cache-压缩方法">构建一种 <strong>query-agnostic、一次预处理、多 query 复用</strong> 的 KV Cache 压缩方法。<a hidden class="anchor" aria-hidden="true" href="#构建一种-query-agnostic一次预处理多-query-复用-的-kv-cache-压缩方法">#</a></h3>
+<hr>
+<h1 id="2-challenge"><strong>2. Challenge</strong><a hidden class="anchor" aria-hidden="true" href="#2-challenge">#</a></h1>
+<h2 id="21-为什么-query-aware-kv-importance-无法泛化"><strong>2.1 为什么 query-aware KV importance 无法泛化？</strong><a hidden class="anchor" aria-hidden="true" href="#21-为什么-query-aware-kv-importance-无法泛化">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure6.png"></p>
+<ul>
+<li>同一 context，在 <strong>QA、Summarization、Reasoning</strong> 三个任务中重要 token 完全不同。</li>
+<li>而且不同 query 的 cross-attention pattern 差异巨大。</li>
+</ul>
+<p>论文通过对多个 query 的 attention map（Figure 6, “QA-1 vs QA-2”）展示：</p>
+<blockquote>
+<p>对同一段 context，两个相似的 QA query 也可能访问完全不同的 token。</p>
+</blockquote>
+<p>导致：</p>
+<ul>
+<li>基于 query 的 token scoring 难以复用到另一个 query。</li>
+<li>每次 query 都需重新 prefill，代价巨大。</li>
+</ul>
+<hr>
+<h2 id="22-为什么-prefill-attention-不能用于衡量-token-重要度"><strong>2.2 为什么 prefill attention 不能用于衡量 token 重要度？</strong><a hidden class="anchor" aria-hidden="true" href="#22-为什么-prefill-attention-不能用于衡量-token-重要度">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure5.png"></p>
+<ul>
+<li>Prefill attention 在 key 维度上几乎均匀分布（dense &amp; flat）。</li>
+<li>Prefill 的主要作用是在 decoder self-attention 中构建位置依赖，而非找到语义关键 token。</li>
+</ul>
+<p>因此：</p>
+<blockquote>
+<p>Prefill attention 缺乏区分度，不能作为 token 重要性的 proxy。</p>
+</blockquote>
+<hr>
+<h1 id="3-contribution"><strong>3. Contribution</strong><a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h1>
+<ol>
+<li>
+<p><strong>提出 KVzip：一种基于 context reconstruction 的 query-agnostic KV cache compression 方法</strong>
+KVzip 利用“重复 prompt + 重构任务”诱导模型自动暴露其“最稳定的语义路径”。</p>
+</li>
+<li>
+<p><strong>提出 Reconstruction Attention Score（RAS）作为 token importance</strong>
+RAS 能跨不同任务、不同 query 保持一致性（。</p>
+</li>
+<li>
+<p><strong>提出 Chunked Scoring</strong>
+用分块避免构建 $O(n_c^2)$ 的稠密 attention 矩阵，实现线性复杂度的 scoring。</p>
+</li>
+<li>
+<p><strong>完成系统级优化且与多种推理系统兼容</strong></p>
+<ul>
+<li>KV quantization（如 QServe 的 KV4）</li>
+<li>Head-level eviction</li>
+<li>与 DuoAttention 兼容或替代</li>
+</ul>
+</li>
+<li>
+<p><strong>在 LLaMA3.1 / Qwen2.5 / Gemma3 多种模型 + 12 类任务上验证</strong>
+在 50–70% eviction 下几乎无损。</p>
+</li>
+</ol>
+<hr>
+<h1 id="4-method"><strong>4. Method</strong><a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h1>
+<h1 id="41-method-overview"><strong>4.1 Method Overview</strong><a hidden class="anchor" aria-hidden="true" href="#41-method-overview">#</a></h1>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure3.png"></p>
+<p><strong>Step 1.</strong> 执行普通 prefill：
+得到 context 的 KV Cache：</p>
+<ul>
+<li>$K_c \in \mathbb{R}^{n_c \times d}$</li>
+<li>$V_c \in \mathbb{R}^{n_c \times d}$</li>
+</ul>
+<p><strong>Step 2.</strong> 构造输入：</p>
+<blockquote>
+<p><strong>Repeat Prompt + 原始 context</strong></p>
+</blockquote>
+<p>Repeat Prompt 的作用是让模型执行 reconstruction：</p>
+<ul>
+<li>模型会尝试复原之前的 context</li>
+<li>强迫模型访问其“核心语义路径”</li>
+</ul>
+<p><strong>Step 3.</strong> 构造 reconstruction attention</p>
+<p>论文强调 reconstruction attention 的特殊性：</p>
+<ul>
+<li>类似语言建模，但目标是“模仿之前内容”</li>
+<li>因而 attention 会更多地指向语义关键 token</li>
+</ul>
+<p><strong>Step 4.</strong> 基于 reconstruction attention 计算 token importance</p>
+<p><strong>Step 5.</strong> 依据 score 排序执行 eviction，得到压缩后的 KV。</p>
+<hr>
+<h1 id="42-repeat-prompt-based-reconstruction-attention"><strong>4.2 Repeat-Prompt-Based Reconstruction Attention</strong><a hidden class="anchor" aria-hidden="true" href="#42-repeat-prompt-based-reconstruction-attention">#</a></h1>
+<h3 id="为什么是-repeat-prompt为什么有效"><strong>为什么是 Repeat Prompt？为什么有效？</strong><a hidden class="anchor" aria-hidden="true" href="#为什么是-repeat-prompt为什么有效">#</a></h3>
+<p>论文通过三组实验验证：</p>
+<hr>
+<h3 id="1prefill-attention-对所有-context-token-关注近似均匀"><strong>（1）Prefill attention 对所有 context token 关注近似均匀</strong><a hidden class="anchor" aria-hidden="true" href="#1prefill-attention-对所有-context-token-关注近似均匀">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure5.png"></p>
+<ul>
+<li>Attention 分布无明显峰值</li>
+<li>无法识别哪些 token 在推理中被频繁访问</li>
+</ul>
+<hr>
+<h3 id="2reconstruction-attention-与多任务-attention-pattern-高重叠"><strong>（2）Reconstruction Attention 与多任务 attention pattern 高重叠</strong><a hidden class="anchor" aria-hidden="true" href="#2reconstruction-attention-与多任务-attention-pattern-高重叠">#</a></h3>
+<p>论文 Figure 6 显示：</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure6.png"></p>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th>Reconstruction Attention 重叠率</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>QA</td>
+          <td>高</td>
+      </tr>
+      <tr>
+          <td>Summarization</td>
+          <td>高</td>
+      </tr>
+      <tr>
+          <td>Reasoning</td>
+          <td>高</td>
+      </tr>
+  </tbody>
+</table>
+<p>即：</p>
+<blockquote>
+<p>Reconstruction attention 能稳定捕捉语义核心 token，且这些 token 也是多数任务所需的关键 token。</p>
+</blockquote>
+<hr>
+<h3 id="3为什么重复而不是使用相同-prompt-一次"><strong>（3）为什么“重复”而不是使用相同 prompt 一次？</strong><a hidden class="anchor" aria-hidden="true" href="#3为什么重复而不是使用相同-prompt-一次">#</a></h3>
+<p>论文解释：</p>
+<ul>
+<li>单次 prompt 无法提供足够 signal 让模型完全重构上下文。</li>
+<li>重复 prompt 等价于构造更多 query，使模型形成稳定 attention。</li>
+</ul>
+<p>多次重复（论文默认为 $G=8$）可以：</p>
+<ul>
+<li>多个 query 共同投票得到更 robust 的 score</li>
+<li>降低单个 query 带来的随机波动</li>
+</ul>
+<hr>
+<h1 id="43-kv-importance-scoring"><strong>4.3 KV Importance Scoring</strong><a hidden class="anchor" aria-hidden="true" href="#43-kv-importance-scoring">#</a></h1>
+<h2 id="431-reconstruction-attention"><strong>4.3.1 Reconstruction Attention</strong><a hidden class="anchor" aria-hidden="true" href="#431-reconstruction-attention">#</a></h2>
+<p>在第 $l$ 层、第 $h$ 个 head：</p>
+<ul>
+<li>
+<p>Query：
+$$Q_{l,h} \in \mathbb{R}^{G \times n_{in} \times d}$$</p>
+</li>
+<li>
+<p>KV Cache（context 部分）：
+$$K_{l,h} \in \mathbb{R}^{n_c \times d}$$</p>
+</li>
+</ul>
+<p>Reconstruction attention：</p>
+<p>$$
+\bar{A}<em>{l,h} = \mathrm{Softmax}\left( Q</em>{l,h} K_{l,h}^{\top} \right)
+$$</p>
+<p>这是标准 Attention，但我们只关心指向 context 的片段（跳过重复 prompt）。</p>
+<hr>
+<h2 id="432-importance-score"><strong>4.3.2 Importance Score</strong><a hidden class="anchor" aria-hidden="true" href="#432-importance-score">#</a></h2>
+<p>论文定义对 token $j$ 的重要度为：</p>
+<p>$$
+S_{l,h}[j] = \max_{g,i}, \bar{A}_{l,h}[g, i, j]
+$$</p>
+<p>含义：</p>
+<ul>
+<li>对所有 Repeat Prompt（$g$ 个）</li>
+<li>所有 query token（$i$ 个）</li>
+<li>找该 token 被访问的最大 attention score</li>
+</ul>
+<h3 id="为什么取最大而非平均"><strong>为什么取最大而非平均？</strong><a hidden class="anchor" aria-hidden="true" href="#为什么取最大而非平均">#</a></h3>
+<p>论文理由：</p>
+<ol>
+<li>重构语义时某些 query 会特别强烈依赖某些 token</li>
+<li>平均可能平滑掉重要 token 的峰值</li>
+<li>最大值能更清晰反映“至少有一次非常重要”</li>
+</ol>
+<p>论文在 Ablation（Figure 16）验证：
+<strong>Replacing max with mean 会显著下降性能。</strong></p>
+<hr>
+<h2 id="433-layer-aggregation--head-aggregation"><strong>4.3.3 Layer Aggregation &amp; Head Aggregation</strong><a hidden class="anchor" aria-hidden="true" href="#433-layer-aggregation--head-aggregation">#</a></h2>
+<p>论文使用：</p>
+<ul>
+<li>layer-wise importance：可设某些层更重要（可选）</li>
+<li>head-wise importance：可配合 DuoAttention 做 head-level eviction</li>
+</ul>
+<p>默认将所有 head importance 通过 max 聚合：</p>
+<p>$$
+S[j] = \max_{l,h} S_{l,h}[j]
+$$</p>
+<p>最终排序决定保留哪些 token。</p>
+<hr>
+<h1 id="44-关键技术难点quadratic-attention-cost"><strong>4.4 关键技术难点：Quadratic Attention Cost</strong><a hidden class="anchor" aria-hidden="true" href="#44-关键技术难点quadratic-attention-cost">#</a></h1>
+<p><strong>FlashAttention 的限制：</strong></p>
+<ul>
+<li>
+<p>它 block-wise 计算 attention，但不会保留完整的中间结果</p>
+</li>
+<li>
+<p>KVzip <strong>必须获得完整归一化后的 attention 矩阵</strong></p>
+<ul>
+<li>需 softmax 归一化</li>
+<li>需按 query dimension 执行 $\max$</li>
+</ul>
+</li>
+</ul>
+<p>FlashAttention 得不到：</p>
+<p>$$
+\max_{i} \mathrm{Softmax}(QK^\top)
+$$</p>
+<p>只能得到最终结果 $V$，不可恢复 attention。</p>
+<p>因此 KVzip 必须重新设计计算方式。</p>
+<hr>
+<h1 id="45-chunked-scoring"><strong>4.5 Chunked Scoring</strong><a hidden class="anchor" aria-hidden="true" href="#45-chunked-scoring">#</a></h1>
+<h2 id="451-chunking-原理"><strong>4.5.1 Chunking 原理</strong><a hidden class="anchor" aria-hidden="true" href="#451-chunking-原理">#</a></h2>
+<p>将 context 拆成大小为 $m$ 的块：</p>
+<p>$$
+\text{context} = [C_1, C_2, &hellip;, C_{n_c/m}]
+$$</p>
+<p>对每个 chunk $C_k$：</p>
+<ol>
+<li>构造只包含 $C_k$ 的局部 KV</li>
+<li>执行 reconstruction attention</li>
+<li>得到 chunk 内局部分数</li>
+<li>最终合并所有 chunk 的 score</li>
+</ol>
+<hr>
+<h2 id="452-为什么-chunking-不会破坏语义"><strong>4.5.2 为什么 chunking 不会破坏语义？</strong><a hidden class="anchor" aria-hidden="true" href="#452-为什么-chunking-不会破坏语义">#</a></h2>
+<p>论文解释：</p>
+<ul>
+<li>Reconstruction attention 的 key 是整个 context，但我们是做 <strong>重要度建模</strong>，非推理</li>
+<li>为 token j 计算 score，只需其所在 chunk 内的查询访问情况</li>
+<li>Reconstruction query 实际访问 token 时主要依赖其附近语义</li>
+</ul>
+<p>实验（Figure 15）证明：</p>
+<blockquote>
+<p>只要 chunk ≥ 2048，其重要度几乎不变。</p>
+</blockquote>
+<hr>
+<h2 id="453-complexity-analysis"><strong>4.5.3 Complexity Analysis</strong><a hidden class="anchor" aria-hidden="true" href="#453-complexity-analysis">#</a></h2>
+<p>单个 chunk：</p>
+<ul>
+<li>reconstruction cost：$O(m^2)$</li>
+</ul>
+<p>总 chunk 数：</p>
+<ul>
+<li>$n_c/m$</li>
+</ul>
+<p>总成本：</p>
+<p>$$
+O(m^2 \times n_c/m) = O(m n_c)
+$$</p>
+<p>对于固定 $m$（论文默认 $m=2048$）：</p>
+<blockquote>
+<p>总成本随 context 长度线性增长，能轻松处理 128k–512k 长上下文。</p>
+</blockquote>
+<hr>
+<h2 id="454-memory-usage"><strong>4.5.4 Memory Usage</strong><a hidden class="anchor" aria-hidden="true" href="#454-memory-usage">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure7.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure8.png"></p>
+<ul>
+<li>Chunked scoring 的额外显存 ≈ 1.8%</li>
+<li>计算耗时 ≈ 2× prefill</li>
+</ul>
+<p>对于 offline/online 初次压缩都可接受。</p>
+<hr>
+<h1 id="5-evaluation"><strong>5. Evaluation</strong><a hidden class="anchor" aria-hidden="true" href="#5-evaluation">#</a></h1>
+<h1 id="51-实验设置概览"><strong>5.1 实验设置概览</strong><a hidden class="anchor" aria-hidden="true" href="#51-实验设置概览">#</a></h1>
+<p>论文覆盖 12 类任务，包括：</p>
+<ul>
+<li>QA（TriviaQA, HotpotQA）</li>
+<li>Summarization（GovReport）</li>
+<li>Reasoning（GSM8K, MATH）</li>
+<li>Needle-in-a-Haystack（NIAH）</li>
+<li>QA retrieval（LongBench）</li>
+</ul>
+<p>实验模型包括：</p>
+<ul>
+<li><strong>LLaMA 3.1（8B / 70B）</strong></li>
+<li><strong>Qwen2.5（7B / 14B）</strong></li>
+<li><strong>Gemma 3</strong></li>
+</ul>
+<p>上下文长度测试：</p>
+<ul>
+<li>32k、64k、128k</li>
+</ul>
+<p>所测 eviction ratio：</p>
+<ul>
+<li>30% / 50% / 70%（default）/ 90%</li>
+</ul>
+<hr>
+<h1 id="52-cross-model-resultsfigure-910"><strong>5.2 Cross-model Results（Figure 9–10）</strong><a hidden class="anchor" aria-hidden="true" href="#52-cross-model-resultsfigure-910">#</a></h1>
+<h3 id="1同样-eviction-下kvzip-在所有任务上均接近无损"><strong>（1）同样 eviction 下，KVzip 在所有任务上均接近无损</strong><a hidden class="anchor" aria-hidden="true" href="#1同样-eviction-下kvzip-在所有任务上均接近无损">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure9.png"></p>
+<ul>
+<li>在 70% eviction 下，所有任务下降 &lt; 2%</li>
+<li>SnapKV 在 30% eviction 下降超过 10–20%</li>
+<li>PyramidKV 在 50% retention 下就出现显著退化</li>
+</ul>
+<hr>
+<h3 id="2不同模型之间的稳定性"><strong>（2）不同模型之间的稳定性</strong><a hidden class="anchor" aria-hidden="true" href="#2不同模型之间的稳定性">#</a></h3>
+<p>论文测试：</p>
+<ul>
+<li>LLaMA 3.1（decoder-only）</li>
+<li>Gemma 3（Google）</li>
+<li>Qwen2.5（阿里）</li>
+</ul>
+<p>结论：</p>
+<blockquote>
+<p>无论架构、embedding 维度、attention 方式如何变化，reconstruction attention 均稳定有效。</p>
+</blockquote>
+<hr>
+<h3 id="3多-query-场景中的能力"><strong>（3）多 query 场景中的能力</strong><a hidden class="anchor" aria-hidden="true" href="#3多-query-场景中的能力">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure2.png">
+Figure 2（multi-query）证明：</p>
+<ul>
+<li>Query-aware 方法几乎完全失效</li>
+<li>KVzip 因 query-agnostic，可一次压缩、多次复用</li>
+</ul>
+<hr>
+<h1 id="53-kv-quantization-compatibilityqserve"><strong>5.3 KV Quantization Compatibility（QServe）</strong><a hidden class="anchor" aria-hidden="true" href="#53-kv-quantization-compatibilityqserve">#</a></h1>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure10.png">
+论文将 KVzip 与 <strong>QServe W8A8KV4</strong> 结合（Figure 10）：</p>
+<ul>
+<li>原 KV Cache：16.3 GB</li>
+<li>经过 W8A8KV4：4.5 GB</li>
+<li>再通过 KVzip 70% eviction：<strong>1.2 GB</strong></li>
+<li>性能损失 &lt; 2%</li>
+</ul>
+<p>这是论文最具工程意义的结果：</p>
+<blockquote>
+<p>KVzip + Quantization = <strong>边缘设备可运行超长上下文 LLM</strong>。</p>
+</blockquote>
+<hr>
+<h1 id="54-与-duoattention-的关系"><strong>5.4 与 DuoAttention 的关系</strong><a hidden class="anchor" aria-hidden="true" href="#54-与-duoattention-的关系">#</a></h1>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure11.png">
+KVzip importance 可用于 head-level eviction：</p>
+<ul>
+<li>比 DuoAttention 更稳定，因为它不依赖大规模 profiling</li>
+<li>在 70% eviction 下更高得分</li>
+</ul>
+<p>论文说明 KVzip 即可替代 DuoAttention，也可作为其先验 score。</p>
+<hr>
+<h1 id="55-ablation-study"><strong>5.5 Ablation Study</strong><a hidden class="anchor" aria-hidden="true" href="#55-ablation-study">#</a></h1>
+<h3 id="551-是否必须重构整个-contextfigure-12"><strong>5.5.1 是否必须重构整个 context？（Figure 12）</strong><a hidden class="anchor" aria-hidden="true" href="#551-是否必须重构整个-contextfigure-12">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/KVzip/figure12.png">
+论文测试：</p>
+<ul>
+<li>只重构部分同样上下文</li>
+<li>仅使用前/后半部分</li>
+<li>重构层数减少（只用 top layers）</li>
+</ul>
+<p>结果：</p>
+<ul>
+<li>Token importance 显著下降</li>
+<li>只 reconstruct 局部会丢失 global semantics</li>
+</ul>
+<hr>
+<h3 id="552-repeat-prompt-数量-g-的影响figure-13"><strong>5.5.2 Repeat Prompt 数量 G 的影响（Figure 13）</strong><a hidden class="anchor" aria-hidden="true" href="#552-repeat-prompt-数量-g-的影响figure-13">#</a></h3>
+<ul>
+<li>当 $G \ge 6$ 时 score 稳定</li>
+<li>$G &lt; 4$ 会导致噪声较大</li>
+</ul>
+<hr>
+<h3 id="553-reconstruction-prompt-长度-n_"><strong>5.5.3 Reconstruction Prompt 长度 $n_{in}$（Figure 14）</strong><a hidden class="anchor" aria-hidden="true" href="#553-reconstruction-prompt-长度-n_">#</a></h3>
+<ul>
+<li>当 $n_{in} \ge 512$ 性能基本稳定</li>
+<li>过短会导致模型难以重构完整 context</li>
+</ul>
+<hr>
+<h3 id="554-chunk-sizefigure-15"><strong>5.5.4 Chunk size（Figure 15）</strong><a hidden class="anchor" aria-hidden="true" href="#554-chunk-sizefigure-15">#</a></h3>
+<ul>
+<li>$m = 2048$ 是推荐值</li>
+<li>$m &lt; 1024$ 会破坏 importance</li>
+</ul>
+<hr>
+<h3 id="555-softmax-的必要性figure-16"><strong>5.5.5 Softmax 的必要性（Figure 16）</strong><a hidden class="anchor" aria-hidden="true" href="#555-softmax-的必要性figure-16">#</a></h3>
+<p>论文测试不用 softmax 的替代（如 raw logits）：</p>
+<ul>
+<li>性能急剧恶化</li>
+<li>Softmax 是必须的归一化步骤</li>
+</ul>
+<hr>
+<h1 id="6-conclusion"><strong>6. Conclusion</strong><a hidden class="anchor" aria-hidden="true" href="#6-conclusion">#</a></h1>
+<p>在不修改你原文的基础上进一步升华总结：</p>
+<p>KVzip 提出一种 <strong>query-agnostic、可泛化、可复用、成本可控、质量稳定</strong> 的 KV 压缩框架，其关键技术包括：</p>
+<ol>
+<li>
+<p><strong>Repeat-prompt-based context reconstruction</strong>
+诱导稳定 attention pattern。</p>
+</li>
+<li>
+<p><strong>Reconstruction Attention Scoring（RAS）</strong>
+获得跨任务一致的通用 token importance。</p>
+</li>
+<li>
+<p><strong>Chunked Scoring（线性复杂度）</strong>
+支持 128k–512k 长上下文压缩。</p>
+</li>
+<li>
+<p><strong>与量化、head-level eviction、speculative decoding 兼容</strong></p>
+</li>
+<li>
+<p><strong>在 50–70% eviction 下几乎无损</strong>
+显著优于所有 query-aware baseline。</p>
+</li>
+</ol>
+<p>这使得 KVzip 在：</p>
+<ul>
+<li><strong>云数据中心（multi-query serving）</strong></li>
+<li><strong>边缘部署（KV quantization + eviction）</strong></li>
+<li><strong>长上下文应用（RAG、文档 QA）</strong></li>
+</ul>
+<p>等场景都具备实用价值。</p>
+<hr>
+<p>这是一个非常深入且切中要害的问题。KVzip 之所以不只使用 &ldquo;Repeat Prompt&rdquo;（复述提示词），而是将 <strong>Prompt + 原始 Context</strong> 拼接在一起作为输入，主要是出于**计算效率（并行化）<strong>和</strong>评分准确性（Teacher-Forcing）**的考虑。</p>
+<p>以下是基于论文的详细解释：</p>
+<h3 id="1-核心原因利用-teacher-forcing-实现并行计算">1. 核心原因：利用 Teacher-Forcing 实现并行计算<a hidden class="anchor" aria-hidden="true" href="#1-核心原因利用-teacher-forcing-实现并行计算">#</a></h3>
+<p>如果只输入 &ldquo;Repeat the previous context:&rdquo; 让模型去生成，模型必须进行<strong>自回归生成（Autoregressive Generation）</strong>，即生成第一个 token，再用它生成第二个&hellip; 如此循环。</p>
+<ul>
+<li>[cite_start]<strong>问题</strong>：对于长上下文（例如 100K tokens），逐个生成这 100K tokens 的速度极慢，且计算成本极高，这在实际应用中是不可接受的 [cite: 120]。</li>
+<li>[cite_start]<strong>解决方案</strong>：通过将 <strong>Repeat Prompt</strong> 和 <strong>Context</strong> 拼接在一起作为输入（Input），KVzip 利用了 <strong>Teacher-Forcing</strong> 机制 [cite: 143]。
+<ul>
+<li>在这种模式下，模型在预测第 $t$ 个 token 时，已经能够看到真实的第 $t-1$ 个 token（因为它们就在输入里）。</li>
+<li>[cite_start]因此，模型可以在**一次前向传播（Single Forward Pass）**中并行计算出所有位置的注意力分数，而不需要真的逐个生成文本 [cite: 143]。</li>
+</ul>
+</li>
+</ul>
+<h3 id="2-评分机制模拟向后看的注意力">2. 评分机制：模拟“向后看”的注意力<a hidden class="anchor" aria-hidden="true" href="#2-评分机制模拟向后看的注意力">#</a></h3>
+<p>KVzip 的核心逻辑是计算**“为了重建上下文，当前的查询（Query）需要关注缓存中的哪些键值对（KV pairs）”**。</p>
+<ul>
+<li>[cite_start]<strong>输入构造</strong>：输入序列长度为 $n_{in} = n_{prompt} + n_c$（提示词长度 + 上下文长度）[cite: 145]。</li>
+<li><strong>交叉注意力</strong>：这个拼接后的输入经过模型时，其产生的 Query（$Q$）会去查询缓存中的 Key（$K$）。
+<ul>
+<li>[cite_start]具体的逻辑是：输入中拼接的 Context 部分实际上充当了“正在生成的 token”的角色，它们回头去关注 $KV_c$（缓存的上下文），由此产生的**最大交叉注意力分数（Max Cross-Attention Score）**即代表了该 KV 对的重要性 [cite: 144, 153]。</li>
+</ul>
+</li>
+<li>如果不加 Context，模型就没有具体的 Query 去“质询”缓存中的 Key，也就无法计算出准确的注意力分布来判断哪些 KV 对对于重建内容是必须的。</li>
+</ul>
+<h3 id="3-实验验证完整重建的必要性">3. 实验验证：完整重建的必要性<a hidden class="anchor" aria-hidden="true" href="#3-实验验证完整重建的必要性">#</a></h3>
+<p>论文作者在 <strong>Section 4.3</strong> 中专门分析了这一点，并进行了对比实验（见论文 Figure 12）：</p>
+<ul>
+<li>[cite_start]<strong>对比设置</strong>：作者尝试了只用 &ldquo;Prompt&rdquo;（仅提示词）、&ldquo;First&rdquo;（提示词+前10%内容）、&ldquo;Last&rdquo;（提示词+后10%内容）以及 &ldquo;Recon&rdquo;（提示词+完整内容）来进行评分 [cite: 486]。</li>
+<li>[cite_start]<strong>结果</strong>：实验结果显示，只有 <strong>Recon（完整重建）</strong> 能够防止性能下降。仅使用 Prompt 或部分内容会导致模型无法准确识别关键 KV 对，从而在压缩后导致推理准确率大幅下跌 [cite: 487, 509]。</li>
+</ul>
+<h3 id="总结">总结<a hidden class="anchor" aria-hidden="true" href="#总结">#</a></h3>
+<p>简单来说，加上 Context 是为了<strong>作弊（Teacher-Forcing）</strong>：让模型在<strong>一次计算</strong>中假装自己正在生成整个上下文，从而快速地通过观测其注意力分布来“偷看”哪些记忆片段是它完成这项任务所真正需要的。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2025 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
