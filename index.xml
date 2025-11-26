@@ -6,8 +6,42 @@
     <description>Recent content on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 23 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 26 Nov 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
+</title>
+      <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
+      <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ysyisyourbrother/Jupiter&#34;&gt;https://github.com/ysyisyourbrother/Jupiter&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。&lt;/li&gt;
+&lt;li&gt;单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。&lt;/li&gt;
+&lt;li&gt;现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。&lt;/li&gt;
+&lt;li&gt;此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。&lt;/li&gt;
+&lt;li&gt;因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 &lt;strong&gt;Jupiter&lt;/strong&gt;。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
+&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;在 &lt;strong&gt;prefill&lt;/strong&gt; 阶段提出 &lt;strong&gt;intra-sequence pipeline parallelism&lt;/strong&gt; —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;设计了基于&lt;strong&gt;动态规划（dynamic programming）&lt;strong&gt;的&lt;/strong&gt;资源高效并行规划（parallelism planning）&lt;/strong&gt;，同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;在 &lt;strong&gt;decoding&lt;/strong&gt; 阶段，引入并整合 &lt;strong&gt;speculative decoding&lt;/strong&gt;（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 &lt;strong&gt;outline-based pipeline parallel decoding&lt;/strong&gt; —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>🏃‍ Finished the 2025 Humen Half Marathon</title>
       <link>https://jjl357.github.io/blog/posts/2025humen/</link>
