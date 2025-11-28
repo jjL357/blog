@@ -15,39 +15,46 @@
       <guid>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/title.png&#34;&gt;
 &lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;SoCC&#39;25&lt;/strong&gt;&lt;/p&gt;
-&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;大语言多模态模型(LMMs)处理本质上不同类型的输入，每种类型需要不同的处理方法。这种异质性引入了独特的服务复杂性，需要新的分析和服务策略。对于图像-文本到文本模型[25]，推理流程由多个专业阶段组成：图像预处理将原始图像转换为张量表示，图像编码将这些张量转换为图像标记(tokens)，以及将文本提示与图像标记结合生成文本输出的语言模型后端。目前，这些阶段通常作为单体系统提供服务[5, 27, 62]，所有组件集成在单个服务实例中，并作为一个统一实体一起扩展。尽管最近的LLM服务系统采用预填充-解码(prefill-decode, PD)分解[46, 65]以减少LLM后端的性能干扰，但这些优化仍然以文本为中心，忽略了多模态预处理和编码的上游阶段，这些阶段仍然紧密耦合在单体服务实例中。
-&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;
-这种缺乏模态感知的解耦限制了现有多模态推理服务系统在服务非文本工作负载时的效率和可扩展性。这些系统难以满足首令牌时间(TTFT)的服务水平目标(SLOs)，因为多模态输入预处理和编码处于关键路径上。图1展示了单体部署在随着每个请求的图像数量增加（多图像或视频工作负载中的常见场景）时面临的扩展挑战，导致TTFT急剧恶化。结果，图像密集型请求可能导致队头(HoL)阻塞，降低系统响应能力并导致资源过度配置。&lt;/p&gt;
-&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
-&lt;p&gt;作者的工作。在本文中，作者对两种主流LMM架构进行了首次全面系统分析：交叉注意力(cross-attention, CroAttn)和仅解码器(decoder-only, DecOnly)，分析对象包括开源LMMs和Azure数据中心中的新型生产LMM推理轨迹。作者分析了它们的多阶段推理流程、性能-资源权衡以及生产工作负载模式，包括可变请求率、多样化的多模态输入和突发流量。为了推进这一领域的研究，作者发布了来自作者生产集群的首个开源多模态轨迹，使社区能够研究真实世界的部署模式。&lt;/p&gt;
-&lt;p&gt;作者的分析确定了三个优化LMM推理的关键Insight。首先，不同的LMM推理阶段表现出不同的性能特征，并对资源和模型配置（例如批处理和模型分片）具有不同的敏感性，需要解耦执行。其次，图像编码是TTFT的主要瓶颈，需要高效的编码器并行化以减少延迟和HoL阻塞。最后，生产多模态流量表现出由每请求图像数量增加驱动的独特突发模式，突显了需要模态感知路由策略来管理突发流量并减轻尾部延迟峰值。&lt;/p&gt;
-&lt;p&gt;基于这些Insight，作者提出了ModServe，一种用于可扩展和资源高效的LMM服务的新型模块化架构，直接解决了作者分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行。在ModServe中，图像实例处理图像预处理和编码，而文本实例管理LLM预填充和解码（图1）。纯文本请求由文本实例服务，而图像-文本请求则通过图像实例，图像在被转发到文本实例进行文本生成之前被转换为标记。&lt;/p&gt;
-&lt;p&gt;ModServe的模块化架构解锁了阶段特定的优化。ModServe使用阶段感知自动扩展、模型分片和批处理独立管理图像和文本实例。通过单独自动扩展各个阶段，它最大限度地减少了资源过度配置。例如，在生产流量中观察到的以图像驱动的突发期间，图像实例可以独立扩展，使ModServe比单体推理系统更具资源效率。为了解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（图1），利用作者的发现，即请求中的图像在编码期间不会相互注意，因此请求可以在图像级别并行化。&lt;/p&gt;
-&lt;p&gt;此外，为了管理以图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，来自图像-文本请求的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。&lt;/p&gt;
-&lt;p&gt;作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过对运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群进行广泛评估，展示了ModServe的有效性。与最先进的基线相比，ModServe在静态分配下实现了3.3-5.5倍更高的吞吐量，并在满足P99 TTFT SLOs的同时将LMM服务成本降低了25-41.3%。&lt;/p&gt;
-&lt;p&gt;虽然现有技术如PD分解已显示出通过分离预填充和解码阶段来优化LLM推理的潜力[46, 65]，但它们对多模态工作负载而言仍然不足。在生产中观察到的突发性和异构多模态流量的独特性质，使得在以文本为中心的LLM推理背景下研究的PD分解难以扩展；模态特定优化，如并行化编码、模态感知路由和阶段自动扩展，对于在保持资源效率的同时满足SLOs至关重要。此外，为LLM后端选择PD分解或共置取决于工作负载条件和优化目标[65]。作者在第5节中展示了ModServe可以与LLM后端的两种配置组合：共置LLM后端（混合PD批处理）以及文本节点的PD分解，并且在两种LLM后端配置中，所提出的模态感知技术都能改善服务延迟。&lt;/p&gt;
-&lt;p&gt;作者专注于图像-文本到文本和视频-文本到文本（其中视频作为图像帧序列处理[31]），但作者的Insight扩展到其他多模态场景，例如音频-文本到文本任务[23]，这些任务与作者研究的模型具有相似的模型架构和推理阶段。&lt;/p&gt;
-&lt;h2 id=&#34;3-preliminary&#34;&gt;3. Preliminary&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure2.png&#34;&gt;
-LMMs通过集成多模态理解能力扩展了以文本为中心的LLMs，用于视觉问答[52]和计算机使用代理[42, 45]等任务。图2显示了视觉理解任务中LMM推理的典型流程[25]，包括三个关键阶段：(1)图像预处理，将原始图像转换为统一大小的图块；(2)图像编码，编码器提取视觉特征并生成一系列图像标记；(3)文本生成，LLM后端处理图像和文本标记以生成输出文本标记。有两种主流LMM架构在LLM后端如何处理图像标记和文本标记方面有所不同：(1)仅解码器(DecOnly)，用于DeepSeek的Janus[7]、LLaVA-OneVision[31]、InternVL[9]和NVLM-D[12]等模型；(2)基于交叉注意力(CroAttn)，见于Llama-3.2 Vision[11]。
-&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/table1.png&#34;&gt;
-图像预处理。LMMs通常在CPU上遵循三个预处理步骤：(1)调整大小、重新缩放、填充和规范化原始图像，(2)将其分割成图块[9, 11, 12]或补丁[31]，(3)应用图块/补丁级转换和采样。图块数量各不相同，更高的图像尺寸会产生更多的图块，最终增加图像标记的数量。例如，具有896×896像素的图像在六种开源LMMs的预处理后生成4、5或10个不同大小的图块（表1）。&lt;/p&gt;
-&lt;p&gt;图像编码。图像编码器将处理后的图像图块作为输入，并生成传递给语言模型后端的图像标记。当今的图像编码器主要使用视觉变换器架构[4]从图像中提取视觉特征。表1显示，不同的LMMs使用不同的编码器[4, 9, 31, 64]，当在相同的ShareGPT-4o数据集[8]上运行图像编码器时，会导致生成的图像标记数量不同（图3）。这是由于每个编码器生成的图块数量和每个图块生成的图像标记数量不同所致。
-&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure3.png&#34;&gt;
-文本生成。图像和文本提示标记被组合并通过LLM预填充和解码生成输出标记，通常使用以下两种架构之一：
-仅解码器(DecOnly) LMMs。未修改的LLM后端在DecOnly LMMs中被重用（例如，LLaVA-OV重用Qwen2 LLM[31]），统一处理文本和图像标记（如图2中的&amp;quot;DecOnly&amp;quot;框所示）。这是通过附加连接器[66]或模态对齐模块（例如MLP）实现的，该模块将图像编码器输出映射到LLM的标记空间。虽然因其简单性和统一的模态处理而受到重视，但DecOnly模型通常需要长序列处理高分辨率图像，导致推理过程中的计算效率低下。
-交叉注意力(CroAttn) LMMs。与保持LLM后端不变的DecOnly LMMs不同，基于CroAttn的模型（例如Llama-3.2 Vision）集成交叉注意力层来处理图像标记，将视觉输入视为LLM后端中的&amp;quot;外语&amp;quot;。虽然训练更为复杂，但它们通过避免在LLM解码器中完全展开图像标记来提高推理效率，使其成为高分辨率输入的理想选择。自注意力在文本标记上操作，而交叉注意力层同时关注文本和图像标记（图2中的&amp;quot;CroAttn&amp;quot;框）。
-（自注意力在[图像+文本]上：需要交互：图像-&amp;gt;图像，图像-&amp;gt;文本，文本-&amp;gt;图像，文本-&amp;gt;文本
-交叉注意力：仅文本-&amp;gt;图像（单向）
-）
-LMM推理的SLO指标。生产LMM服务系统需要满足定义在尾部延迟（例如P99）上的SLOs，以确保最坏情况下的性能。这些SLO指标包括首令牌时间(TTFT)和令牌间时间(TBT)。TTFT测量从查询（文本/图像）到第一个响应标记的延迟，对交互式应用至关重要。与以文本为中心的LLM服务相比，LMM TTFT包括LMMs推理流程的以下阶段：(1)图像预处理，(2)编码，(3)语言模型预填充时间。TBT捕获解码期间连续标记生成之间的延迟，影响输出流畅性。由于多模态预处理和编码主要影响TTFT，在本工作中，作者专注于TTFT，同时利用最先进技术[1, 46]优化TBT。理想的LMM服务系统应在满足TTFT/TBT SLOs的同时最大化请求吞吐量（即有效吞吐量）和计算利用率（GPU成本）。&lt;/p&gt;
-&lt;p&gt;当今的LMM部署。最先进的服务框架[5, 27, 62]将LMMs部署为单体系统以满足延迟SLOs。在这种设置中，所有推理组件（即图像预处理器、图像编码器和LLM后端）在同一硬件服务器上共置，作为一个单一单元。虽然PD分解可以应用于这种单体设置中，以将预填充与解码阶段解耦并在文本生成期间减少干扰，但它仍然将多模态组件与预填充实例耦合[27]，防止根据其不同的资源需求和性能特征对每个组件进行独立优化。这些紧密耦合的组件在整个流程中共享统一的批处理和模型并行策略。表1详细列出了作者开源LMMs的默认模型并行性。虽然这种单体设计易于实现并且在开源LMM服务中很常见，但它限制了灵活性，并在图像密集型工作负载下遭受TTFT急剧恶化（图1）。&lt;/p&gt;
-&lt;h2 id=&#34;4-lmm-characterization&#34;&gt;4. LMM Characterization&lt;/h2&gt;
-&lt;h3 id=&#34;41-characterization-on-open-source-lmms&#34;&gt;4.1 Characterization on Open-Source LMMs&lt;/h3&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure5.png&#34;&gt;
-作者对开源LMMs进行特征分析，以了解不同推理阶段如何影响性能和资源效率。此外，作者比较DecOnly和CroAttn模型，以突出模型特定优化的必要性。&lt;/p&gt;
-&lt;p&gt;各阶段延迟分解。图5绘制了TTFT在三个组成部分上的分布：图像预处理、图像编码和LLM预填充。有三个关键发现。首先，发生在CPU上的图像预处理对整体TTFT贡献很小，而图像编码时间对TTFT贡献很大（特别是在CroAttn模型中）。例如，Llama3.2-11B和Llama3.2-90B中79%和65%的TTFT来自图像编码。对于InternVL-26B和NVLM-D-72B等DecOnly模型，图像编码延迟占TTFT的25%和54%。其次，图像编码时间取决于编码器模型大小。例如，从SigLIP-400M（在LLaVA-OV-7B中）扩展到InternViT-6B（在InternVL-26B中），中位图像编码时间增加了10倍。由于连接器[66]非常小（例如，InternVL-26B中总参数的&amp;lt;0.1%），它们贡献的延迟可忽略不计（&amp;lt;TTFT的0.4%）。最后，CroAttn模型中的预填充计算更高效，因为图像标记仅在CroAttn层中被关注，而LLM后端的大部分是自注意力层，如第2节所述。&lt;/p&gt;</description>
+&lt;h3 id=&#34;1-动机motivation&#34;&gt;1. 动机（Motivation）&lt;/h3&gt;
+&lt;p&gt;大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图像预处理：&lt;/strong&gt; 将原始图像转换为张量表示。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图像编码：&lt;/strong&gt; 将这些张量转换为图像标记（tokens）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;语言模型后端：&lt;/strong&gt; 结合文本提示和图像标记生成文本输出。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;当前，这些阶段通常以&lt;strong&gt;单体系统&lt;/strong&gt;[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。&lt;/p&gt;
+&lt;p&gt;这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足&lt;strong&gt;首令牌时间（TTFT）的服务水平目标（SLOs）。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞&lt;/strong&gt;，进而降低系统响应能力并导致资源过度配置。&lt;/p&gt;
+&lt;h3 id=&#34;2-贡献contribution&#34;&gt;2. 贡献（Contribution）&lt;/h3&gt;
+&lt;p&gt;&lt;strong&gt;作者的工作：&lt;/strong&gt; 本文首次对两种主流LMM架构——&lt;strong&gt;交叉注意力（CroAttn）和仅解码器（DecOnly）&lt;/strong&gt;——进行了全面的系统分析。分析对象包括六个代表性的开源LMMs以及来自Azure数据中心的真实生产LMM推理轨迹。作者深入剖析了它们的多阶段推理流程、性能与资源之间的权衡，以及生产工作负载模式（包括可变的请求率、多样化的多模态输入和突发流量）。为促进研究，作者发布了来自生产集群的首个开源多模态轨迹，以供社区研究真实世界的部署模式。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;关键洞察（Insights）：&lt;/strong&gt; 作者的分析确定了三个优化LMM推理的关键洞察：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Insight 1：&lt;/strong&gt; 不同的LMM推理阶段（如预处理、编码、预填充、解码）表现出不同的性能特征，并且对资源和模型配置（如批处理、模型分片）具有不同的敏感性，因此需要&lt;strong&gt;解耦执行&lt;/strong&gt;。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Insight 2：&lt;/strong&gt; 图像编码是影响TTFT的主要瓶颈，因此需要&lt;strong&gt;高效的编码器并行化&lt;/strong&gt;来减少延迟和队头（HoL）阻塞。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Insight 3：&lt;/strong&gt; 生产多模态流量展现出独特的突发模式，主要由&lt;strong&gt;每个请求的图像数量增加&lt;/strong&gt;所驱动，这强调了需要&lt;strong&gt;模态感知路由策略&lt;/strong&gt;来管理突发流量并减轻尾部延迟峰值。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;ModServe架构：&lt;/strong&gt; 基于上述洞察，作者提出了&lt;strong&gt;ModServe&lt;/strong&gt;，一种新型的模块化架构，专为可扩展和资源高效的LMM服务而设计，旨在直接解决分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;图像实例：&lt;/strong&gt; 处理图像预处理和编码。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文本实例：&lt;/strong&gt; 管理LLM的预填充和解码（见&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;请求流：&lt;/strong&gt; 纯文本请求绕过图像实例直接由文本实例服务；图像-文本请求则先通过图像实例将图像转换为标记，再转发给文本实例进行文本生成。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;ModServe的优化能力：&lt;/strong&gt; 这种模块化架构实现了阶段特定的优化：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;独立资源管理：&lt;/strong&gt; ModServe独立地使用阶段感知自动扩展、模型分片和批处理来管理图像和文本实例。通过单独扩展各个阶段，它最大程度地减少了资源过度配置。例如，在生产流量中观察到的图像驱动突发期间，图像实例可以独立扩展，从而比单体推理系统更具资源效率。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;并行化编码：&lt;/strong&gt; 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;模态感知路由：&lt;/strong&gt; 为管理图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，图像-文本请求中的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;&lt;strong&gt;性能表现：&lt;/strong&gt; 作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过在运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群上进行广泛评估，验证了ModServe的有效性。与最先进的基线相比，ModServe在静态资源分配下实现了&lt;strong&gt;3.3至5.5倍&lt;/strong&gt;更高的吞吐量，同时在满足P99 TTFT SLOs的前提下，将LMM服务成本降低了&lt;strong&gt;25%至41.3%&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;互补性：&lt;/strong&gt; 虽然现有的PD分解技术[46, 65]有助于优化LLM推理（通过分离预填充和解码），但它们对于处理多模态工作负载来说是不够的。生产环境中异构且突发的多模态流量性质，使得在以文本为中心背景下研究的PD分解难以扩展；模态特定的优化（如并行化编码、模态感知路由和阶段自动扩展）对于在保持资源效率的同时满足SLOs至关重要。作者在第5节中证明，ModServe可以与LLM后端的两种配置（共置LLM后端/混合PD批处理，以及文本节点的PD分解）结合，且提出的模态感知技术在两种配置下都能改善服务延迟。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;适用范围：&lt;/strong&gt; 作者重点研究了图像-文本到文本和视频-文本到文本（视频被视为图像帧序列处理[31]）任务，但其洞察可推广到其他多模态场景，例如音频-文本到文本任务[23]，因为它们与研究所用的模型具有相似的模型架构和推理阶段。&lt;/p&gt;
+&lt;h3 id=&#34;3-基础知识preliminary&#34;&gt;3. 基础知识（Preliminary）&lt;/h3&gt;
+&lt;p&gt;LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure2.png&#34;&gt;描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;图像预处理：&lt;/strong&gt; 将原始图像转换为统一大小的图块。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;图像编码：&lt;/strong&gt; 编码器提取视觉特征并生成一系列图像标记。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文本生成：&lt;/strong&gt; LLM后端处理图像和文本标记以生成输出文本标记。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;LMM主流架构：&lt;/strong&gt; 主流LMM架构在LLM后端处理图像标记和文本标记的方式上存在差异：&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding</title>
