@@ -6,8 +6,40 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 27 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 06 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 RServe: Overlapping Encoding and Prefill for Efficient LMM Inference</title>
+      <link>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
+      <pubDate>Sat, 06 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/title.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;大型多模态模型（LMMs）通常采用编码模块将多模态数据输入转换为 Embedding，然后将其馈送给语言模型进行进一步处理。然而，由于其推理流程的固有复杂性，高效地服务 LMM 仍然极具挑战性。传统的服务引擎将编码模块和语言模型部署在一起，导致显著的资源干扰和紧密的数据依赖。最近的研究通过将编码模块从模型中解（Disaggregating），采用预填充-解码（Prefill-Decode）分离的设计风格来缓解这一问题。尽管如此，这些方法未能充分利用单个请求内（Intra-request）和多个请求间（Inter-request）的并行性。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;与纯语言模型相比，多模态模型推理通常依赖于更丰富的提示输入，如图 1 所示。当前的 LMM 依赖额外的编码器来生成与传统 LLM 兼容的多模态输入 Embedding。尽管如此，LMM 面临另一个挑战：在单个请求内编码所有多模态数据会引入显著的延迟（其比例可高达 26%，如图 2 所示），这会干扰 LLM 的前向计算。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;随着模型规模的不断增长，LLM 或 LMM 的分布式部署已成为主流。最广泛使用的方法包括张量并行（Tensor Parallelism, TP）和流水线并行（Pipeline Parallelism, PP）。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;张量并行 (TP):&lt;/strong&gt; 通常用于具有高带宽互连的节点内，可有效降低推理延迟。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;流水线并行 (PP):&lt;/strong&gt; 通常用于带宽有限的节点间场景，可提高推理吞吐量。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;最近提出的 &lt;strong&gt;分块流水线并行 (Chunked Pipeline Parallelism, CPP)&lt;/strong&gt; 1改变了这一格局，使流水线并行能够实现与张量并行相当的延迟降低。具体而言，CPP 将整个输入 Embedding 分割成多个块（Chunks），并按原始输入顺序对预填充（Prefill）计算进行流水线处理，允许单个请求的不同块在流水线内同时处理。如图 2 所示，对于单个多模态请求，流水线并行和张量并行可以保持相当的推理延迟。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
+&lt;p&gt;为了实现交错和重叠执行，作者提出了 &lt;strong&gt;RServe&lt;/strong&gt;，这是一个 LMM 推理系统，能够以全并行方式高效编排请求内（Intra-request）和请求间（Inter-request）的流水线。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;请求内优化 (Intra-request Optimization):&lt;/strong&gt; 对于具有丰富多模态输入（即大量图像）的请求，RServe 将多模态编码过程与 Prefill 执行重叠，构建请求内流水线。为实现这一点，RServe 将输入 Embedding 分为两类：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;就绪 Embedding (Ready embeddings):&lt;/strong&gt; 包括文本 Embedding 和已经编码完成的多模态 Embedding。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;未就绪 Embedding (Not-ready embeddings):&lt;/strong&gt; 指尚未被编码模块处理的那些数据。
+RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部分 Embedding 生成后立即启动 Prefill 执行。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;请求间优化 (Inter-request Optimization):&lt;/strong&gt; 为了保持高吞吐量和低延迟，RServe 进一步对不同请求进行批处理执行，并利用 &lt;strong&gt;可调度 Token (Schedulable Tokens)&lt;/strong&gt; 来平衡各个微批次（Micro-batches）之间的计算负载，构建请求间流水线。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving </title>
       <link>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
