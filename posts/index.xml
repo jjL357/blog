@@ -6,8 +6,39 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 06 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 08 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Elastic On-Device LLM Service</title>
+      <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
+      <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;MobiCom &amp;lsquo;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yinwangsong/ElastiLM&#34;&gt;https://github.com/yinwangsong/ElastiLM&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;端侧 LLM 需要弹性（Elasticity）&lt;/strong&gt;。LLM 虽然能够处理广泛的语言任务，但其巨大的参数量使得在设备上为每个任务部署独立的模型既不“必要”也不“实际”。因此，端侧 LLM 通常作为系统服务（LLM-as-a-Service）被多个任务和 APP 共享。然而，&lt;strong&gt;单一的静态 LLM 无法满足不同任务对服务水平目标（Service-Level Objectives, SLOs）的多样化需求&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;因此，端侧 LLM 必须具备弹性。由于 LLM 推理包含两个截然不同的阶段，这种弹性的需求变得更加复杂：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Prefill（预填充阶段）&lt;/strong&gt;：处理 Prompt 的速度，由 &lt;strong&gt;Time-To-First-Token (TTFT)&lt;/strong&gt; 衡量。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Decode（解码阶段）&lt;/strong&gt;：生成 Token 的速度，由 &lt;strong&gt;Time-Per-Output-Token (TPOT)&lt;/strong&gt; 衡量。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/table1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;不同的应用对这两个指标有截然不同的要求（如上表所示）：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Chatbot&lt;/strong&gt;：需要低 TTFT 和低 TPOT 以匹配人类阅读速度。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;UI 自动化 Agent&lt;/strong&gt;：需要低 TTFT 来快速响应首个动作，但对 TPOT 要求较低（因为生成过程可以与 UI 操作重叠）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;后台屏幕录制器&lt;/strong&gt;：对 TTFT/TPOT 的容忍度都很高。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;如果无法满足 SLO，会导致用户体验严重下降或 Agent 交互失败。理想情况下，请求发送给弹性 LLM 时会附带 Prompt 和预期的 SLO，LLM 需要在不违反 SLO 的前提下提供最高的文本生成质量。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;作者的先导实验表明（如图2）：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;TTFT&lt;/strong&gt; 与 Prompt 长度和模型大小均成正比：$TTFT \propto PromptLength \times ModelSize$。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;TPOT&lt;/strong&gt; 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \propto ModelSize$。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;这意味着作者需要同时从 &lt;strong&gt;模型维度（Model Dimension）&lt;/strong&gt; 和 &lt;strong&gt;Prompt 维度（Prompt Dimension）&lt;/strong&gt; 进行弹性化。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 RServe: Overlapping Encoding and Prefill for Efficient LMM Inference</title>
       <link>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
