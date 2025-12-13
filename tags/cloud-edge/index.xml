@@ -6,8 +6,46 @@
     <description>Recent content in Cloud-Edge on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 03 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 12 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/cloud-edge/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
+      <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
+      <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation-动机&#34;&gt;1. Motivation (动机)&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;图 1 抽象了一个部署在智能家居场景中的&lt;strong&gt;基于VLM（视觉-语言模型）的在线视频理解应用&lt;/strong&gt;。在这个应用中，家庭成员可以随时发起针对当前或历史录制视频片段的查询。该应用包含三个关键模块：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;流媒体感知模块 (Streaming Perception Module):&lt;/strong&gt; 配备板载计算能力的边缘摄像头持续捕获家庭场景的视频，并即时处理多模态数据。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;历史记忆模块 (Historical Memory Module):&lt;/strong&gt; 构建历史视频流并存储在记忆数据库中，以支持高效准确地检索与查询相关的信息。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;推理模块 (Reasoning Module):&lt;/strong&gt; 在接收到用户查询后，利用云托管的 VLM 进行推理并生成答案，由历史记忆提供上下文基础 (contextual grounding)。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;AI 社区中新兴的研究工作（如 [13]–[15]）探索了 VLM 在视频理解中的有效性，但大多数工作都侧重于&lt;strong&gt;算法性能 (algorithmic performance)&lt;/strong&gt;，而&lt;strong&gt;忽略了部署相关的约束 (deployment-related constraints)&lt;/strong&gt;，这限制了它们在边缘智能场景中的直接适用性。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;纯云端部署 (Fully Cloud-based Deployment):&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;利用强大的服务器端计算来减少设备端处理。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点：&lt;/strong&gt; 需要上传&lt;strong&gt;整个相关视频 (entire relevant video)&lt;/strong&gt;，导致显著的&lt;strong&gt;通信延迟 (communication latency)&lt;/strong&gt;。图 2 显示，通信延迟可占总响应延迟的 &lt;strong&gt;80%&lt;/strong&gt;，且随着视频时长的增加而大幅增长。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;边缘-云端策略（边缘执行选择算法）(Edge-Cloud Strategy):&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;一些方法 [3], [13] 通过在推理前执行**帧选择 (frame selection)**来提高准确性。&lt;/li&gt;
+&lt;li&gt;在边缘设备上执行选择算法，只将选定的帧上传到云端，可以显著减少通信开销。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;缺点：&lt;/strong&gt; 边缘设备的计算能力有限，导致&lt;strong&gt;逐帧处理&lt;/strong&gt;产生&lt;strong&gt;巨大的设备端处理成本 (substantial on-device processing costs)&lt;/strong&gt;，例如高达 &lt;strong&gt;924秒&lt;/strong&gt; 的设备端延迟（图 2）。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;现有方法的共同限制：&lt;/strong&gt; 除了通信和计算开销，现有方法&lt;strong&gt;固有地受限于离线执行 (offline execution)&lt;/strong&gt;，不适用于涉及&lt;strong&gt;在线用户查询&lt;/strong&gt;并需要**长期上下文记忆 (long-term contextual memory)**的在线流媒体应用。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution-贡献&#34;&gt;2. Contribution (贡献)&lt;/h2&gt;
+&lt;p&gt;为解决上述限制，作者提出了 &lt;strong&gt;Venus&lt;/strong&gt;，一种新颖的&lt;strong&gt;设备端记忆和检索系统 (on-device memory-and-retrieval system)&lt;/strong&gt;，专为高效在线边缘视频理解而设计。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
       <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
