@@ -6,8 +6,25 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 15 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 20 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 SpecBranch: Speculative Decoding via Hybrid Drafting and Rollback-Aware Branch Parallelism</title>
+      <link>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
+      <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 Submitted&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;核心痛点：投机解码（Speculative Decoding, SD）中的串行瓶颈与回滚代价&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;受到现代处理器分支预测技术的启发 ，作者允许 Draft Model（草稿模型）在 Target Model（目标模型）进行验证的同时，主动生成推测性的分支。这种并行 SD 范式创建了一个两阶段流水线，使得 Draft Model 的 token 生成与 Target Model 的验证在时间上重叠，从而有效地填补了传统 SD 中固有的流水线气泡（Pipeline Bubbles）。&lt;/p&gt;
+&lt;p&gt;先前的研究（如 PEARL ）尝试在 Drafting 阶段利用 Target Model 预验证第一个 token，并在验证阶段让 Draft Model 继续生成。然而，与传统 SD 仅面临局部惩罚（即丢弃部分 token）不同，&lt;strong&gt;并行 SD 面临全局失效的风险&lt;/strong&gt; 。如果并行生成的某个关键 token 被拒绝，会导致后续所有并行计算的 token 全部失效（Global Invalidation），从而严重阻碍并行效率。这种现象在生成长度较长时尤为严重，因为被接受的 token 数量通常服从截断几何分布（Truncated Geometric Distribution），这在并行性和回滚代价之间制造了一个艰难的权衡（Trade-off）。&lt;/p&gt;
+&lt;p&gt;遗憾的是，PEARL 并未充分解决这些挑战：&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;Pre-verify Rollback（预验证回滚）：&lt;/strong&gt; PEARL 忽视了并行加速的一个关键条件：验证期间生成的 token 必须被 &lt;strong&gt;“全部接受（All-Accepted）”&lt;/strong&gt; 。否则，PEARL 会退化为串行执行并失去并行能力。它仅验证第一个 token，而系统对序列中间发生的拒绝（例如 Fig. 1(b) 中  被拒绝）一无所知，直到并行验证结束才发现，导致大量浪费 。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Empower Vision Applications with LoRA LMM</title>
       <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
