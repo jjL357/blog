@@ -6,13 +6,27 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 20 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 21 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>MLLM</title>
+      <link>https://jjl357.github.io/blog/tags/mllm/</link>
+      <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
+      <description></description>
+    </item>
     <item>
       <title>Paper Note</title>
       <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
+      <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Reinforcement Learning</title>
+      <link>https://jjl357.github.io/blog/tags/reinforcement-learning/</link>
+      <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/reinforcement-learning/</guid>
       <description></description>
     </item>
     <item>
@@ -27,13 +41,6 @@
       <link>https://jjl357.github.io/blog/tags/lora/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/lora/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>MLLM</title>
-      <link>https://jjl357.github.io/blog/tags/mllm/</link>
-      <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
       <description></description>
     </item>
     <item>
@@ -55,13 +62,6 @@
       <link>https://jjl357.github.io/blog/tags/reasoning/</link>
       <pubDate>Sun, 14 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/reasoning/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Reinforcement Learning</title>
-      <link>https://jjl357.github.io/blog/tags/reinforcement-learning/</link>
-      <pubDate>Sun, 14 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/reinforcement-learning/</guid>
       <description></description>
     </item>
     <item>
