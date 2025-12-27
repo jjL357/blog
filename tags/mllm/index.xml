@@ -6,8 +6,37 @@
     <description>Recent content in MLLM on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Tue, 23 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 27 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/mllm/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
+      <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
+      <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/lern-to-write/STC&#34;&gt;https://github.com/lern-to-write/STC&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;p&gt;最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对&lt;strong&gt;流式视频理解 (Streaming Video Understanding, SVU)&lt;/strong&gt; 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;通过图 1 的推理时间分解可以发现：视频理解与图像理解存在显著差异 。在 Qwen2-VL 和 LLaVA-OV 等模型中，ViT 编码的计算成本通常比图像理解高出 2-3 倍，成为主要的延迟瓶颈 。例如，当 LLaVA-OV 处理 32 帧视频时，会有  个视觉标记输入 LLM，是普通图像任务（约 1,900 个标记）的三倍以上 。&lt;/p&gt;
+&lt;p&gt;针对流式场景，本研究通过实证分析揭示了两个关键特征：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;ViT 编码中的时间冗余 (Temporal Redundancy)&lt;/strong&gt;：流式视频需要更密集的帧采样，导致相邻帧之间存在大量重复内容 。实验显示，在 ViT 的深层（如 Layer 20），相邻帧特征的平均余弦相似度在流式设置下高达 0.85，而离线设置仅为 0.60 。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;不完整的视频与未知的指令 (Incomplete Video and Unknown Instructions)&lt;/strong&gt;：流式场景下，模型无法预先获取完整视频或用户指令，这使得依赖全局视频特征或指令感知的压缩策略（如 Instruction-aware pruning）失效，因为查询通常在视频帧处理完后才到达 。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;因此，迫切需要一种能够**因果式（causally）**运行、利用编码过程中的时间冗余且不依赖全局上下文的压缩方法 。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
+&lt;p&gt;基于上述分析，我们提出了 &lt;strong&gt;Streaming Token Compression (STC)&lt;/strong&gt;，这是一个即插即用的分层加速框架，旨在共同优化 ViT 编码和 LLM 预填充（prefilling）阶段 。其核心贡献包括：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;流式场景的实证分析&lt;/strong&gt;：分析了现有压缩方法在 SVU 中的局限性，强调了因果压缩的必要性，即在不依赖未来指令的情况下降低 ViT 成本 。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 HyperVL: An Efficient and Dynamic Multimodal Large Language Model for Edge Devices</title>
       <link>https://jjl357.github.io/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</link>
