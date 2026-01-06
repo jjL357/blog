@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference | JJ&#39;s Blog</title>
+<meta name="keywords" content="MLLM, KV Cache, Prefix Cache, Paper Note">
+<meta name="description" content="
+1. Motivation
+
+
+前缀缓存（Prefix Cache）的局限性：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列精确匹配。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便图像完全相同，只要系统提示词或用户问题不同，也无法触发缓存命中。
+
+
+位置无关重用的必要性：如果允许在不同位置重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，必须对部分 token 进行重新计算（recompute）。
+
+
+现有启发式方法的缺陷：
+
+
+CacheBlend [14]：通过比较前三层的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖浅层局部信息，无法刻画 token 在整个 Transformer 堆栈中的全局重要性。
+
+
+EPIC [6] 与 MPIC [16]：以 chunk 为单位，重计算每个数据块的初始 token。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。
+
+
+KVShare [13]：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对重用误差如何在解码阶段传播的系统性分析。
+
+
+
+
+缺乏系统性研究：上述方法普遍缺少以下两点：
+
+不同 Transformer 层对最终输出贡献差异的系统研究；
+重用误差在自回归解码过程中跨 token、跨层传播机制的深入分析。
+
+
+
+
+2. Contribution
+
+
+识别累积重用误差效应：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 累积重用误差效应（Cumulative Reuse Error Effect），即早期 token 的重用误差会在后续生成过程中不断传播和放大。
+
+
+层级重要性差异分析：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的层级重要性多样性。
+
+
+提出 VLCache 框架：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference">
+  <meta property="og:description" content="
+1. Motivation 前缀缓存（Prefix Cache）的局限性：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列精确匹配。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便图像完全相同，只要系统提示词或用户问题不同，也无法触发缓存命中。
+位置无关重用的必要性：如果允许在不同位置重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，必须对部分 token 进行重新计算（recompute）。
+现有启发式方法的缺陷：
+CacheBlend [14]：通过比较前三层的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖浅层局部信息，无法刻画 token 在整个 Transformer 堆栈中的全局重要性。
+EPIC [6] 与 MPIC [16]：以 chunk 为单位，重计算每个数据块的初始 token。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。
+KVShare [13]：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对重用误差如何在解码阶段传播的系统性分析。
+缺乏系统性研究：上述方法普遍缺少以下两点：
+不同 Transformer 层对最终输出贡献差异的系统研究； 重用误差在自回归解码过程中跨 token、跨层传播机制的深入分析。 2. Contribution 识别累积重用误差效应：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 累积重用误差效应（Cumulative Reuse Error Effect），即早期 token 的重用误差会在后续生成过程中不断传播和放大。
+层级重要性差异分析：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的层级重要性多样性。
+提出 VLCache 框架：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-01-06T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-01-06T00:00:00+00:00">
+    <meta property="article:tag" content="MLLM">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Prefix Cache">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference">
+<meta name="twitter:description" content="
+1. Motivation
+
+
+前缀缓存（Prefix Cache）的局限性：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列精确匹配。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便图像完全相同，只要系统提示词或用户问题不同，也无法触发缓存命中。
+
+
+位置无关重用的必要性：如果允许在不同位置重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，必须对部分 token 进行重新计算（recompute）。
+
+
+现有启发式方法的缺陷：
+
+
+CacheBlend [14]：通过比较前三层的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖浅层局部信息，无法刻画 token 在整个 Transformer 堆栈中的全局重要性。
+
+
+EPIC [6] 与 MPIC [16]：以 chunk 为单位，重计算每个数据块的初始 token。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。
+
+
+KVShare [13]：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对重用误差如何在解码阶段传播的系统性分析。
+
+
+
+
+缺乏系统性研究：上述方法普遍缺少以下两点：
+
+不同 Transformer 层对最终输出贡献差异的系统研究；
+重用误差在自回归解码过程中跨 token、跨层传播机制的深入分析。
+
+
+
+
+2. Contribution
+
+
+识别累积重用误差效应：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 累积重用误差效应（Cumulative Reuse Error Effect），即早期 token 的重用误差会在后续生成过程中不断传播和放大。
+
+
+层级重要性差异分析：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的层级重要性多样性。
+
+
+提出 VLCache 框架：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference",
+      "item": "https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference",
+  "name": "📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference",
+  "description": "\n1. Motivation 前缀缓存（Prefix Cache）的局限性：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列精确匹配。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便图像完全相同，只要系统提示词或用户问题不同，也无法触发缓存命中。\n位置无关重用的必要性：如果允许在不同位置重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，必须对部分 token 进行重新计算（recompute）。\n现有启发式方法的缺陷：\nCacheBlend [14]：通过比较前三层的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖浅层局部信息，无法刻画 token 在整个 Transformer 堆栈中的全局重要性。\nEPIC [6] 与 MPIC [16]：以 chunk 为单位，重计算每个数据块的初始 token。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。\nKVShare [13]：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对重用误差如何在解码阶段传播的系统性分析。\n缺乏系统性研究：上述方法普遍缺少以下两点：\n不同 Transformer 层对最终输出贡献差异的系统研究； 重用误差在自回归解码过程中跨 token、跨层传播机制的深入分析。 2. Contribution 识别累积重用误差效应：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 累积重用误差效应（Cumulative Reuse Error Effect），即早期 token 的重用误差会在后续生成过程中不断传播和放大。\n层级重要性差异分析：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的层级重要性多样性。\n提出 VLCache 框架：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。\n",
+  "keywords": [
+    "MLLM", "KV Cache", "Prefix Cache", "Paper Note"
+  ],
+  "articleBody": "\n1. Motivation 前缀缓存（Prefix Cache）的局限性：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列精确匹配。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便图像完全相同，只要系统提示词或用户问题不同，也无法触发缓存命中。\n位置无关重用的必要性：如果允许在不同位置重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，必须对部分 token 进行重新计算（recompute）。\n现有启发式方法的缺陷：\nCacheBlend [14]：通过比较前三层的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖浅层局部信息，无法刻画 token 在整个 Transformer 堆栈中的全局重要性。\nEPIC [6] 与 MPIC [16]：以 chunk 为单位，重计算每个数据块的初始 token。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。\nKVShare [13]：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对重用误差如何在解码阶段传播的系统性分析。\n缺乏系统性研究：上述方法普遍缺少以下两点：\n不同 Transformer 层对最终输出贡献差异的系统研究； 重用误差在自回归解码过程中跨 token、跨层传播机制的深入分析。 2. Contribution 识别累积重用误差效应：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 累积重用误差效应（Cumulative Reuse Error Effect），即早期 token 的重用误差会在后续生成过程中不断传播和放大。\n层级重要性差异分析：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的层级重要性多样性。\n提出 VLCache 框架：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。\n双重重用机制：\n重用视觉编码器输出（Encoder Cache）； 重用语言模型中的 KV Cache。 动态重计算策略：在固定重计算预算约束下，提出一种逐层自适应的重计算比例分配算法，以最小化输出误差。\n显著性能提升：实验表明，仅需重新计算 2–5% 的视觉 token，即可实现近乎无损的准确率，同时将首字延迟（TTFT）提升 1.2×–16×。\n系统集成验证：在 SGLang 框架中实现原型系统，显著降低真实部署环境中的推理延迟。\n3. Observation 3.1 Cumulative Reuse Error Effect（累积重用误差效应） 在自注意力机制中，每个 token 的输出依赖于其上下文表示。在因果语言模型（Causal LLM）中，第 $i$ 个 token 会关注所有位置 $j \\le i$ 的 token。当 KV Cache 在不匹配的上下文下被重用时，会引入 重用误差（Reuse Error）。\n作者将位置 $i$ 的 token 总误差分解为两部分：\n自身重用误差（Self Reuse Error）： $$ \\epsilon_i^{\\text{self}} = h_i^{\\text{reuse}} - h_i^{\\text{full}}, $$\n其中 $h_i^{\\text{reuse}}$ 表示使用重用 KV Cache 得到的隐状态，$h_i^{\\text{full}}$ 表示完全重计算得到的隐状态。\n传播误差（Propagated Error）：来自所有先前 token 的误差累积： $$ \\epsilon_i^{\\text{prop}} = \\sum_{j \u003c i} \\alpha_{i,j} , \\epsilon_j, $$\n其中 $\\alpha_{i,j}$ 表示位置 $j$ 的误差通过自注意力机制向位置 $i$ 传播的权重。\n因此，第 $i$ 个 token 的总重用误差为：\n$$ \\epsilon_i = \\epsilon_i^{\\text{self}} + \\epsilon_i^{\\text{prop}}. $$\n该公式揭示了一个关键现象：即使后续 token 本身被精确计算，只要早期 token 存在重用误差，该误差仍会持续影响下游表示。\n（对应论文 Figure 2：早期 token 的重计算可显著抑制下游误差累积）\n实验验证：通过测量不同重计算比例下的误差范数，作者发现：\n早期 token 的重用会引入持久且累积的误差； 仅对前 $10%$ 或 $30%$ 的 token 进行重计算，即可消除大部分上游误差，从而显著改善整体输出质量。 3.2 Layer-wise Importance Difference（层级重要性差异） 作者在 Qwen2.5-VL-7B 上实证研究了不同 Transformer 层对最终输出的敏感性，验证“所有层同等重要”的假设是否成立。\n实验流程（三阶段）：\n构造缓存：固定输入图像，将原始问题替换为无关提示词（如 “Please describe this image”），执行前向传播并缓存图像对应的 KV Cache。\n获取基准输出：使用原始问题进行标准推理，记录输出的 logits 与生成文本。\n注入误差并测量敏感度：\n在推理过程中使用不匹配的图像 KV Cache； 仅在指定的第 $l$ 层对前 $r$ 比例的 token 进行重计算； 计算当前输出 logits 与基准 logits 之间的 MSE 损失。 $$ \\mathcal{L}_l(r) = | \\mathbf{z}^{\\text{reuse}}_l(r) - \\mathbf{z}^{\\text{full}} |_2^2. $$\n（对应论文 Figure 3：MMMU-Pro 上的层级敏感度曲线）\n结论：\n不同层对重计算比例 $r$ 的敏感性差异极大； 某些中间或高层是“关键层”，需要较高的重计算比例； 也存在对重用几乎不敏感的层，甚至可以完全跳过重计算而不影响输出质量。 4. Design (Algorithm \u0026 System Implementation) 4.1 VLCache: Reuse and Dynamic Recomputation VLCache 以插件形式集成到标准的 VLM 推理流水线中。\n基础算法（Basic Algorithm） （对应论文 Figure 1：整体缓存与重用流程）\n哈希与检索：\n对输入图像计算内容哈希值； Cache Miss：执行完整 prefilling，并将视觉编码器输出（Encoder Cache）与 LLM 的 KV Cache 存入后端存储（如 Tair KVCache Store）； Cache Hit：直接从后端检索缓存。 部分重计算：\n对缓存的视觉 token，仅重计算最前面的 $r$ 比例； 其余 $(1-r)$ 的 token 直接重用缓存结果。 计算跳过：\n对重用 token，其 Attention 与 MLP 计算被完全跳过； 这是 VLCache 实现显著加速的核心机制。 （对应论文 Figure 4：形成连续、硬件友好的计算区域）\n动态重计算策略（Dynamic Recomputation） 为在固定预算下获得最优精度，作者提出逐层动态分配重计算比例的策略。\n层敏感度定义： 在代理数据集 $\\mathcal{D}$ 上，第 $l$ 层在重计算比例 $r$ 下的敏感度定义为：\n$$ S_l(r) = \\mathbb{E}_{(x,y) \\sim \\mathcal{D}} \\left[ | \\mathbf{z}_l^{\\text{reuse}}(r) - \\mathbf{z}^{\\text{full}} |_2^2 \\right]. $$\n优化目标建模： 在总重计算预算 $B$ 下，优化问题表示为：\n$$ \\min_{{r_l}} \\sum_{l=1}^L S_l(r_l) $$\n约束条件：\n$$ \\sum_{l=1}^L r_l \\le B, $$\n$$ r_1 \\ge r_2 \\ge \\cdots \\ge r_L, $$\n$$ r_l \\in {0, \\Delta, 2\\Delta, \\dots, 1}. $$\n其中单调不增约束保证深层可以直接复用浅层已经计算好的隐状态，避免重复计算。\n贪心近似算法： 由于该问题是离散整数规划，作者在假设层间近似独立的前提下，采用贪心策略搜索近似最优解，大幅降低搜索成本。\n4.2 SGLang Integration of VLCache 在 SGLang 框架中的实现包含两项关键系统优化：\n跳过 ViT 计算：\n对输入图像像素计算全局内容哈希； 若缓存命中，直接从 Tair KVCache Store 读取视觉 embedding，完全绕过视觉 Transformer（ViT）。 跳过 Attention 与 MLP 计算：\n为每张图像分配独立哈希，实现细粒度缓存管理； 采用 Block Sparse Attention 支持非连续 token 的选择性重计算； 在每一层构造二值 Computation Mask，标识需重计算的 token； 仅对被选中的 token 执行 RoPE、Attention 与 MLP，其余部分直接复用； KV Cache 在应用 RoPE 之前存储，从而支持位置无关重用。 5. Experiments and Discussion 5.1 Acceleration of VLCache（加速性能） VLCache 显著降低了 Time-To-First-Token（TTFT）。在 Qwen2.5-VL（表中标记为 Qwen3-VL）上的实验表明：\nQwen2.5-VL-8B：\n在 20K 视觉 token 下，原始 TTFT 为 8.784s； 动态配置后降至 4.714s，加速比 1.86×； 即使不考虑 ViT 跳过，仅 KV Cache 重用也贡献主要加速。 Qwen2.5-VL-32B：\n在 20K token 下，加速比最高可达 3.94×（静态），动态配置下仍超过 2.5×。 整体趋势：视觉 token 越长，加速效果越显著，TTFT 提升范围为 1.2×–16×。\n5.2 Accuracy Preservation of VLCache（准确度保持） 近乎无损精度：仅重计算 2–5% 的视觉 token，在 MMMU-Pro、MME 等基准上与全量重计算几乎一致。\n动态优于静态：在相同预算下，逐层动态分配重计算比例显著优于统一比例策略。\n5.3 Comparisons with Other SOTA Methods 全面优于启发式方法：在加速比与准确率上均优于 CacheBlend、MPIC 与 KVShare；\n理论驱动优势：基于累积误差效应与层级重要性分析，VLCache 避免了 MPIC 在视觉 token 场景下失效的问题。\n6. Conclusion VLCache 提供了一个将理论洞察与系统实现深度结合的完整方案，在几乎不损失推理精度的前提下，大幅加速了 VLM 的预填充阶段。该方法尤其适用于多请求共享同一图像的高并发推理场景。未来的研究方向包括将缓存重用从“完全相同图像”扩展到“相似视觉输入”，以进一步提升其实用价值。\n",
+  "wordCount" : "491",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-01-06T00:00:00Z",
+  "dateModified": "2026-01-06T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference
+    </h1>
+    <div class="post-meta"><span title='2026-01-06 00:00:00 +0000 UTC'>January 6, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/title.png"></p>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<ul>
+<li>
+<p><strong>前缀缓存（Prefix Cache）的局限性</strong>：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列<strong>精确匹配</strong>。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便<strong>图像完全相同</strong>，只要系统提示词或用户问题不同，也无法触发缓存命中。</p>
+</li>
+<li>
+<p><strong>位置无关重用的必要性</strong>：如果允许在<strong>不同位置</strong>重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，<strong>必须对部分 token 进行重新计算（recompute）</strong>。</p>
+</li>
+<li>
+<p><strong>现有启发式方法的缺陷</strong>：</p>
+<ul>
+<li>
+<p><strong>CacheBlend [14]</strong>：通过比较<strong>前三层</strong>的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖<strong>浅层局部信息</strong>，无法刻画 token 在整个 Transformer 堆栈中的<strong>全局重要性</strong>。</p>
+</li>
+<li>
+<p><strong>EPIC [6] 与 MPIC [16]</strong>：以 chunk 为单位，重计算每个数据块的<strong>初始 token</strong>。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。</p>
+</li>
+<li>
+<p><strong>KVShare [13]</strong>：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对<strong>重用误差如何在解码阶段传播</strong>的系统性分析。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>缺乏系统性研究</strong>：上述方法普遍缺少以下两点：</p>
+<ol>
+<li>不同 Transformer 层对最终输出贡献差异的系统研究；</li>
+<li>重用误差在自回归解码过程中<strong>跨 token、跨层传播机制</strong>的深入分析。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h2 id="2-contribution">2. Contribution<a hidden class="anchor" aria-hidden="true" href="#2-contribution">#</a></h2>
+<ul>
+<li>
+<p><strong>识别累积重用误差效应</strong>：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 <strong>累积重用误差效应（Cumulative Reuse Error Effect）</strong>，即早期 token 的重用误差会在后续生成过程中不断传播和放大。</p>
+</li>
+<li>
+<p><strong>层级重要性差异分析</strong>：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的<strong>层级重要性多样性</strong>。</p>
+</li>
+<li>
+<p><strong>提出 VLCache 框架</strong>：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。</p>
+</li>
+<li>
+<p><strong>双重重用机制</strong>：</p>
+<ul>
+<li>重用视觉编码器输出（Encoder Cache）；</li>
+<li>重用语言模型中的 KV Cache。</li>
+</ul>
+</li>
+<li>
+<p><strong>动态重计算策略</strong>：在固定重计算预算约束下，提出一种<strong>逐层自适应</strong>的重计算比例分配算法，以最小化输出误差。</p>
+</li>
+<li>
+<p><strong>显著性能提升</strong>：实验表明，仅需重新计算 <strong>2–5%</strong> 的视觉 token，即可实现近乎无损的准确率，同时将首字延迟（TTFT）提升 <strong>1.2×–16×</strong>。</p>
+</li>
+<li>
+<p><strong>系统集成验证</strong>：在 <strong>SGLang</strong> 框架中实现原型系统，显著降低真实部署环境中的推理延迟。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-observation">3. Observation<a hidden class="anchor" aria-hidden="true" href="#3-observation">#</a></h2>
+<h3 id="31-cumulative-reuse-error-effect累积重用误差效应">3.1 Cumulative Reuse Error Effect（累积重用误差效应）<a hidden class="anchor" aria-hidden="true" href="#31-cumulative-reuse-error-effect累积重用误差效应">#</a></h3>
+<p>在自注意力机制中，每个 token 的输出依赖于其上下文表示。在因果语言模型（Causal LLM）中，第 $i$ 个 token 会关注所有位置 $j \le i$ 的 token。当 KV Cache 在<strong>不匹配的上下文</strong>下被重用时，会引入 <strong>重用误差（Reuse Error）</strong>。</p>
+<p>作者将位置 $i$ 的 token 总误差分解为两部分：</p>
+<ol>
+<li><strong>自身重用误差（Self Reuse Error）</strong>：</li>
+</ol>
+<p>$$
+\epsilon_i^{\text{self}} = h_i^{\text{reuse}} - h_i^{\text{full}},
+$$</p>
+<p>其中 $h_i^{\text{reuse}}$ 表示使用重用 KV Cache 得到的隐状态，$h_i^{\text{full}}$ 表示完全重计算得到的隐状态。</p>
+<ol start="2">
+<li><strong>传播误差（Propagated Error）</strong>：来自所有先前 token 的误差累积：</li>
+</ol>
+<p>$$
+\epsilon_i^{\text{prop}} = \sum_{j &lt; i} \alpha_{i,j} , \epsilon_j,
+$$</p>
+<p>其中 $\alpha_{i,j}$ 表示位置 $j$ 的误差通过自注意力机制向位置 $i$ 传播的权重。</p>
+<p>因此，第 $i$ 个 token 的总重用误差为：</p>
+<p>$$
+\epsilon_i = \epsilon_i^{\text{self}} + \epsilon_i^{\text{prop}}.
+$$</p>
+<p>该公式揭示了一个关键现象：<strong>即使后续 token 本身被精确计算，只要早期 token 存在重用误差，该误差仍会持续影响下游表示</strong>。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/figure2.png">
+<em>（对应论文 Figure 2：早期 token 的重计算可显著抑制下游误差累积）</em></p>
+<p><strong>实验验证</strong>：通过测量不同重计算比例下的误差范数，作者发现：</p>
+<ul>
+<li>早期 token 的重用会引入<strong>持久且累积</strong>的误差；</li>
+<li>仅对前 $10%$ 或 $30%$ 的 token 进行重计算，即可消除大部分上游误差，从而显著改善整体输出质量。</li>
+</ul>
+<hr>
+<h3 id="32-layer-wise-importance-difference层级重要性差异">3.2 Layer-wise Importance Difference（层级重要性差异）<a hidden class="anchor" aria-hidden="true" href="#32-layer-wise-importance-difference层级重要性差异">#</a></h3>
+<p>作者在 <strong>Qwen2.5-VL-7B</strong> 上实证研究了不同 Transformer 层对最终输出的敏感性，验证“所有层同等重要”的假设是否成立。</p>
+<p><strong>实验流程（三阶段）</strong>：</p>
+<ol>
+<li>
+<p><strong>构造缓存</strong>：固定输入图像，将原始问题替换为无关提示词（如 <em>“Please describe this image”</em>），执行前向传播并缓存图像对应的 KV Cache。</p>
+</li>
+<li>
+<p><strong>获取基准输出</strong>：使用原始问题进行标准推理，记录输出的 logits 与生成文本。</p>
+</li>
+<li>
+<p><strong>注入误差并测量敏感度</strong>：</p>
+<ul>
+<li>在推理过程中使用<strong>不匹配的图像 KV Cache</strong>；</li>
+<li>仅在<strong>指定的第 $l$ 层</strong>对前 $r$ 比例的 token 进行重计算；</li>
+<li>计算当前输出 logits 与基准 logits 之间的 MSE 损失。</li>
+</ul>
+</li>
+</ol>
+<p>$$
+\mathcal{L}_l(r) = | \mathbf{z}^{\text{reuse}}_l(r) - \mathbf{z}^{\text{full}} |_2^2.
+$$</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/figure3.png">
+<em>（对应论文 Figure 3：MMMU-Pro 上的层级敏感度曲线）</em></p>
+<p><strong>结论</strong>：</p>
+<ul>
+<li>不同层对重计算比例 $r$ 的敏感性差异极大；</li>
+<li>某些中间或高层是“关键层”，需要较高的重计算比例；</li>
+<li>也存在对重用几乎不敏感的层，甚至可以完全跳过重计算而不影响输出质量。</li>
+</ul>
+<hr>
+<h2 id="4-design-algorithm--system-implementation">4. Design (Algorithm &amp; System Implementation)<a hidden class="anchor" aria-hidden="true" href="#4-design-algorithm--system-implementation">#</a></h2>
+<h3 id="41-vlcache-reuse-and-dynamic-recomputation">4.1 VLCache: Reuse and Dynamic Recomputation<a hidden class="anchor" aria-hidden="true" href="#41-vlcache-reuse-and-dynamic-recomputation">#</a></h3>
+<p>VLCache 以插件形式集成到标准的 VLM 推理流水线中。</p>
+<h4 id="基础算法basic-algorithm">基础算法（Basic Algorithm）<a hidden class="anchor" aria-hidden="true" href="#基础算法basic-algorithm">#</a></h4>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/figure1.png">
+<em>（对应论文 Figure 1：整体缓存与重用流程）</em></p>
+<ol>
+<li>
+<p><strong>哈希与检索</strong>：</p>
+<ul>
+<li>对输入图像计算内容哈希值；</li>
+<li><strong>Cache Miss</strong>：执行完整 prefilling，并将视觉编码器输出（Encoder Cache）与 LLM 的 KV Cache 存入后端存储（如 Tair KVCache Store）；</li>
+<li><strong>Cache Hit</strong>：直接从后端检索缓存。</li>
+</ul>
+</li>
+<li>
+<p><strong>部分重计算</strong>：</p>
+<ul>
+<li>对缓存的视觉 token，仅重计算最前面的 $r$ 比例；</li>
+<li>其余 $(1-r)$ 的 token 直接重用缓存结果。</li>
+</ul>
+</li>
+<li>
+<p><strong>计算跳过</strong>：</p>
+<ul>
+<li>对重用 token，其 Attention 与 MLP 计算被<strong>完全跳过</strong>；</li>
+<li>这是 VLCache 实现显著加速的核心机制。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/figure4.png">
+<em>（对应论文 Figure 4：形成连续、硬件友好的计算区域）</em></p>
+<hr>
+<h4 id="动态重计算策略dynamic-recomputation">动态重计算策略（Dynamic Recomputation）<a hidden class="anchor" aria-hidden="true" href="#动态重计算策略dynamic-recomputation">#</a></h4>
+<p>为在固定预算下获得最优精度，作者提出逐层动态分配重计算比例的策略。</p>
+<ol>
+<li><strong>层敏感度定义</strong>：</li>
+</ol>
+<p>在代理数据集 $\mathcal{D}$ 上，第 $l$ 层在重计算比例 $r$ 下的敏感度定义为：</p>
+<p>$$
+S_l(r) = \mathbb{E}_{(x,y) \sim \mathcal{D}} \left[ | \mathbf{z}_l^{\text{reuse}}(r) - \mathbf{z}^{\text{full}} |_2^2 \right].
+$$</p>
+<ol start="2">
+<li><strong>优化目标建模</strong>：</li>
+</ol>
+<p>在总重计算预算 $B$ 下，优化问题表示为：</p>
+<p>$$
+\min_{{r_l}} \sum_{l=1}^L S_l(r_l)
+$$</p>
+<p>约束条件：</p>
+<p>$$
+\sum_{l=1}^L r_l \le B,
+$$</p>
+<p>$$
+r_1 \ge r_2 \ge \cdots \ge r_L,
+$$</p>
+<p>$$
+r_l \in {0, \Delta, 2\Delta, \dots, 1}.
+$$</p>
+<p>其中单调不增约束保证<strong>深层可以直接复用浅层已经计算好的隐状态</strong>，避免重复计算。</p>
+<ol start="3">
+<li><strong>贪心近似算法</strong>：</li>
+</ol>
+<p>由于该问题是离散整数规划，作者在假设层间近似独立的前提下，采用贪心策略搜索近似最优解，大幅降低搜索成本。</p>
+<hr>
+<h3 id="42-sglang-integration-of-vlcache">4.2 SGLang Integration of VLCache<a hidden class="anchor" aria-hidden="true" href="#42-sglang-integration-of-vlcache">#</a></h3>
+<p>在 SGLang 框架中的实现包含两项关键系统优化：</p>
+<ol>
+<li>
+<p><strong>跳过 ViT 计算</strong>：</p>
+<ul>
+<li>对输入图像像素计算全局内容哈希；</li>
+<li>若缓存命中，直接从 <strong>Tair KVCache Store</strong> 读取视觉 embedding，完全绕过视觉 Transformer（ViT）。</li>
+</ul>
+</li>
+<li>
+<p><strong>跳过 Attention 与 MLP 计算</strong>：</p>
+<ul>
+<li>为每张图像分配独立哈希，实现细粒度缓存管理；</li>
+<li>采用 <strong>Block Sparse Attention</strong> 支持非连续 token 的选择性重计算；</li>
+<li>在每一层构造二值 <strong>Computation Mask</strong>，标识需重计算的 token；</li>
+<li>仅对被选中的 token 执行 RoPE、Attention 与 MLP，其余部分直接复用；</li>
+<li>KV Cache 在应用 RoPE 之前存储，从而支持位置无关重用。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="5-experiments-and-discussion">5. Experiments and Discussion<a hidden class="anchor" aria-hidden="true" href="#5-experiments-and-discussion">#</a></h2>
+<h3 id="51-acceleration-of-vlcache加速性能">5.1 Acceleration of VLCache（加速性能）<a hidden class="anchor" aria-hidden="true" href="#51-acceleration-of-vlcache加速性能">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/table1and2.png">
+VLCache 显著降低了 Time-To-First-Token（TTFT）。在 Qwen2.5-VL（表中标记为 Qwen3-VL）上的实验表明：</p>
+<ul>
+<li>
+<p><strong>Qwen2.5-VL-8B</strong>：</p>
+<ul>
+<li>在 20K 视觉 token 下，原始 TTFT 为 8.784s；</li>
+<li>动态配置后降至 4.714s，加速比 <strong>1.86×</strong>；</li>
+<li>即使不考虑 ViT 跳过，仅 KV Cache 重用也贡献主要加速。</li>
+</ul>
+</li>
+<li>
+<p><strong>Qwen2.5-VL-32B</strong>：</p>
+<ul>
+<li>在 20K token 下，加速比最高可达 <strong>3.94×（静态）</strong>，动态配置下仍超过 <strong>2.5×</strong>。</li>
+</ul>
+</li>
+<li>
+<p><strong>整体趋势</strong>：视觉 token 越长，加速效果越显著，TTFT 提升范围为 <strong>1.2×–16×</strong>。</p>
+</li>
+</ul>
+<hr>
+<h3 id="52-accuracy-preservation-of-vlcache准确度保持">5.2 Accuracy Preservation of VLCache（准确度保持）<a hidden class="anchor" aria-hidden="true" href="#52-accuracy-preservation-of-vlcache准确度保持">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/table3&4.png"></p>
+<ul>
+<li>
+<p><strong>近乎无损精度</strong>：仅重计算 <strong>2–5%</strong> 的视觉 token，在 MMMU-Pro、MME 等基准上与全量重计算几乎一致。</p>
+</li>
+<li>
+<p><strong>动态优于静态</strong>：在相同预算下，逐层动态分配重计算比例显著优于统一比例策略。</p>
+</li>
+</ul>
+<hr>
+<h3 id="53-comparisons-with-other-sota-methods">5.3 Comparisons with Other SOTA Methods<a hidden class="anchor" aria-hidden="true" href="#53-comparisons-with-other-sota-methods">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/VLCACHE/table5.png"></p>
+<ul>
+<li>
+<p><strong>全面优于启发式方法</strong>：在加速比与准确率上均优于 CacheBlend、MPIC 与 KVShare；</p>
+</li>
+<li>
+<p><strong>理论驱动优势</strong>：基于累积误差效应与层级重要性分析，VLCache 避免了 MPIC 在视觉 token 场景下失效的问题。</p>
+</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion<a hidden class="anchor" aria-hidden="true" href="#6-conclusion">#</a></h2>
+<p>VLCache 提供了一个将<strong>理论洞察与系统实现深度结合</strong>的完整方案，在几乎不损失推理精度的前提下，大幅加速了 VLM 的预填充阶段。该方法尤其适用于<strong>多请求共享同一图像</strong>的高并发推理场景。未来的研究方向包括将缓存重用从“完全相同图像”扩展到“相似视觉输入”，以进一步提升其实用价值。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/prefix-cache/">Prefix Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

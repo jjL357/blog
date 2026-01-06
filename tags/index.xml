@@ -6,20 +6,34 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 27 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 06 Jan 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>KV Cache</title>
+      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
+      <description></description>
+    </item>
     <item>
       <title>MLLM</title>
       <link>https://jjl357.github.io/blog/tags/mllm/</link>
-      <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
       <description></description>
     </item>
     <item>
       <title>Paper Note</title>
       <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Prefix Cache</title>
+      <link>https://jjl357.github.io/blog/tags/prefix-cache/</link>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/prefix-cache/</guid>
       <description></description>
     </item>
     <item>
@@ -72,13 +86,6 @@
       <description></description>
     </item>
     <item>
-      <title>Reasoning</title>
-      <link>https://jjl357.github.io/blog/tags/reasoning/</link>
-      <pubDate>Sun, 14 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/reasoning/</guid>
-      <description></description>
-    </item>
-    <item>
       <title>Cloud-Edge</title>
       <link>https://jjl357.github.io/blog/tags/cloud-edge/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
@@ -125,13 +132,6 @@
       <link>https://jjl357.github.io/blog/tags/sports/</link>
       <pubDate>Sun, 23 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/sports/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>KV Cache</title>
-      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
-      <pubDate>Fri, 21 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
       <description></description>
     </item>
     <item>

@@ -6,8 +6,56 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 27 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 06 Jan 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference</title>
+      <link>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;前缀缓存（Prefix Cache）的局限性&lt;/strong&gt;：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列&lt;strong&gt;精确匹配&lt;/strong&gt;。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便&lt;strong&gt;图像完全相同&lt;/strong&gt;，只要系统提示词或用户问题不同，也无法触发缓存命中。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;位置无关重用的必要性&lt;/strong&gt;：如果允许在&lt;strong&gt;不同位置&lt;/strong&gt;重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，&lt;strong&gt;必须对部分 token 进行重新计算（recompute）&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;现有启发式方法的缺陷&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CacheBlend [14]&lt;/strong&gt;：通过比较&lt;strong&gt;前三层&lt;/strong&gt;的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖&lt;strong&gt;浅层局部信息&lt;/strong&gt;，无法刻画 token 在整个 Transformer 堆栈中的&lt;strong&gt;全局重要性&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;EPIC [6] 与 MPIC [16]&lt;/strong&gt;：以 chunk 为单位，重计算每个数据块的&lt;strong&gt;初始 token&lt;/strong&gt;。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;KVShare [13]&lt;/strong&gt;：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对&lt;strong&gt;重用误差如何在解码阶段传播&lt;/strong&gt;的系统性分析。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;缺乏系统性研究&lt;/strong&gt;：上述方法普遍缺少以下两点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;不同 Transformer 层对最终输出贡献差异的系统研究；&lt;/li&gt;
+&lt;li&gt;重用误差在自回归解码过程中&lt;strong&gt;跨 token、跨层传播机制&lt;/strong&gt;的深入分析。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;识别累积重用误差效应&lt;/strong&gt;：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 &lt;strong&gt;累积重用误差效应（Cumulative Reuse Error Effect）&lt;/strong&gt;，即早期 token 的重用误差会在后续生成过程中不断传播和放大。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;层级重要性差异分析&lt;/strong&gt;：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的&lt;strong&gt;层级重要性多样性&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;提出 VLCache 框架&lt;/strong&gt;：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
       <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
@@ -113,43 +161,6 @@
 &lt;/ol&gt;
 &lt;p&gt;&lt;strong&gt;Research Question:&lt;/strong&gt; 我们能否利用 LoRA LMM 来丰富视觉应用，同时满足其严格的性能要求？
 作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。&lt;/p&gt;</description>
-    </item>
-    <item>
-      <title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter</title>
-      <link>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
-      <pubDate>Sun, 14 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ASPLOS&#39;26&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mit-han-lab/fastrl&#34;&gt;https://github.com/mit-han-lab/fastrl&lt;/a&gt;&lt;/p&gt;
-&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;强化学习（RL）已成为赋予大语言模型（LLMs）强大推理能力（如OpenAI-o1, DeepSeek-R1）的标准方法。然而，这种RL方法面临独特的效率挑战。通过分析自收集的轨迹和来自字节跳动（ByteDance）的生产环境轨迹，作者确定了推理RL过程中的关键特征：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure1.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;(Figure 1展示了推理RL中的长尾生成问题和工作负载不平衡)&lt;/em&gt;&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;(1) 极不平衡的Rollout（采样）与训练时间 (Unbalanced Rollout and Training Time):&lt;/strong&gt;&lt;br&gt;
-在RL过程中，最耗时的阶段是Rollout（模型生成大量候选回答）。这一阶段占据了总步长时间的绝大部分（约 &lt;strong&gt;85%&lt;/strong&gt;），成为主要的瓶颈。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;(2) 持续的长尾分布 (Persistent Long-Tail Distribution):&lt;/strong&gt;&lt;br&gt;
-Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽然大多数生成的序列相对较短，但一小部分序列会达到极长的长度（例如达到最大上下文限制）。这种长尾模式并非偶发，而是贯穿整个长期训练过程的持续模式。在大多数RL步骤中，少数响应达到最大配置长度，而绝大多数则短得多，导致显着的资源未充分利用（即GPU在等待最长序列完成时处于闲置状态）。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;(3)巨大的时间和资源需求 (Substantial Time and Resource Demands):&lt;/strong&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure2.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;ByteDance的生产轨迹显示，使用128个GPU训练一个32B模型，仅完成385步就需要11天。单步训练平均耗时约40分钟，极度消耗资源。&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;为什么选择投机解码 (Why Speculative Decoding - SD)?&lt;/strong&gt;&lt;br&gt;
-作者认为投机解码（SD）是非常适合解决此问题的方法。SD利用轻量级草稿模型（Draft Model）快速生成token序列，然后由目标模型并行验证。SD适合RL训练主要基于两个优点：&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;数学上的无损性 (Mathematically Lossless):&lt;/strong&gt; 输出分布与目标模型的原始分布完全一致。这对RL至关重要，因为近似方法可能会改变策略优化轨迹。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;对长尾效率高 (Efficient for Long-Tail):&lt;/strong&gt; SD通过将过程从**内存受限（Memory-Bound）&lt;strong&gt;转变为&lt;/strong&gt;计算受限（Compute-Bound）**来提高吞吐量。这对于RL Rollout的长尾阶段特别有效，因为此时有效批大小（Batch Size）通常很小，标准解码无法充分利用GPU计算能力。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;&lt;strong&gt;在RL中应用SD的挑战 (Challenges in Reasoning RL):&lt;/strong&gt;&lt;br&gt;
-现有的SD技术主要针对静态推理场景设计，应用于动态推理RL训练面临三大挑战：&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;&lt;strong&gt;C1. 演进的目标模型 (Evolving Target Model):&lt;/strong&gt; RL训练期间目标模型权重不断更新。固定的草稿模型会迅速变得“过时”（Stale），导致投机接受率下降，严重削弱SD效果。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;C2. 草稿模型训练成本 (Draft Model Training Costs):&lt;/strong&gt; 高效的SD通常依赖专门的草稿模型（如EAGLE等），这需要额外的训练来与目标模型对齐，引入了额外的开销和复杂性。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;C3. 波动的批大小 (Fluctuating Batch Sizes):&lt;/strong&gt; 现有SD通常针对小批次优化。然而，RL Rollout的特征是有效批大小动态剧烈波动（开始时很大，随着短响应完成迅速减小）。如果不进行管理，在大批次下性能可能会下降甚至发生显存溢出（OOM）。&lt;/li&gt;
-&lt;/ol&gt;
-&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
-&lt;p&gt;为了解决上述挑战，论文提出了 &lt;strong&gt;TLT&lt;/strong&gt;，这是一个具有自适应投机解码的高效推理RL训练系统。&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>

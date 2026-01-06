@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Prefix Cache on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/prefix-cache/</link>
+    <description>Recent content in Prefix Cache on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Tue, 06 Jan 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/prefix-cache/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference</title>
+      <link>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
+      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;前缀缓存（Prefix Cache）的局限性&lt;/strong&gt;：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列&lt;strong&gt;精确匹配&lt;/strong&gt;。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便&lt;strong&gt;图像完全相同&lt;/strong&gt;，只要系统提示词或用户问题不同，也无法触发缓存命中。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;位置无关重用的必要性&lt;/strong&gt;：如果允许在&lt;strong&gt;不同位置&lt;/strong&gt;重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，&lt;strong&gt;必须对部分 token 进行重新计算（recompute）&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;现有启发式方法的缺陷&lt;/strong&gt;：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;CacheBlend [14]&lt;/strong&gt;：通过比较&lt;strong&gt;前三层&lt;/strong&gt;的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖&lt;strong&gt;浅层局部信息&lt;/strong&gt;，无法刻画 token 在整个 Transformer 堆栈中的&lt;strong&gt;全局重要性&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;EPIC [6] 与 MPIC [16]&lt;/strong&gt;：以 chunk 为单位，重计算每个数据块的&lt;strong&gt;初始 token&lt;/strong&gt;。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;KVShare [13]&lt;/strong&gt;：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对&lt;strong&gt;重用误差如何在解码阶段传播&lt;/strong&gt;的系统性分析。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;缺乏系统性研究&lt;/strong&gt;：上述方法普遍缺少以下两点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;不同 Transformer 层对最终输出贡献差异的系统研究；&lt;/li&gt;
+&lt;li&gt;重用误差在自回归解码过程中&lt;strong&gt;跨 token、跨层传播机制&lt;/strong&gt;的深入分析。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-contribution&#34;&gt;2. Contribution&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;识别累积重用误差效应&lt;/strong&gt;：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 &lt;strong&gt;累积重用误差效应（Cumulative Reuse Error Effect）&lt;/strong&gt;，即早期 token 的重用误差会在后续生成过程中不断传播和放大。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;层级重要性差异分析&lt;/strong&gt;：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的&lt;strong&gt;层级重要性多样性&lt;/strong&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;提出 VLCache 框架&lt;/strong&gt;：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
