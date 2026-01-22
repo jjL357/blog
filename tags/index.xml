@@ -6,8 +6,22 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 16 Jan 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 21 Jan 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Paper Note</title>
+      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
+      <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Speculative Decoding</title>
+      <link>https://jjl357.github.io/blog/tags/speculative-decoding/</link>
+      <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/speculative-decoding/</guid>
+      <description></description>
+    </item>
     <item>
       <title>Marathon</title>
       <link>https://jjl357.github.io/blog/tags/marathon/</link>
@@ -44,13 +58,6 @@
       <description></description>
     </item>
     <item>
-      <title>Paper Note</title>
-      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
-      <description></description>
-    </item>
-    <item>
       <title>Prefix Cache</title>
       <link>https://jjl357.github.io/blog/tags/prefix-cache/</link>
       <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
@@ -76,13 +83,6 @@
       <link>https://jjl357.github.io/blog/tags/reinforcement-learning/</link>
       <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/reinforcement-learning/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Speculative Decoding</title>
-      <link>https://jjl357.github.io/blog/tags/speculative-decoding/</link>
-      <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/speculative-decoding/</guid>
       <description></description>
     </item>
     <item>

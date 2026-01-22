@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees | JJ&#39;s Blog</title>
+<meta name="keywords" content="Speculative Decoding, Paper Note">
+<meta name="description" content="
+1. Introduction
+投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。
+然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建固定宽度、固定深度的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。
+为了解决这些挑战，作者提出了 TALON：一种无需训练（training-free）、预算驱动（budget-driven） 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。
+
+核心理念：将草稿树塑造成“深而窄”（deep-and-narrow）的形式以应对确定性上下文，以及“浅而宽”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。
+实验表现：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 EAGLE-3，相比于自回归解码（auto-regressive decoding）实现了高达 5.16× 的端到端加速。
+
+
+2. Motivated Experiments
+为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。
+
+4.1 The &ldquo;Acceptance Funnel&rdquo; Phenomenon (接受漏斗现象)
+
+作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：
+
+深层宽度的边际收益递减：如图 3 所示，接受分布呈现出漏斗状模式。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。
+误差累积放大：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。
+结论：在深层维持  的固定宽度会产生巨大的冗余。当模型自信时，极小的  即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。
+
+
+4.2 Variance in Real-World Accepted Length (实际接受长度的方差)
+">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees">
+  <meta property="og:description" content="
+1. Introduction 投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。
+然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建固定宽度、固定深度的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。
+为了解决这些挑战，作者提出了 TALON：一种无需训练（training-free）、预算驱动（budget-driven） 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。
+核心理念：将草稿树塑造成“深而窄”（deep-and-narrow）的形式以应对确定性上下文，以及“浅而宽”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。 实验表现：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 EAGLE-3，相比于自回归解码（auto-regressive decoding）实现了高达 5.16× 的端到端加速。 2. Motivated Experiments 为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。
+4.1 The “Acceptance Funnel” Phenomenon (接受漏斗现象) 作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：
+深层宽度的边际收益递减：如图 3 所示，接受分布呈现出漏斗状模式。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型 与目标模型 之间的初始随机性和分布差异，需要较宽的搜索宽度。 误差累积放大：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。 结论：在深层维持 的固定宽度会产生巨大的冗余。当模型自信时，极小的 即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。 4.2 Variance in Real-World Accepted Length (实际接受长度的方差) ">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-01-21T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-01-21T00:00:00+00:00">
+    <meta property="article:tag" content="Speculative Decoding">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees">
+<meta name="twitter:description" content="
+1. Introduction
+投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。
+然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建固定宽度、固定深度的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。
+为了解决这些挑战，作者提出了 TALON：一种无需训练（training-free）、预算驱动（budget-driven） 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。
+
+核心理念：将草稿树塑造成“深而窄”（deep-and-narrow）的形式以应对确定性上下文，以及“浅而宽”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。
+实验表现：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 EAGLE-3，相比于自回归解码（auto-regressive decoding）实现了高达 5.16× 的端到端加速。
+
+
+2. Motivated Experiments
+为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。
+
+4.1 The &ldquo;Acceptance Funnel&rdquo; Phenomenon (接受漏斗现象)
+
+作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：
+
+深层宽度的边际收益递减：如图 3 所示，接受分布呈现出漏斗状模式。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。
+误差累积放大：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。
+结论：在深层维持  的固定宽度会产生巨大的冗余。当模型自信时，极小的  即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。
+
+
+4.2 Variance in Real-World Accepted Length (实际接受长度的方差)
+">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees",
+      "item": "https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees",
+  "name": "📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees",
+  "description": "\n1. Introduction 投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。\n然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建固定宽度、固定深度的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。\n为了解决这些挑战，作者提出了 TALON：一种无需训练（training-free）、预算驱动（budget-driven） 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。\n核心理念：将草稿树塑造成“深而窄”（deep-and-narrow）的形式以应对确定性上下文，以及“浅而宽”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。 实验表现：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 EAGLE-3，相比于自回归解码（auto-regressive decoding）实现了高达 5.16× 的端到端加速。 2. Motivated Experiments 为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。\n4.1 The \u0026ldquo;Acceptance Funnel\u0026rdquo; Phenomenon (接受漏斗现象) 作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：\n深层宽度的边际收益递减：如图 3 所示，接受分布呈现出漏斗状模式。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型 与目标模型 之间的初始随机性和分布差异，需要较宽的搜索宽度。 误差累积放大：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。 结论：在深层维持 的固定宽度会产生巨大的冗余。当模型自信时，极小的 即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。 4.2 Variance in Real-World Accepted Length (实际接受长度的方差) ",
+  "keywords": [
+    "Speculative Decoding", "Paper Note"
+  ],
+  "articleBody": "\n1. Introduction 投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。\n然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建固定宽度、固定深度的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。\n为了解决这些挑战，作者提出了 TALON：一种无需训练（training-free）、预算驱动（budget-driven） 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。\n核心理念：将草稿树塑造成“深而窄”（deep-and-narrow）的形式以应对确定性上下文，以及“浅而宽”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。 实验表现：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 EAGLE-3，相比于自回归解码（auto-regressive decoding）实现了高达 5.16× 的端到端加速。 2. Motivated Experiments 为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。\n4.1 The “Acceptance Funnel” Phenomenon (接受漏斗现象) 作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：\n深层宽度的边际收益递减：如图 3 所示，接受分布呈现出漏斗状模式。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型 与目标模型 之间的初始随机性和分布差异，需要较宽的搜索宽度。 误差累积放大：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。 结论：在深层维持 的固定宽度会产生巨大的冗余。当模型自信时，极小的 即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。 4.2 Variance in Real-World Accepted Length (实际接受长度的方差) 虽然 4.1 揭示了固定宽度的结构冗余，作者进一步研究了固定深度的弱点。\nThe Static Depth Dilemma (静态深度困境)：如图 4 所示，即使在同一任务类别（如数学或代码）中，平均接受标记（MAT）也会剧烈波动。 低熵（简单）上下文：草稿模型与目标模型高度一致，潜在接受长度往往超过预定义的深度 。静态深度限制了 生成更多标记的能力，限制了加速上限。 高熵（复杂）上下文：预测变得模糊，草稿模型倾向于在注定被拒绝的分支上生成深度幻觉。固定深度强迫计算资源分配给这些无效标记，增加了延迟开销，边际效用为零。 3. Method 作者引入 TALON，这是一个预算驱动的框架，通过根据实时模型置信度动态分配资源来优化草稿树的构建。\n5.1 From Static Grids to Dynamic Budgets 为了克服静态拓扑与标记难度不匹配导致的效率低下，TALON 将约束从“形状”转变为“容量”。\n全局标记预算 (Global Token Budget, $B$)：定义为草稿树 $\\mathcal{T}$ 中允许的最大节点数。\n目标：迭代地“投资”此预算以生长草稿树。\n确定性上下文：分配为深而窄的链。\n不确定性分支：分配为浅而宽的层。\n5.2 Hybrid Tree Expansion Strategy (混合树扩展策略) TALON 逐层构建树，采用混合策略：在根节点（第 0 层）进行鲁棒初始化，随后在后续层（）进行置信度门控扩展。\n5.2.1 Confidence-Gated Expansion (置信度门控扩展) 对于深度 ，作者采用全局过滤机制，根据候选者的相对置信度进行门控。 设 为父节点集合，候选池 为所有子节点扩展的并集：\n$$ \\mathcal{C}l = \\bigcup{v \\in \\mathcal{P}_{l-1}} \\text{Expand}(v) $$\n每个候选节点 被分配一个路径累计概率：\n$$ s(c) = \\prod_{t=1}^{l} p_d(x_t \\mid x_{",
+  "wordCount" : "438",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-01-21T00:00:00Z",
+  "dateModified": "2026-01-21T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees
+    </h1>
+    <div class="post-meta"><span title='2026-01-21 00:00:00 +0000 UTC'>January 21, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/title.png"></p>
+<h2 id="1-introduction">1. Introduction<a hidden class="anchor" aria-hidden="true" href="#1-introduction">#</a></h2>
+<p>投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。</p>
+<p>然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建<strong>固定宽度、固定深度</strong>的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。</p>
+<p>为了解决这些挑战，作者提出了 <strong>TALON</strong>：一种<strong>无需训练（training-free）</strong>、<strong>预算驱动（budget-driven）</strong> 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。</p>
+<ul>
+<li><strong>核心理念</strong>：将草稿树塑造成“<strong>深而窄</strong>”（deep-and-narrow）的形式以应对确定性上下文，以及“<strong>浅而宽</strong>”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。</li>
+<li><strong>实验表现</strong>：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 <strong>EAGLE-3</strong>，相比于自回归解码（auto-regressive decoding）实现了高达 <strong>5.16×</strong> 的端到端加速。</li>
+</ul>
+<hr>
+<h2 id="2-motivated-experiments">2. Motivated Experiments<a hidden class="anchor" aria-hidden="true" href="#2-motivated-experiments">#</a></h2>
+<p>为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。</p>
+<hr>
+<h3 id="41-the-acceptance-funnel-phenomenon-接受漏斗现象">4.1 The &ldquo;Acceptance Funnel&rdquo; Phenomenon (接受漏斗现象)<a hidden class="anchor" aria-hidden="true" href="#41-the-acceptance-funnel-phenomenon-接受漏斗现象">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/figure3.png"></p>
+<p>作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：</p>
+<ul>
+<li><strong>深层宽度的边际收益递减</strong>：如图 3 所示，接受分布呈现出<strong>漏斗状模式</strong>。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。</li>
+<li><strong>误差累积放大</strong>：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。</li>
+<li><strong>结论</strong>：在深层维持  的固定宽度会产生巨大的冗余。当模型自信时，极小的  即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。</li>
+</ul>
+<hr>
+<h3 id="42-variance-in-real-world-accepted-length-实际接受长度的方差">4.2 Variance in Real-World Accepted Length (实际接受长度的方差)<a hidden class="anchor" aria-hidden="true" href="#42-variance-in-real-world-accepted-length-实际接受长度的方差">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/figure4.png"></p>
+<p>虽然 4.1 揭示了固定宽度的结构冗余，作者进一步研究了<strong>固定深度</strong>的弱点。</p>
+<ul>
+<li><strong>The Static Depth Dilemma (静态深度困境)</strong>：如图 4 所示，即使在同一任务类别（如数学或代码）中，平均接受标记（MAT）也会剧烈波动。</li>
+<li><strong>低熵（简单）上下文</strong>：草稿模型与目标模型高度一致，潜在接受长度往往超过预定义的深度 。静态深度限制了  生成更多标记的能力，限制了加速上限。</li>
+<li><strong>高熵（复杂）上下文</strong>：预测变得模糊，草稿模型倾向于在注定被拒绝的分支上生成深度幻觉。固定深度强迫计算资源分配给这些无效标记，增加了延迟开销，边际效用为零。</li>
+</ul>
+<hr>
+<h2 id="3-method">3. Method<a hidden class="anchor" aria-hidden="true" href="#3-method">#</a></h2>
+<p>作者引入 TALON，这是一个预算驱动的框架，通过根据实时模型置信度动态分配资源来优化草稿树的构建。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/figure5.png"></p>
+<hr>
+<h3 id="51-from-static-grids-to-dynamic-budgets">5.1 From Static Grids to Dynamic Budgets<a hidden class="anchor" aria-hidden="true" href="#51-from-static-grids-to-dynamic-budgets">#</a></h3>
+<p>为了克服静态拓扑与标记难度不匹配导致的效率低下，TALON 将约束从“形状”转变为“容量”。</p>
+<ul>
+<li>
+<p><strong>全局标记预算 (Global Token Budget, $B$)</strong>：定义为草稿树 $\mathcal{T}$ 中允许的最大节点数。</p>
+</li>
+<li>
+<p><strong>目标</strong>：迭代地“投资”此预算以生长草稿树。</p>
+</li>
+<li>
+<p><strong>确定性上下文</strong>：分配为深而窄的链。</p>
+</li>
+<li>
+<p><strong>不确定性分支</strong>：分配为浅而宽的层。</p>
+</li>
+</ul>
+<hr>
+<h3 id="52-hybrid-tree-expansion-strategy-混合树扩展策略">5.2 Hybrid Tree Expansion Strategy (混合树扩展策略)<a hidden class="anchor" aria-hidden="true" href="#52-hybrid-tree-expansion-strategy-混合树扩展策略">#</a></h3>
+<p>TALON 逐层构建树，采用混合策略：在根节点（第 0 层）进行鲁棒初始化，随后在后续层（）进行置信度门控扩展。</p>
+<hr>
+<h4 id="521-confidence-gated-expansion-置信度门控扩展">5.2.1 Confidence-Gated Expansion (置信度门控扩展)<a hidden class="anchor" aria-hidden="true" href="#521-confidence-gated-expansion-置信度门控扩展">#</a></h4>
+<p>对于深度 ，作者采用全局过滤机制，根据候选者的相对置信度进行门控。
+设  为父节点集合，候选池  为所有子节点扩展的并集：</p>
+<p>$$
+\mathcal{C}<em>l = \bigcup</em>{v \in \mathcal{P}_{l-1}} \text{Expand}(v)
+$$</p>
+<p>每个候选节点  被分配一个<strong>路径累计概率</strong>：</p>
+<p>$$
+s(c) = \prod_{t=1}^{l} p_d(x_t \mid x_{&lt;t})
+$$</p>
+<p>为了识别当前层的“最优潜力”，作者首先找到<strong>锚点置信度</strong> (anchor confidence) ：</p>
+<p>$$
+s_{\text{anchor}} = \max_{c \in \mathcal{C}_l} s(c)
+$$</p>
+<p>然后，作者仅保留置信度落在锚点动态裕度  范围内的候选者：</p>
+<p>$$
+\mathcal{C}_l&rsquo; = \left{, c \in \mathcal{C}<em>l ;\middle|; s(c) \ge \alpha \cdot s</em>{\text{anchor}} ,\right}
+$$</p>
+<p>其中  是超参数（TALON 默认取 ）。</p>
+<ul>
+<li><strong>预算尊重机制</strong>：如果  超过剩余预算 ，作者仅保留路径分数最高的 top 候选者。</li>
+<li><strong>直觉原理</strong>：</li>
+<li>在<strong>确定性上下文</strong>中（如“The capital of France is&hellip;”），锚点 ，会施加严苛阈值，自动剪枝形成深层单链。</li>
+<li>在<strong>高熵上下文</strong>中（如“Quantum computing can&hellip;”）， 较低，阈值随之放松，允许更多样化的候选者进入下一层，形成浅宽结构以提高覆盖率。</li>
+</ul>
+<hr>
+<h4 id="522-robust-tree-initialization-鲁棒树初始化">5.2.2 Robust Tree Initialization (鲁棒树初始化)<a hidden class="anchor" aria-hidden="true" href="#522-robust-tree-initialization-鲁棒树初始化">#</a></h4>
+<p>虽然置信度门控在深层有效，但在根节点（）直接应用会因为<strong>草稿模型过度自信（Over-confidence）</strong> 而损害鲁棒性。</p>
+<ul>
+<li><strong>过度自信陷阱</strong>：小草稿模型往往校准不准，可能在错误的分支上给出  的概率。如果此时使用相对门控，树会过早塌缩为单一的错误分支。</li>
+<li><strong>灾难性后果</strong>：根节点的失败会导致整个草稿序列被拒绝。</li>
+<li><strong>解决方案</strong>：在第一层采用标准的 <strong>Top-K 初始化</strong>。无论置信度分布如何，显式扩展 Top-K 个标记：</li>
+</ul>
+<p>$$
+\mathcal{C}_1 = \text{TopK}\left(p_d(x_1 \mid x_0), K\right)
+$$</p>
+<p>这确保了在切换到预算高效的门控策略之前，在最关键的连接处覆盖了多样化的方向。</p>
+<hr>
+<h3 id="53-evaluating-talon-with-draft-efficiency-草稿效率评估">5.3 Evaluating TALON with Draft Efficiency (草稿效率评估)<a hidden class="anchor" aria-hidden="true" href="#53-evaluating-talon-with-draft-efficiency-草稿效率评估">#</a></h3>
+<p>为了量化 TALON 的成本效益，作者通过分解质量和成本因子来分析墙钟时间加速比（wall-time speedup）。</p>
+<ul>
+<li>
+<p><strong>$N_v$</strong>：目标模型执行的正向传播总次数（验证步骤）。</p>
+</li>
+<li>
+<p><strong>$N_d$</strong>：草稿模型生成的总步数。</p>
+</li>
+<li>
+<p><strong>$L$</strong>：输出序列长度。</p>
+</li>
+<li>
+<p><strong>$\gamma$</strong>：草稿模型相对于目标模型的计算成本比例。</p>
+</li>
+</ul>
+<p>作者引入新指标 <strong>草稿效率 (Draft Efficiency, )</strong>：</p>
+<p>$$
+\eta = \frac{N_d}{N_v}
+$$</p>
+<p>代表系统为了获得一次验证机会所投入的平均草稿步数。墙钟加速比  可以表示为平均接受标记数  和  的函数：</p>
+<p>$$
+\text{Speedup} \approx \frac{\mathbb{E}[A]}{1 + \gamma \cdot \eta}
+$$</p>
+<p><strong>理论解释 TALON 的优越性</strong>：</p>
+<ol>
+<li><strong>高熵上下文（难例）</strong>：接受奖励  下降。EAGLE 等静态方法仍支付固定高昂成本 ，导致  骤降。TALON 通过及早停止减少投资（），补偿了低奖励。</li>
+<li><strong>低熵上下文（易例）</strong>：静态方法将奖励  限制在深度 。TALON 允许树向深处无限延伸，显著增加 。由于 ， 的增长远慢于  的增长，确保了总加速比  的持续提升。</li>
+</ol>
+<hr>
+<h2 id="4-evaluation">4. Evaluation<a hidden class="anchor" aria-hidden="true" href="#4-evaluation">#</a></h2>
+<h3 id="41-experimental-setup">4.1 Experimental Setup<a hidden class="anchor" aria-hidden="true" href="#41-experimental-setup">#</a></h3>
+<ul>
+<li>
+<p><strong>基础模型 (Target Models)</strong>：涵盖不同规模和架构，包括 Llama-3-8B-Instruct, Llama-2-7B/13B/70B-Chat, Vicuna-7B/13B, 以及 Qwen2-7B。</p>
+</li>
+<li>
+<p><strong>草稿模型 (Draft Models)</strong>：采用 EAGLE 结构的轻量级回归头（EAGLE-style）。</p>
+</li>
+<li>
+<p><strong>数据集</strong>：</p>
+</li>
+<li>
+<p><strong>MT-Bench</strong>：通用多轮对话。</p>
+</li>
+<li>
+<p><strong>GSM8K</strong>：数学推理。</p>
+</li>
+<li>
+<p><strong>HumanEval</strong>：代码生成。</p>
+</li>
+<li>
+<p><strong>MBPP</strong>：入门级 Python 编程。</p>
+</li>
+<li>
+<p><strong>Spider</strong>：文本转 SQL。</p>
+</li>
+<li>
+<p><strong>ShareGPT</strong>：真实用户指令。</p>
+</li>
+<li>
+<p><strong>超参数设置</strong>：全局预算 ，门控阈值 ，根节点初始化 （对应 EAGLE-2 默认设置）。</p>
+</li>
+</ul>
+<hr>
+<h3 id="42-main-results-主要实验结果">4.2 Main Results (主要实验结果)<a hidden class="anchor" aria-hidden="true" href="#42-main-results-主要实验结果">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/table1.png"></p>
+<p>TALON 在所有测试场景中均表现出显著优势：</p>
+<ul>
+<li><strong>超越 SOTA</strong>：TALON 在所有模型上均超过了 EAGLE-3（尽管 EAGLE-3 宣称通过更复杂的离线策略优化了静态树结构）。</li>
+<li><strong>加速比峰值</strong>：在 Llama-3-8B 结合 GSM8K 数据集上，TALON 实现了 <strong>5.16×</strong> 的端到端加速，而 EAGLE-2 为 4.11×，EAGLE-3 为 4.35×。</li>
+<li><strong>各任务表现</strong>：</li>
+<li>在 <strong>数学和代码任务</strong>（如 GSM8K, HumanEval）中，由于逻辑推导具有很强的确定性路径，TALON 生成了极深的树， 显著提高。</li>
+<li>在 <strong>对话任务</strong>（MT-Bench）中，TALON 通过在不确定处变宽，提高了接受率的稳定性。</li>
+</ul>
+<hr>
+<h3 id="43-evaluating-talon-with-draft-efficiency-草稿效率分析">4.3 Evaluating TALON with Draft Efficiency (草稿效率分析)<a hidden class="anchor" aria-hidden="true" href="#43-evaluating-talon-with-draft-efficiency-草稿效率分析">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/figure6.png"></p>
+<p>实验验证了 Section 5.3 的理论模型：</p>
+<ul>
+<li><strong>动态</strong>：观察到 TALON 的草稿效率  会根据任务难度自动调整。在 MT-Bench 上  较低（约 15-20），而在 GSM8K 上  会为了追求高奖励  而增加到 30 以上。</li>
+<li><strong>收益曲线</strong>：加速比  与  呈正相关，且 TALON 总是能找到比固定树更好的  平衡点。</li>
+</ul>
+<hr>
+<h3 id="44-ablation-study-消融研究">4.4 Ablation Study (消融研究)<a hidden class="anchor" aria-hidden="true" href="#44-ablation-study-消融研究">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/TALON/figure7.png"></p>
+<ul>
+<li>
+<p><strong>预算  的影响</strong>：随着预算  从 20 增加到 120，加速比呈现先快速上升后平缓的趋势。 被证明是性能与 GPU 显存限制之间的良好折中点。</p>
+</li>
+<li>
+<p><strong>阈值  的敏感性</strong>：</p>
+</li>
+<li>
+<p>太小（如 0.001）：树变得太宽，浪费资源在无效分支。</p>
+</li>
+<li>
+<p>太大（如 0.5）：树变得太窄，容易因草稿模型微小偏离而导致整条路径失败。</p>
+</li>
+<li>
+<p><strong>结论</strong>： 范围内性能稳定。</p>
+</li>
+<li>
+<p><strong>初始化策略</strong>：对比实验显示，去掉第一层的 Top-K 初始化会导致在某些任务上性能下降 10% 以上，验证了处理草稿模型过度自信的重要性。</p>
+</li>
+</ul>
+<hr>
+<h2 id="5-limitations">5. Limitations<a hidden class="anchor" aria-hidden="true" href="#5-limitations">#</a></h2>
+<p>尽管 TALON 表现优异，但仍存在以下局限：</p>
+<ul>
+<li><strong>大 Batch Size 的可扩展性</strong>：目前主要针对 Batch Size = 1（延迟敏感型交互）进行了优化。在高吞吐量场景下，为每个请求维护不同的动态树结构会带来非平凡的 GPU 计算饱和及内存管理开销。</li>
+<li><strong>超参数泛化</strong>：虽然默认值  表现健壮，但在极端专业领域可能需要微调。开发根据接受历史实时自动调节  和  的机制是未来方向。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion<a hidden class="anchor" aria-hidden="true" href="#6-conclusion">#</a></h2>
+<p>本文提出了 <strong>TALON</strong>，一个将投机解码从僵化的几何约束转向灵活的、预算驱动范式的训练免框架。通过结合<strong>鲁棒初始化</strong>与<strong>置信度门控</strong>的混合扩展策略，TALON 动态调整草稿树形状：在确定性上下文中进化为深窄链，在不确定分支中演化为浅宽结构。
+在 5 个 LLM 和 6 个基准测试中的广泛评估证明，TALON 持续优于 EAGLE-3 等最先进方法，实现了高达 <strong>5.16×</strong> 的加速，为自适应推理优化提供了新的视角。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/speculative-decoding/">Speculative Decoding</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
