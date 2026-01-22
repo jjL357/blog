@@ -6,8 +6,35 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Wed, 21 Jan 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 22 Jan 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models</title>
+      <link>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</link>
+      <pubDate>Thu, 22 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VidCom2/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/xuyang-liu16/VidCom2&#34;&gt;https://github.com/xuyang-liu16/VidCom2&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;p&gt;视频大语言模型（VideoLLMs）在视频理解任务（如视频问答、视频推理、时序理解等）上表现出色，但其推理效率受到&lt;strong&gt;视觉 token 数量过多&lt;/strong&gt;的严重制约。具体而言，当前主流 VideoLLM 通常将视频拆解为多帧图像，每一帧再由 ViT 等视觉编码器转化为大量 patch-level tokens，这些视觉 tokens 会与文本 tokens 一同送入 LLM 进行跨模态建模。&lt;/p&gt;
+&lt;p&gt;由于 Transformer 自注意力的复杂度为 $O(N^2)$，当视频帧数 $T$ 和每帧 token 数 $M$ 较大时，总 token 数 $N = T \times M$ 会迅速膨胀，导致推理延迟和显存消耗急剧上升。这一问题在&lt;strong&gt;长视频理解&lt;/strong&gt;和&lt;strong&gt;高分辨率视频&lt;/strong&gt;场景中尤为突出。&lt;/p&gt;
+&lt;p&gt;作者系统性地分析了现有 VideoLLM token compression 方法，发现其普遍存在两个关键问题：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;忽视帧间差异性（Frame-level Distinctiveness）&lt;/strong&gt;
+多数方法对所有帧采用统一的压缩比例，默认每一帧“信息密度相同”，从而容易在关键帧上丢失重要视觉线索。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;工程实现受限（Implementation Constraints）&lt;/strong&gt;
+一些方法依赖特定模型结构（如 ViT 的 [CLS] token）或显式 attention 权重，导致难以兼容现代视觉编码器（如 SigLIP）或高效注意力算子（如 FlashAttention）。&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;为此，作者总结出 &lt;strong&gt;三条 VideoLLM token compression 的设计原则&lt;/strong&gt;，并提出一种**即插即用（plug-and-play）**的推理加速框架 &lt;strong&gt;Video Compression Commander（VidCom2）&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;VidCom2 的核心思想是：&lt;strong&gt;量化每一帧在整个视频中的“独特性（uniqueness）”&lt;/strong&gt;，并据此动态调整不同帧的压缩强度，从而在保证信息保真的前提下最大化冗余削减。&lt;/p&gt;
+&lt;p&gt;大量实验表明，VidCom2 在多种 VideoLLM 架构和 benchmark 上均取得了更优的性能-效率权衡。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees</title>
       <link>https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</link>
