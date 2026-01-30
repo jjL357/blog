@@ -6,8 +6,22 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Thu, 22 Jan 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 30 Jan 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Matryoshka Multimodal Models</title>
+      <link>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</link>
+      <pubDate>Fri, 30 Jan 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/M3/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mu-cai/matryoshka-mm&#34;&gt;https://github.com/mu-cai/matryoshka-mm&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/M3/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Large Multimodal Models (LMMs) such as LLaVA have shown strong performance in visual-linguistic reasoning. These models first embed images into a fixed large number of visual tokens and then feed them into a Large Language Model (LLM). However, this design causes an excessive number of tokens for dense visual scenarios such as high-resolution images and videos, leading to great inefficiency.&lt;/p&gt;
+&lt;p&gt;While token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 &lt;strong&gt;Matryoshka Multimodal Models (M³)&lt;/strong&gt;。该模型学习将视觉内容表示为&lt;strong&gt;嵌套的视觉 Token 集合&lt;/strong&gt;（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models</title>
       <link>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</link>
