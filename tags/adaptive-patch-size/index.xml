@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Adaptive Patch Size on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/adaptive-patch-size/</link>
+    <description>Recent content in Adaptive Patch Size on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 02 Feb 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/adaptive-patch-size/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS</title>
+      <link>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</link>
+      <pubDate>Mon, 02 Feb 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</guid>
+      <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; ICLR&#39;26&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-abstract&#34;&gt;1. Abstract&lt;/h2&gt;
+&lt;p&gt;现实世界中的视觉信号在分辨率上天然具有高度的多样性，因此，让多模态大语言模型（Multimodal Large Language Models, MLLMs）具备&lt;strong&gt;原生分辨率（native-resolution）感知能力&lt;/strong&gt;是一个自然且必要的目标。原则上，对于一般且直观的多模态理解任务，低分辨率图像往往已经足够；但对于包含大量细节的信息密集型图像（如文档、表格、图表等），则必须保留高分辨率输入，否则简单的缩放操作会不可避免地导致关键信息丢失。&lt;/p&gt;
+&lt;p&gt;近期的研究通过 &lt;strong&gt;sequence packing&lt;/strong&gt; 技术，使模型能够处理任意分辨率和任意宽高比的图像。然而，尽管这些方法在形式上支持 Any-Resolution（AnyRes）输入，模型在低分辨率和高分辨率下的性能仍然明显下降，同时高分辨率输入还会带来显著的计算开销。&lt;/p&gt;
+&lt;p&gt;本文提出一个核心观点：&lt;strong&gt;“单一固定 patch size”是导致上述问题的根本原因&lt;/strong&gt;。当图像分辨率或信息密度发生变化时，固定 patch size 在建模上天然是次优的。&lt;/p&gt;
+&lt;p&gt;为此，论文提出 &lt;strong&gt;Adaptive Patching（AdaPatch）&lt;/strong&gt;：一种&lt;strong&gt;无需额外训练&lt;/strong&gt;、可直接插入到现有固定 patch MLLMs 中的策略。AdaPatch 根据图像的&lt;strong&gt;原生分辨率&lt;/strong&gt;和&lt;strong&gt;信息密度&lt;/strong&gt;动态调整 patch size，从而在不同类型、不同分辨率的图像上取得更稳定、更优的性能。实验表明，该方法在不增加训练成本的前提下，显著提升了 AnyRes 场景下的准确率和稳定性；此外，论文还提出了一种&lt;strong&gt;训练版方法&lt;/strong&gt;，进一步增强模型对动态 patch size 的适应能力。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaPatch/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;早期的多模态大模型（如 LLaVA、InternVL 系列）通常依赖&lt;strong&gt;固定分辨率的视觉编码器&lt;/strong&gt;：要么将输入图像统一 resize 到某个标准尺寸，要么先切分成多个 tile 再分别处理。这类预处理不可避免地会改变原始视觉内容，对于需要保留细粒度细节或整体结构的任务（例如图表、示意图）尤其不利。&lt;/p&gt;
+&lt;p&gt;受 NaViT 启发，近期工作开始直接保留图像的&lt;strong&gt;原生分辨率&lt;/strong&gt;，并将图像划分为固定大小的 non-overlapping patches，使 token 数量随分辨率线性增长。随后通过 &lt;strong&gt;sequence packing&lt;/strong&gt; 将多张图像的 token 序列拼接为一个长序列，并通过 block-diagonal attention mask 保证不同图像之间不互相注意。Qwen2.5-VL、Ovis2.5、Kimi-VL 等 SOTA 模型均采用了这一范式，并宣称支持任意分辨率输入。&lt;/p&gt;
+&lt;p&gt;然而，本文通过系统性实验指出：&lt;strong&gt;当前 AnyRes 设计并未真正实现“原生分辨率鲁棒性”&lt;/strong&gt;。在跨越大范围像素预算的测试中，模型性能在不同分辨率区间显著波动，且在极低或极高分辨率下普遍退化。&lt;/p&gt;
+&lt;p&gt;论文进一步分析发现，问题的根源在于：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;在&lt;strong&gt;低分辨率或高信息密度图像&lt;/strong&gt;中，大 patch 会过于粗糙，无法捕获细节；&lt;/li&gt;
+&lt;li&gt;在&lt;strong&gt;高分辨率或低信息密度图像&lt;/strong&gt;中，小 patch 过于局部，导致全局上下文建模能力不足。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;因此，&lt;strong&gt;patch size 与分辨率、信息密度之间的失配&lt;/strong&gt;，是 AnyRes 性能不稳定的主要架构性原因。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
