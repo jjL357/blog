@@ -6,8 +6,17 @@
     <description>Recent content in Token Pruning on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 27 Dec 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 28 Feb 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/token-pruning/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
+      <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
+      <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
+      <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR 2026&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; &lt;a href=&#34;https://zhuanlan.zhihu.com/p/1944299907109348831&#34;&gt;https://zhuanlan.zhihu.com/p/1944299907109348831&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
       <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>

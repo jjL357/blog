@@ -6,8 +6,17 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 02 Feb 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 28 Feb 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
+      <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
+      <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
+      <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR 2026&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; &lt;a href=&#34;https://zhuanlan.zhihu.com/p/1944299907109348831&#34;&gt;https://zhuanlan.zhihu.com/p/1944299907109348831&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS</title>
       <link>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</link>
