@@ -6,8 +6,41 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 28 Feb 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 01 Mar 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY</title>
+      <link>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
+      <pubDate>Sun, 01 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;ICLR&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/ZhengyaoFang/PruneSID&#34;&gt;https://github.com/ZhengyaoFang/PruneSID&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-abstract&#34;&gt;1. Abstract&lt;/h2&gt;
+&lt;p&gt;视觉-语言模型（VLMs）因产生大量视觉 token 导致计算效率低下。先前研究指出大比例 visual tokens 存在冗余，但现有压缩方法难以在“重要性（importance）保存”和“信息多样性（diversity）保留”之间取得良好平衡。为了解决该问题，论文提出 &lt;strong&gt;PRUNESID&lt;/strong&gt;：一种&lt;strong&gt;无训练（training-free）&lt;/strong&gt;、&lt;strong&gt;协同重要性—多样性（Synergistic Importance–Diversity）&lt;/strong&gt; 的 two-stage 框架，包含：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;PSCA（Principal Semantic Components Analysis）&lt;/strong&gt;：将 tokens 按语义主方向聚类成多个语义相干组（semantic groups），确保概念覆盖。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;组内 NMS（Intra-group Non-Maximum Suppression）&lt;/strong&gt;：在每组内按相似度动态阈值去重，保留最具代表性的 token。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;此外，PRUNESID 引入 &lt;strong&gt;信息感知动态压缩率（information-aware dynamic compression ratio）&lt;/strong&gt;，根据图像复杂度动态分配 token 预算，从而在多样化场景上实现更优的平均信息保留。大量实验表明：在 LLaVA-1.5 上仅保留 $11.1%$ token（64 tokens）时可达 $96.3%$ 精度；在极端压缩（$5.6%$）下在 LLaVA-NeXT 仍达 $92.8%$，相较此前方法有显著提升，并在 prefilling 时间上有 $7.8\times$ 的加速。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;现状：主流 VLM（如 LLaVA-1.5 与 LLaVA-NeXT）通常为每张图像产生数百到几千 visual tokens（例如 576 或 2880），远超捕捉图像语义所需。相关研究表明约 $70%$ tokens 可丢弃而对准确率影响甚微。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;两类现有方案：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Attention-guided selection&lt;/strong&gt;：依据 attention score 保留高 attention token（优点：保留局部显著性；缺点：忽视背景与多样性，可能重保重复区域）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Duplication-aware（相似性/去重）方法&lt;/strong&gt;：依据相似性去重，提升多样性，但可能丢弃语义重要但相似的高 attention token。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;本文关键观点：设计一个 &lt;strong&gt;组引导（group-guided）&lt;/strong&gt; 的训练免费方法，使得“重要性”和“多样性”得到协同优化。通过 PSCA 先将 tokens 按语义方向分组，再在组内用 NMS 去冗余，同时用信息感知机制在图像间自动分配 token 预算，从而在极端压缩下仍保留丰富语义。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
       <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
