@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>MoE on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/moe/</link>
+    <link>http://localhost:1313/blog/tags/moe/</link>
     <description>Recent content in MoE on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Mon, 10 Nov 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/moe/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/moe/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders </title>
-      <link>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</link>
+      <link>http://localhost:1313/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/MoVE-KD/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/MoVE-KD/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;CVPR 2025&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github：&lt;/strong&gt; &lt;a href=&#34;https://github.com/hey-cjj/MoVE-KD&#34;&gt;https://github.com/hey-cjj/MoVE-KD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -32,7 +32,7 @@
 MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压缩进单一学生模型中，同时解决知识冲突与效率问题。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/MoVE-KD/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/MoVE-KD/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;MoVE-KD 的提出灵感来自 ViT 的 token 扩展方法 [9]，其核心思想是利用注意力机制引导多教师的知识蒸馏过程，通过 [CLS] token 判断视觉 token 的重要性，并分配动态权重，从而“选择性”吸收有价值的信息。&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;

@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="noindex, nofollow">
+<title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models | JJ&#39;s Blog</title>
+<meta name="keywords" content="MLLM, Token Pruning, Paper Note">
+<meta name="description" content="
+Conference: CVPR&#39;26
+Github: https://github.com/xuyang-liu16/V2Drop
+
+Abstract
+Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。
+
+1. Introduction
+
+
+
+Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。">
+<meta name="author" content="">
+<link rel="canonical" href="http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
+<link crossorigin="anonymous" href="http://localhost:1313/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="http://localhost:1313/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="http://localhost:1313/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="http://localhost:1313/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models
+    </h1>
+    <div class="post-meta"><span title='2026-03-23 00:00:00 +0000 UTC'>March 23, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/title.png"></p>
+<p><strong>Conference:</strong> <strong>CVPR'26</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/xuyang-liu16/V2Drop">https://github.com/xuyang-liu16/V2Drop</a></p>
+<hr>
+<h2 id="abstract">Abstract<a hidden class="anchor" aria-hidden="true" href="#abstract">#</a></h2>
+<p>Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：<strong>positional bias</strong> 和 <strong>incompatibility with efficient operators</strong>，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了<strong>首个从动态 token variation 视角出发的方法</strong>，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 <strong>Variation-aware Vision Token Dropping（V2Drop）</strong>，在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 <strong>94.0%</strong> 和 <strong>98.6%</strong>，同时将 LLM generation latency 分别降低了 <strong>31.5%</strong> 和 <strong>74.2%</strong>。</p>
+<hr>
+<h2 id="1-introduction">1. Introduction<a hidden class="anchor" aria-hidden="true" href="#1-introduction">#</a></h2>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure2.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure3.png"></p>
+<p>Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。</p>
+<p>为缓解这一问题，已有大量 token compression 方法被提出，用于去除冗余视觉 token 并尽可能保留性能。其中，<strong>Inner-LLM compression</strong> 因其 architecture-agnostic 和 plug-and-play 的性质受到特别关注：这类方法不需要修改主干结构，而是在 LLM forward 过程中进行 token 剪枝或合并。典型方法往往依赖 LLM attention weights 来选择“重要 token”，但作者强调，这类策略存在根本缺陷。</p>
+<p>作者进一步分析了 attention-guided 方法（如 FastV、SparseVLM）与 variation-aware evaluation 的 token 保留分布：前者会显著偏向保留视觉序列末端 token，而不管内容是否真的重要；后者则能产生更自然、更均匀的空间分布。Figure 2 和 Figure 3 共同说明了这一点：attention-guided 方法表现出<strong>information-agnostic positional bias</strong>，即高重要性偏置与内容无关，更多与 token 位置相关；而 variation-aware 方法则更符合视觉语义的实际分布。这个偏差会导致早期重要 token 被误删，进而加剧 multimodal hallucination。与此同时，attention weight 的显式计算还会与 FlashAttention 等 efficient operators 冲突，造成额外显存开销，甚至峰值显存高于不压缩模型。</p>
+<p>基于上述问题，作者提出了一个核心问题：<strong>是否可以不依赖间接 attention signal，而是直接利用 token 在模型内部的行为变化来判断其重要性？</strong> 为此，本文从 token variation 的角度重新审视“什么才是真正重要的视觉 token”。作者的核心洞察是：<strong>真正参与 LLM 计算的 token，会在层与层之间表现出更显著的表征变化；而作用较小的 token 则在多个层之间保持相对静态。</strong> 因此，作者定义这类变化缓慢的 token 为 lazy tokens，并提出 V2Drop：通过识别并逐步丢弃 lazy tokens，实现高效的 LVLM 推理加速，同时避免 positional bias，并保持与 efficient operators 的兼容性。</p>
+<p>最终，V2Drop 在图像理解和视频理解上都取得了良好的 performance-efficiency trade-off：图像理解任务上达到 <strong>1.30×</strong> 加速，视频理解任务上达到 <strong>1.87×</strong> 加速。作者总结了三点贡献：第一，系统性分析 token variation pattern，证明 variation magnitude 与任务相关性和 token 重要性相关；第二，提出 variation-aware token dropping，在不依赖 attention weights 的情况下实现 progressive dropping；第三，通过大量实验验证其在不同 LVLM 和 VideoLLM 上均能兼顾准确率与效率。</p>
+<hr>
+<h2 id="2-related-work">2. Related Work<a hidden class="anchor" aria-hidden="true" href="#2-related-work">#</a></h2>
+<h3 id="large-vision-language-models">Large Vision-Language Models<a hidden class="anchor" aria-hidden="true" href="#large-vision-language-models">#</a></h3>
+<p>LVLM 通常采用 <strong>ViT-Projector-LLM</strong> 范式：视觉编码器首先将图像或视频编码为视觉 embeddings，再通过 projector（通常是两层 MLP）映射为 vision tokens，最后交由 LLM 进行文本生成。近年来，LVLM 为适应更高分辨率输入和更长视频序列，开始引入动态裁剪、native resolution 和长上下文建模等策略，例如 InternVL-3、LLaVA-OneVision、Qwen2-VL、Seed1.5-VL、VideoLLaMA3 等。但这些改进也使 visual token 数量进一步增长，导致二次复杂度问题更加严重，影响 scalability 和 practical deployment。</p>
+<h3 id="token-compression-for-lvlms">Token Compression for LVLMs<a hidden class="anchor" aria-hidden="true" href="#token-compression-for-lvlms">#</a></h3>
+<p>Token compression 的目标是直接缩短 token 序列，从而提升模型效率。相关工作从 training-aware paradigm 逐步发展到 training-free 方法，后者更适合 plug-and-play 式的推理加速。作者将方法分为两类：</p>
+<ol>
+<li><strong>Pre-LLM compression</strong>：在进入 LLM 之前对视觉 token 进行压缩；</li>
+<li><strong>Inner-LLM compression</strong>：在 LLM forward 过程中完成压缩。</li>
+</ol>
+<p>然而，大多数 Inner-LLM 方法依赖 attention weights，因而存在两个问题：一是无法与 FlashAttention 等 efficient attention operator 兼容，导致显存峰值上升；二是容易产生 positional bias，偏向保留序列末端 token，而忽略真正关键的视觉区域。作者因此转向<strong>低 variation token 的渐进式丢弃</strong>，以实现无需 attention weights 的训练自由加速。</p>
+<hr>
+<h2 id="3-methodology">3. Methodology<a hidden class="anchor" aria-hidden="true" href="#3-methodology">#</a></h2>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure5.png"></p>
+<h3 id="31-preliminary-lvlms">3.1. Preliminary: LVLMs<a hidden class="anchor" aria-hidden="true" href="#31-preliminary-lvlms">#</a></h3>
+<p>LVLM 主要遵循 “ViT-Projector-LLM” 架构。给定图像 $I \in \mathbb{R}^{H \times W \times 3}$ 或视频 $V = {v_i}<em>{i=1}^{T} \in \mathbb{R}^{T \times H \times W \times 3}$，其处理流程可概括为三步：
+(i) <strong>Visual encoder（ViT）</strong> 将输入映射为视觉 embeddings $E \in \mathbb{R}^{N \times D}$（图像）或 $E = {e_i}</em>{i=1}^{T} \in \mathbb{R}^{T \times N \times D}$（视频）；
+(ii) <strong>Projector（通常为 2-layer MLP）</strong> 将 embeddings 映射为 vision tokens $F_v \in \mathbb{R}^{M \times D&rsquo;}$（图像）或 $F_v = {f_v^i}_{i=1}^{T} \in \mathbb{R}^{T \times M \times D&rsquo;}$（视频），其中 $M \le N$；
+(iii) <strong>LLM decoder</strong> 在 prefilling 阶段同时处理视觉 token 和文本 token $F_t$，并在 decoding 阶段自回归地产生答案。生成过程可写为：</p>
+<p>$$
+p(Y \mid F_v, F_t)=\prod_{j=1}^{L} p\left(y_j \mid F_v, F_t, Y_{1:j-1}\right),
+$$</p>
+<p>其中 $Y={y_j}_{j=1}^{L}$ 表示最终生成 token 序列。这里作者强调，不同 LVLM 的 token 数变化存在差异：例如 LLaVA-1.5 在 projector 后 token 数通常保持不变（$M=N$），而部分 VideoLLM 会为了效率在 projector 阶段提前压缩 token（$M&lt;N$）。这也解释了为什么 token compression 在不同模型上的作用位置和收益会不同。</p>
+<h3 id="32-token-variation-in-lvlms">3.2. Token Variation in LVLMs<a hidden class="anchor" aria-hidden="true" href="#32-token-variation-in-lvlms">#</a></h3>
+<p>为克服 attention-guided 的局限，作者从“外部信号”转向“内部属性”，重新思考 token importance 的本质：<strong>一个视觉 token 之所以重要，是因为它在 LLM 处理过程中持续参与并引发表征变化。</strong> 与之相对，变化较小的 token 更像是“lazy token”，对最终输出贡献有限。</p>
+<h4 id="token-variation-metrics">Token Variation Metrics<a hidden class="anchor" aria-hidden="true" href="#token-variation-metrics">#</a></h4>
+<p>作者定义了相邻 LLM transformer layers 之间的 token variation，并使用三种指标衡量：L1 Distance、L2 Distance 和 Cosine Similarity。对于第 $l$ 层的第 $i$ 个视觉 token $f_i^{(l)}$，variation 记为：</p>
+<p>$$
+\text{Var}(f_i^{(l-1)}, f_i^{(l)})=
+\begin{cases}
+|f_i^{(l)}-f_i^{(l-1)}|_1, &amp; \text{L1 Distance} <br>
+|f_i^{(l)}-f_i^{(l-1)}|_2, &amp; \text{L2 Distance} <br>
+1-\dfrac{f_i^{(l)} \cdot f_i^{(l-1)}}{|f_i^{(l)}|_2 |f_i^{(l-1)}|_2}, &amp; \text{Cosine Similarity}
+\end{cases}
+$$</p>
+<p>其中，数值越大表示 token 在相邻层之间表征变化越显著。三种指标分别反映不同类型的变化：L1 更关注稀疏变化，L2 反映整体幅度变化，Cosine Similarity 则关注方向变化。作者默认在实验中采用 <strong>L2 distance</strong>，并在消融实验中验证其他指标也同样有效。</p>
+<h4 id="variation-relevance-relationship">Variation-Relevance Relationship<a hidden class="anchor" aria-hidden="true" href="#variation-relevance-relationship">#</a></h4>
+<p>Figure 4 给出定性证据：在 LLaVA-1.5-7B 第三层 transformer 中，具有显著 variation 的 token（高 L1/L2、低 cosine similarity）与答案相关区域高度一致，例如 “Are these bottles of pepsi?” 中与 pepsi 瓶子相关的 token，以及 “What number is on the player&rsquo;s jersey?” 中与球衣数字相关的 token（如答案 22 对应区域）。相反，variation 较小的 token 多落在任务无关区域。</p>
+<p>更重要的是，Figure 4 展示了两个不同空间位置的例子：一个答案区域位于图像中部，另一个位于底部，对应的 token index 也处于不同区间。但三种 variation 指标都能准确识别这些语义关键区域，说明 variation 机制具有<strong>spatial-agnostic</strong> 能力，不依赖 token 在序列中的绝对位置。这个性质恰好克服了 attention-guided 方法的 positional bias。作者由此提出：<strong>高 variation token 正在 actively participating in reasoning process，因此应被保留；低 variation token 代表稳定、贡献有限的 lazy tokens，可安全丢弃。</strong></p>
+<h3 id="33-variation-aware-vision-token-dropping">3.3. Variation-aware Vision Token Dropping<a hidden class="anchor" aria-hidden="true" href="#33-variation-aware-vision-token-dropping">#</a></h3>
+<p>基于上述观察，作者提出 <strong>V2Drop</strong>：在 LLM 推理过程中，按 layer 逐步识别并丢弃 low-variation 的 vision tokens，同时保留语义上更关键的 token。</p>
+<p>V2Drop 的核心设置是：给定 LLM 中的 vision tokens 序列 $F_v \in \mathbb{R}^{M \times D&rsquo;}$，采用一个 <strong>multi-stage progressive dropping</strong> 策略，在预先选定的三处 LLM 层上进行 pruning。作者将这三层设计为覆盖 shallow / middle / deep 三个阶段，以在压缩率与性能保持之间取得平衡。Figure 5 展示了整体框架：V2Drop 在相邻层间比较 token variation，并在若干关键层进行逐步丢弃。</p>
+<p>在第 $k$ 个 pruning layer $l_k \in L$，V2Drop 依次执行三个步骤：</p>
+<h4 id="i-variation-computation">(i) Variation Computation<a hidden class="anchor" aria-hidden="true" href="#i-variation-computation">#</a></h4>
+<p>对于层 $l_k$ 上的每个 token $f_i^{(l_k)}$，计算它相对于前一层 $l_k-1$ 的变化幅度：</p>
+<p>$$
+S^{(l_k)}=\left{\text{Var}\left(f_i^{(l_k-1)}, f_i^{(l_k)}\right)\right}<em>{i=1}^{M</em>{l_k}},
+$$</p>
+<p>其中 $M_{l_k}$ 表示该层当前剩余的视觉 token 数。默认使用 L2 distance，因为实验表明它在性能与效率之间取得较好平衡。作者强调，该步骤只需要简单的向量差分与范数计算，不需要重新计算 attention weights，因此在实现上非常轻量。</p>
+<h4 id="ii-token-ranking-and-selection">(ii) Token Ranking and Selection<a hidden class="anchor" aria-hidden="true" href="#ii-token-ranking-and-selection">#</a></h4>
+<p>接着，将所有视觉 token 按 variation score 从大到小排序，保留 top-$K_{l_k}$ 个 variation 最大的 token：</p>
+<p>$$
+\hat{F}<em>v^{l_k} = \text{TopK}(F_v^{l_k}, S^{(l_k)}, K</em>{l_k}).
+$$</p>
+<p>这一机制的关键在于：<strong>variation 大的 token 更可能承载与当前推理问题相关的关键信息，因此应被保留；variation 小的 token 更可能是冗余或无关信息，因此可被丢弃。</strong> 由于排名依据来自 token 自身的动态变化，而非 attention scores，因此不会出现“总偏向序列末尾 token”的问题。</p>
+<h4 id="iii-token-reorganization">(iii) Token Reorganization<a hidden class="anchor" aria-hidden="true" href="#iii-token-reorganization">#</a></h4>
+<p>保留下来的 token 会被重组为后续层的输入，且满足 $K_{l_k} &lt; M_{l_k}$，从而完成 progressive visual token dropping。作者使用一个预定义的压缩日程：</p>
+<p>$$
+M \rightarrow K_a \rightarrow K_b \rightarrow K_c,
+$$</p>
+<p>其中 $K_a, K_b, K_c$ 分别是三个阶段的压缩目标，可用于调节 performance-efficiency trade-off。也就是说，V2Drop 并非一次性把 token 大幅砍掉，而是在模型的浅层、中层、深层逐步压缩，以尽量减少早期误删导致的信息损失。作者在消融实验中证明，<strong>progressive dropping 明显优于 one-time dropping</strong>，同时不同 pruning layer 的选择也较为鲁棒。</p>
+<p>从方法设计上看，V2Drop 的关键优势是两点：第一，它不再使用 attention weights，所以天然避免 attention-guided 的 positional bias；第二，它与 FlashAttention 等 efficient operators 完全兼容，因为不需要为 token selection 额外保留昂贵的 attention map。</p>
+<h3 id="34-theoretical-analysis">3.4. Theoretical Analysis<a hidden class="anchor" aria-hidden="true" href="#34-theoretical-analysis">#</a></h3>
+<p>作者通过一阶分析建立了 token variation 与模型输出变化之间的理论联系，从而证明 variation magnitude 可以作为 token importance 的有效 proxy。</p>
+<h4 id="341-problem-formulation">3.4.1. Problem Formulation<a hidden class="anchor" aria-hidden="true" href="#341-problem-formulation">#</a></h4>
+<p>设第 $t$ 层的 token 表示为：</p>
+<p>$$
+X^{(t)}={x_1^{(t)}, \ldots, x_n^{(t)}}\subset \mathbb{R}^{d}.
+$$</p>
+<p>定义 token $j$ 的层间 variation 为：</p>
+<p>$$
+\Delta x_j^{(t)} = x_j^{(t+1)} - x_j^{(t)}.
+$$</p>
+<p>令 $f:\mathbb{R}^{n \times d} \rightarrow \mathbb{R}^{k}$ 表示从第 $t+1$ 层表示到最终输出的映射，则 token $j$ 关于输出的 Jacobian 为：</p>
+<p>$$
+J_j = \frac{\partial f}{\partial x_j^{(t+1)}} \in \mathbb{R}^{k \times d}.
+$$</p>
+<p>这个建模方式的直观含义是：我们想知道某个 token 在层间发生变化后，会对最终输出带来多大影响。</p>
+<h4 id="342-variation-impact-theorem">3.4.2. Variation-Impact Theorem<a hidden class="anchor" aria-hidden="true" href="#342-variation-impact-theorem">#</a></h4>
+<p><strong>Theorem 1.</strong> 在 $f$ 满足温和光滑性条件下，token $j$ 引起的输出变化满足：</p>
+<p>$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$</p>
+<p>这里 $|\cdot|_{\text{op}}$ 是 operator norm，$\Delta f_j$ 表示仅 token $j$ 从第 $t$ 层变化到第 $t+1$ 层时引起的输出变化。</p>
+<p>证明思路是对 $f$ 在 $x_j^{(t)}$ 附近作一阶 Taylor 展开：</p>
+<p>$$
+f(\ldots, x_j^{(t+1)}, \ldots)
+= f_j^{(t)} + J_j \Delta x_j^{(t)} + O(|\Delta x_j^{(t)}|^2)
+= f_j^{(t)} + J_j \Delta x_j^{(t)} + R_j,
+$$</p>
+<p>其中 $R_j$ 是高阶余项。再利用三角不等式与 operator norm 的定义：</p>
+<p>$$
+|\Delta f_j| \le |J_j \Delta x_j^{(t)}| + |R_j|
+\le |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}| + |R_j|.
+$$</p>
+<p>当 $|\Delta x_j^{(t)}|$ 足够小时，二阶项可忽略，于是得到近似关系：</p>
+<p>$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$</p>
+<p>这说明：token 在层间变化越大，其对输出的影响通常越大。</p>
+<h4 id="343-implications">3.4.3. Implications<a hidden class="anchor" aria-hidden="true" href="#343-implications">#</a></h4>
+<p>基于上述定理，作者得到一个 corollary：若 token 的 Jacobian operator norm 具有下界 $|J_j|_{\text{op}} \ge \mu &gt; 0$，则更大的 variation 意味着更大的 output influence，因此 variation 可以作为计算高效的 token importance proxy。形式上有：</p>
+<p>$$
+|\Delta f_j| \gtrsim \mu \cdot |\Delta x_j^{(t)}|.
+$$</p>
+<p>这意味着，只要 token 的梯度影响不退化，选择 variation 小的 token 进行 dropping，就近似等价于选择对输出扰动最小的一组 token 删除。作者进一步在附录中说明，这一假设在 Transformer 结构中是合理的：残差连接、layer normalization 以及 softmax attention 都有助于维持稳定的梯度传播。</p>
+<hr>
+<h2 id="4-experiments">4. Experiments<a hidden class="anchor" aria-hidden="true" href="#4-experiments">#</a></h2>
+<p>作者在多个 LVLM 和 VideoLLM 上进行了全面实验，涵盖 10 个多模态理解 benchmark，并在附录中给出了实现细节。实验结论总体上支持两个核心主张：第一，variation-aware token dropping 在性能上优于 attention-guided baselines；第二，它在效率上与 efficient operators 高度兼容，尤其适合视频场景和高分辨率输入。</p>
+<h3 id="computational-overhead">Computational Overhead<a hidden class="anchor" aria-hidden="true" href="#computational-overhead">#</a></h3>
+<p>作者首先评估了 V2Drop 的计算开销。由于只在三层进行 pruning，因此计算成本极低。对 $M$ 个、维度为 $D&rsquo;$ 的 token 计算 L2 distance 的代价约为 $3MD&rsquo;$ FLOPs；以 LLaVA-1.5 中 $M=576, D&rsquo;=4096$ 为例，单层约为 7M FLOPs，仅占单个 attention layer（约 32B FLOPs）的 0.022%。三层总开销约 21M FLOPs，仅占完整 forward pass 的 0.002%。Table 5 也验证了这一点：V2Drop 和 random dropping 的 throughput 几乎一致，说明 variation 计算几乎不构成额外瓶颈。</p>
+<hr>
+<h3 id="41-main-comparisons">4.1. Main Comparisons<a hidden class="anchor" aria-hidden="true" href="#41-main-comparisons">#</a></h3>
+<h4 id="image-understanding">Image Understanding<a hidden class="anchor" aria-hidden="true" href="#image-understanding">#</a></h4>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table2&3.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table9.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure6.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure7.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure8.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure9.png"></p>
+<p>Table 1 比较了 V2Drop 与多种 token compression 方法在 LLaVA-1.5-7B 上的图像理解性能，分别在保留 192、128、64 个 token 的情况下进行对比。作者重点强调了三个结论：</p>
+<ol>
+<li><strong>State-of-the-art performance</strong>：在保留 192 tokens（即减少 66.7%）时，V2Drop 的平均性能达到 <strong>97.6%</strong>，比第二名 PDrop 高 <strong>1.6%</strong>；即使压缩更激进，V2Drop 依旧保持稳定。</li>
+<li><strong>Efficient operator compatibility</strong>：V2Drop 不需要显式 attention score 计算，因此可以无缝接入 FlashAttention，且在峰值显存和总时延上接近 random dropping。</li>
+<li><strong>Scalability</strong>：在 Qwen2-VL-7B 上，V2Drop 在高分辨率和 variable-resolution 输入下也保持领先，说明方法对先进模型具有良好迁移性。</li>
+</ol>
+<p><strong>Table 1. Comparison with other token compression methods on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">SQA</th>
+          <th style="text-align: right">TextVQA</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">Average</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, 576 Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 192 Tokens (↓66.7%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">65.2</td>
+          <td style="text-align: right">52.1</td>
+          <td style="text-align: right">72.4</td>
+          <td style="text-align: right">1563</td>
+          <td style="text-align: right">60.5</td>
+          <td style="text-align: right">88.8%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">64.8</td>
+          <td style="text-align: right">1612</td>
+          <td style="text-align: right">61.2</td>
+          <td style="text-align: right">88.2%</td>
+      </tr>
+      <tr>
+          <td>HiRED</td>
+          <td style="text-align: right">58.7</td>
+          <td style="text-align: right">68.4</td>
+          <td style="text-align: right">47.4</td>
+          <td style="text-align: right">82.8</td>
+          <td style="text-align: right">1737</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">93.6%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">67.9</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">71.3</td>
+          <td style="text-align: right">1632</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">90.3%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">57.6</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">83.6</td>
+          <td style="text-align: right">1721</td>
+          <td style="text-align: right">62.5</td>
+          <td style="text-align: right">95.9%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">1766</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>58.5</strong></td>
+          <td style="text-align: right"><strong>69.3</strong></td>
+          <td style="text-align: right">55.6</td>
+          <td style="text-align: right"><strong>85.1</strong></td>
+          <td style="text-align: right"><strong>1826</strong></td>
+          <td style="text-align: right"><strong>63.7</strong></td>
+          <td style="text-align: right"><strong>97.6%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 128 Tokens (↓77.8%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">52.4</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">49.1</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">1343</td>
+          <td style="text-align: right">53.3</td>
+          <td style="text-align: right">80.4%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">49.6</td>
+          <td style="text-align: right">60.2</td>
+          <td style="text-align: right">50.6</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">1490</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">81.7%</td>
+      </tr>
+      <tr>
+          <td>HiRED</td>
+          <td style="text-align: right">57.2</td>
+          <td style="text-align: right">68.1</td>
+          <td style="text-align: right">46.1</td>
+          <td style="text-align: right">79.8</td>
+          <td style="text-align: right">1710</td>
+          <td style="text-align: right">61.5</td>
+          <td style="text-align: right">91.6%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">53.3</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">67.2</td>
+          <td style="text-align: right">1554</td>
+          <td style="text-align: right">58.1</td>
+          <td style="text-align: right">87.9%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">56.0</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.9</td>
+          <td style="text-align: right">80.5</td>
+          <td style="text-align: right">1696</td>
+          <td style="text-align: right">60.0</td>
+          <td style="text-align: right">93.2%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">56.0</td>
+          <td style="text-align: right">68.3</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">1644</td>
+          <td style="text-align: right">61.1</td>
+          <td style="text-align: right">93.6%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>56.3</strong></td>
+          <td style="text-align: right"><strong>68.8</strong></td>
+          <td style="text-align: right">53.8</td>
+          <td style="text-align: right">80.9</td>
+          <td style="text-align: right"><strong>1712</strong></td>
+          <td style="text-align: right"><strong>61.8</strong></td>
+          <td style="text-align: right"><strong>94.0%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 64 Tokens (↓88.9%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">48.6</td>
+          <td style="text-align: right">50.0</td>
+          <td style="text-align: right">45.3</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">1138</td>
+          <td style="text-align: right">43.7</td>
+          <td style="text-align: right">69.7%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">46.1</td>
+          <td style="text-align: right">51.1</td>
+          <td style="text-align: right">47.8</td>
+          <td style="text-align: right">48.0</td>
+          <td style="text-align: right">1256</td>
+          <td style="text-align: right">48.0</td>
+          <td style="text-align: right">71.3%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">51.9</td>
+          <td style="text-align: right">68.1</td>
+          <td style="text-align: right">54.0</td>
+          <td style="text-align: right">65.3</td>
+          <td style="text-align: right">1549</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">62.2</td>
+          <td style="text-align: right">51.8</td>
+          <td style="text-align: right">75.1</td>
+          <td style="text-align: right">1505</td>
+          <td style="text-align: right">56.2</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">41.9</td>
+          <td style="text-align: right">68.6</td>
+          <td style="text-align: right">45.9</td>
+          <td style="text-align: right">55.9</td>
+          <td style="text-align: right">1092</td>
+          <td style="text-align: right">33.3</td>
+          <td style="text-align: right">70.1%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right">50.5</td>
+          <td style="text-align: right"><strong>68.9</strong></td>
+          <td style="text-align: right"><strong>51.8</strong></td>
+          <td style="text-align: right"><strong>75.1</strong></td>
+          <td style="text-align: right"><strong>1470</strong></td>
+          <td style="text-align: right"><strong>55.2</strong></td>
+          <td style="text-align: right"><strong>86.9%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>表格说明：在 192 tokens 时，V2Drop 在 GQA、POPE、MME、MMBench 上都很强；在 128 tokens 时总体依旧稳；在极限 64 tokens 时，平均表现明显优于传统压缩方法，说明 variation-based selection 在更强压缩下仍能保留关键语义。</p>
+<h4 id="qwen2-vl-7b-image-understanding">Qwen2-VL-7B Image Understanding<a hidden class="anchor" aria-hidden="true" href="#qwen2-vl-7b-image-understanding">#</a></h4>
+<p>Table 2 将方法推广到 Qwen2-VL-7B，实验覆盖 AI2D、MMStar、SQA、POPE、MME、MMBench。V2Drop 在 66.7% token reduction 和 77.8% token reduction 下都优于 FastV 与 DART，说明该方法对更强大的 native-resolution LVLM 仍然有效。尤其值得注意的是，V2Drop 在 POPE 上的表现非常稳定，说明它不仅能保留语义信息，也能减少 object hallucination 风险。</p>
+<p><strong>Table 2. Comparison with Qwen2-VL-7B across multiple image understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">AI2D</th>
+          <th style="text-align: right">MMStar</th>
+          <th style="text-align: right">SQA</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">MMB</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>Qwen2-VL-7B</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">84.7</td>
+          <td style="text-align: right">86.1</td>
+          <td style="text-align: right">2317</td>
+          <td style="text-align: right">80.5</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Token Reduction (↓66.7%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">76.1</td>
+          <td style="text-align: right">52.8</td>
+          <td style="text-align: right">80.0</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">2130</td>
+          <td style="text-align: right">76.1</td>
+          <td style="text-align: right">92.9%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">78.0</td>
+          <td style="text-align: right">53.4</td>
+          <td style="text-align: right">81.4</td>
+          <td style="text-align: right">83.9</td>
+          <td style="text-align: right">2245</td>
+          <td style="text-align: right">78.9</td>
+          <td style="text-align: right">95.5%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>78.0</strong></td>
+          <td style="text-align: right"><strong>53.5</strong></td>
+          <td style="text-align: right"><strong>81.6</strong></td>
+          <td style="text-align: right"><strong>87.2</strong></td>
+          <td style="text-align: right"><strong>2224</strong></td>
+          <td style="text-align: right"><strong>78.7</strong></td>
+          <td style="text-align: right"><strong>96.0%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Token Reduction (↓77.8%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">73.8</td>
+          <td style="text-align: right">49.3</td>
+          <td style="text-align: right">78.3</td>
+          <td style="text-align: right">79.2</td>
+          <td style="text-align: right">2031</td>
+          <td style="text-align: right">74.1</td>
+          <td style="text-align: right">89.5%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">74.4</td>
+          <td style="text-align: right">48.5</td>
+          <td style="text-align: right">79.6</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">2175</td>
+          <td style="text-align: right">77.3</td>
+          <td style="text-align: right">91.8%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>75.6</strong></td>
+          <td style="text-align: right"><strong>48.7</strong></td>
+          <td style="text-align: right"><strong>78.9</strong></td>
+          <td style="text-align: right"><strong>85.1</strong></td>
+          <td style="text-align: right"><strong>2173</strong></td>
+          <td style="text-align: right"><strong>75.8</strong></td>
+          <td style="text-align: right"><strong>92.3%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h4 id="video-understanding">Video Understanding<a hidden class="anchor" aria-hidden="true" href="#video-understanding">#</a></h4>
+<p>作者将 V2Drop 扩展到视频理解任务，并使用 LLaVA-OV-7B 与 Qwen2-VL-7B 进行评估。Table 3 和 Table 4 给出整体性能，Table 5 给出效率指标。结论非常明确：V2Drop 在视频场景下比图像场景更有优势，因为视频 token 更长、更冗余，而 variation-based dropping 更适合在长序列中识别那些真正影响推理的 token。</p>
+<p>在 Qwen2-VL-7B 上，V2Drop 在 20% average retention ratio 下取得 <strong>93.3%</strong> 的平均性能，显著优于 FastV 的 <strong>81.3%</strong> 和 DART 的 <strong>90.5%</strong>。在 LLaVA-OV-7B 上，V2Drop 在 25% retention 下达到 <strong>98.6%</strong>，在 15% retention 下也仍达到 <strong>93.9%</strong>，并且明显优于 FastV、SparseVLM、PDrop 和 DyCoke。尤其在 <strong>VideoMME (Long)</strong> 上，V2Drop 的优势更明显，因为它缓解了 VideoLLM 对后期帧 token 的偏置，避免把注意力过度集中在后续 token。</p>
+<p><strong>Table 3. Performance comparison with Qwen2-VL-7B across video understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MVBench Overall</th>
+          <th style="text-align: right">VideoMME Short</th>
+          <th style="text-align: right">VideoMME Medium</th>
+          <th style="text-align: right">VideoMME Long</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>Qwen2-VL-7B</td>
+          <td style="text-align: right">66.1</td>
+          <td style="text-align: right">57.7</td>
+          <td style="text-align: right">70.4</td>
+          <td style="text-align: right">54.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 20%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">50.9</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">45.7</td>
+          <td style="text-align: right">81.3%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">58.9</td>
+          <td style="text-align: right">53.0</td>
+          <td style="text-align: right">64.1</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">90.5%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>62.1</strong></td>
+          <td style="text-align: right"><strong>53.5</strong></td>
+          <td style="text-align: right"><strong>63.7</strong></td>
+          <td style="text-align: right"><strong>51.0</strong></td>
+          <td style="text-align: right"><strong>93.3%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Table 4. Performance comparison with LLaVA-OV-7B across video understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MVBench Overall</th>
+          <th style="text-align: right">VideoMME Short</th>
+          <th style="text-align: right">VideoMME Medium</th>
+          <th style="text-align: right">VideoMME Long</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-OV-7B</td>
+          <td style="text-align: right">56.9</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">70.0</td>
+          <td style="text-align: right">56.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 30%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">56.6</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.6</td>
+          <td style="text-align: right">97.7%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 25%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">55.5</td>
+          <td style="text-align: right">55.3</td>
+          <td style="text-align: right">65.0</td>
+          <td style="text-align: right">53.8</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">56.3</td>
+          <td style="text-align: right">57.3</td>
+          <td style="text-align: right">68.4</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">98.4%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">55.3</td>
+          <td style="text-align: right">55.5</td>
+          <td style="text-align: right">64.7</td>
+          <td style="text-align: right">53.1</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">49.5</td>
+          <td style="text-align: right">51.0</td>
+          <td style="text-align: right">61.1</td>
+          <td style="text-align: right">48.6</td>
+          <td style="text-align: right">87.1%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>56.4</strong></td>
+          <td style="text-align: right"><strong>57.4</strong></td>
+          <td style="text-align: right"><strong>68.2</strong></td>
+          <td style="text-align: right"><strong>54.6</strong></td>
+          <td style="text-align: right"><strong>98.6%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 15%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">51.6</td>
+          <td style="text-align: right">48.1</td>
+          <td style="text-align: right">51.4</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">52.9</td>
+          <td style="text-align: right">53.4</td>
+          <td style="text-align: right">61.0</td>
+          <td style="text-align: right">52.1</td>
+          <td style="text-align: right">92.1%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">53.2</td>
+          <td style="text-align: right">50.1</td>
+          <td style="text-align: right">58.7</td>
+          <td style="text-align: right">48.7</td>
+          <td style="text-align: right">89.6%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>53.9</strong></td>
+          <td style="text-align: right"><strong>54.4</strong></td>
+          <td style="text-align: right"><strong>64.1</strong></td>
+          <td style="text-align: right"><strong>51.4</strong></td>
+          <td style="text-align: right"><strong>93.9%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h4 id="efficiency-comparison">Efficiency Comparison<a hidden class="anchor" aria-hidden="true" href="#efficiency-comparison">#</a></h4>
+<p>Table 5 从效率角度展示了 V2Drop 的收益，包括 LLM generation latency、model generation latency、total latency、GPU peak memory 和 throughput。这里最值得强调的是：V2Drop 在降低时延的同时，并没有引入明显额外显存开销，说明 variation 计算是“低成本、高收益”的。</p>
+<ul>
+<li>在 <strong>LLaVA-1.5-7B</strong> 上，V2Drop 将 LLM generation latency 从 400s 降到 <strong>273.9s</strong>，减少 <strong>31.5%</strong>；总时延从 10:14 降到 <strong>8:06</strong>；throughput 从 7.13 提升到 <strong>9.01 item/s</strong>。</li>
+<li>在 <strong>LLaVA-OV-7B</strong> 上，V2Drop 将 LLM generation latency 从 752.2s 降到 <strong>193.8s</strong>，减少 <strong>74.2%</strong>；throughput 提升到 <strong>0.72 item/s</strong>。</li>
+<li>与 SparseVLM 相比，V2Drop 避免了显著的 peak memory 增长；作者特别指出 SparseVLM 在 MVBench 上会因 merging 策略和显式 attention computation 导致峰值显存上升 <strong>54.8%</strong>。</li>
+</ul>
+<p><strong>Table 5. Efficiency comparison on image/video understanding.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">LLM Generation↓</th>
+          <th style="text-align: right">Model Generation↓</th>
+          <th style="text-align: right">Total Latency↓</th>
+          <th style="text-align: right">GPU Peak Memory↓</th>
+          <th style="text-align: right">Throughput↑</th>
+          <th style="text-align: right">Performance↑</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, 576 Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">400</td>
+          <td style="text-align: right">558</td>
+          <td style="text-align: right">10:14</td>
+          <td style="text-align: right">15566</td>
+          <td style="text-align: right">7.13</td>
+          <td style="text-align: right">64.6</td>
+      </tr>
+      <tr>
+          <td>Random</td>
+          <td style="text-align: right">270.4 (↓32.4%)</td>
+          <td style="text-align: right">425.9 (↓23.7%)</td>
+          <td style="text-align: right">8:02 (↓21.5%)</td>
+          <td style="text-align: right">15045 (↓3.3%)</td>
+          <td style="text-align: right">9.08 (↑1.27×)</td>
+          <td style="text-align: right">59.1 (91.5%)</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">294.0 (↓26.5%)</td>
+          <td style="text-align: right">449.7 (↓19.4%)</td>
+          <td style="text-align: right">8:26 (↓17.6%)</td>
+          <td style="text-align: right">16139 (↑3.7%)</td>
+          <td style="text-align: right">8.65 (↑1.21×)</td>
+          <td style="text-align: right">56.1 (86.8%)</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">288.2 (↓28.0%)</td>
+          <td style="text-align: right">443.5 (↓20.5%)</td>
+          <td style="text-align: right">8:20 (↓18.6%)</td>
+          <td style="text-align: right">19229 (↑23.5%)</td>
+          <td style="text-align: right">8.75 (↑1.23×)</td>
+          <td style="text-align: right">60.0 (92.9%)</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">279.6 (↓30.1%)</td>
+          <td style="text-align: right">429.7 (↓23.0%)</td>
+          <td style="text-align: right">8:09 (↓20.3%)</td>
+          <td style="text-align: right">15197 (↓2.3%)</td>
+          <td style="text-align: right">8.95 (↑1.25×)</td>
+          <td style="text-align: right">61.1 (94.6%)</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>273.9 (↓31.5%)</strong></td>
+          <td style="text-align: right"><strong>429.3 (↓23.1%)</strong></td>
+          <td style="text-align: right"><strong>8:06 (↓20.8%)</strong></td>
+          <td style="text-align: right"><strong>15046 (↓3.3%)</strong></td>
+          <td style="text-align: right"><strong>9.01 (↑1.26×)</strong></td>
+          <td style="text-align: right"><strong>61.8 (95.7%)</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-OV-7B</td>
+          <td style="text-align: right">752.2</td>
+          <td style="text-align: right">1201.6</td>
+          <td style="text-align: right">32:02</td>
+          <td style="text-align: right">17686</td>
+          <td style="text-align: right">0.52</td>
+          <td style="text-align: right">56.9</td>
+      </tr>
+      <tr>
+          <td>Random</td>
+          <td style="text-align: right">190.9 (↓74.6%)</td>
+          <td style="text-align: right">639.0 (↓46.8%)</td>
+          <td style="text-align: right">23:09 (↓27.7%)</td>
+          <td style="text-align: right">16298 (↓7.8%)</td>
+          <td style="text-align: right">0.72 (↑1.38×)</td>
+          <td style="text-align: right">54.6 (96.0%)</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">315.9 (↓58.0%)</td>
+          <td style="text-align: right">781.1 (↓35.0%)</td>
+          <td style="text-align: right">25:05 (↓21.7%)</td>
+          <td style="text-align: right">24619 (↑39.2%)</td>
+          <td style="text-align: right">0.67 (↑1.29×)</td>
+          <td style="text-align: right">55.5 (97.5%)</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">493.8 (↓34.4%)</td>
+          <td style="text-align: right">960.9 (↓20.0%)</td>
+          <td style="text-align: right">30:12 (↓5.7%)</td>
+          <td style="text-align: right">27378 (↑54.8%)</td>
+          <td style="text-align: right">0.55 (↑1.06×)</td>
+          <td style="text-align: right">56.4 (99.1%)</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">256.3 (↓65.9%)</td>
+          <td style="text-align: right">719.0 (↓40.2%)</td>
+          <td style="text-align: right">23:18 (↓27.3%)</td>
+          <td style="text-align: right">24371 (↑37.8%)</td>
+          <td style="text-align: right">0.71 (↑1.36×)</td>
+          <td style="text-align: right">55.3 (97.2%)</td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">249.2 (↓66.7%)</td>
+          <td style="text-align: right">713.5 (↓40.6%)</td>
+          <td style="text-align: right">23:25 (↓26.9%)</td>
+          <td style="text-align: right">16298 (↓7.8%)</td>
+          <td style="text-align: right">0.71 (↑1.36×)</td>
+          <td style="text-align: right">49.5 (87.0%)</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>193.8 (↓74.2%)</strong></td>
+          <td style="text-align: right"><strong>642.4 (↓46.5%)</strong></td>
+          <td style="text-align: right"><strong>23:13 (↓27.5%)</strong></td>
+          <td style="text-align: right"><strong>16298 (↓7.8%)</strong></td>
+          <td style="text-align: right"><strong>0.72 (↑1.38×)</strong></td>
+          <td style="text-align: right"><strong>56.4 (99.1%)</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h3 id="42-ablation-study">4.2. Ablation Study<a hidden class="anchor" aria-hidden="true" href="#42-ablation-study">#</a></h3>
+<h4 id="effects-of-variation-metric">Effects of Variation Metric<a hidden class="anchor" aria-hidden="true" href="#effects-of-variation-metric">#</a></h4>
+<p>Figure 6 比较了三种 variation metric：Cosine Similarity、L1 Norm、L2 Norm，并与 FastV 对照。结论是三种 variation-based pruning 都能在平均性能上超过 FastV，说明这种“看 token 变化而不是看 attention 分数”的思路本身就更稳健。进一步看 throughput，L2 Norm 在性能与效率之间最均衡，因此被设为默认配置。</p>
+<p><strong>Table 7. Supplementary results on variation metric selection. Throughput with 128 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">SQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">8.02</td>
+          <td style="text-align: right">7.5</td>
+          <td style="text-align: right">7.13</td>
+          <td style="text-align: right">6.9</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">9.46 (1.18×)</td>
+          <td style="text-align: right">8.68 (1.16×)</td>
+          <td style="text-align: right">8.65 (1.21×)</td>
+          <td style="text-align: right">8.14 (1.18×)</td>
+      </tr>
+      <tr>
+          <td>Cosine Similarity</td>
+          <td style="text-align: right">9.95 (1.24×)</td>
+          <td style="text-align: right">9.13 (1.21×)</td>
+          <td style="text-align: right">8.90 (1.25×)</td>
+          <td style="text-align: right">8.14 (1.18×)</td>
+      </tr>
+      <tr>
+          <td>L1 Norm</td>
+          <td style="text-align: right">10.16 (1.27×)</td>
+          <td style="text-align: right">9.23 (1.23×)</td>
+          <td style="text-align: right">9.01 (1.26×)</td>
+          <td style="text-align: right">8.49 (1.23×)</td>
+      </tr>
+      <tr>
+          <td>L2 Norm</td>
+          <td style="text-align: right">10.11 (1.26×)</td>
+          <td style="text-align: right">9.18 (1.22×)</td>
+          <td style="text-align: right">9.01 (1.26×)</td>
+          <td style="text-align: right">8.42 (1.22×)</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Table 9. Supplementary results on variation metric selection.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">TextVQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">58.2</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">1490</td>
+          <td style="text-align: right">49.6</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">67.3</td>
+      </tr>
+      <tr>
+          <td>Cosine Similarity</td>
+          <td style="text-align: right">1718</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">61.8</td>
+          <td style="text-align: right">69.2</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td>L1 Norm</td>
+          <td style="text-align: right">1698</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">60.9</td>
+          <td style="text-align: right">68.7</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td>L2 Norm</td>
+          <td style="text-align: right">1712</td>
+          <td style="text-align: right">56.3</td>
+          <td style="text-align: right">61.8</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">—</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里的核心信息是：三种 variation metric 的差别并不大，说明 V2Drop 的主要收益来自“variation 视角”本身，而不是某个特殊指标；其中 L1/L2 的 throughput 较好，L2 是默认选择。</p>
+<h4 id="effects-of-token-dropping-across-different-layers">Effects of Token Dropping across Different Layers<a hidden class="anchor" aria-hidden="true" href="#effects-of-token-dropping-across-different-layers">#</a></h4>
+<p>Figure 8 研究了在不同 LLM transformer layers 上执行 token dropping 的效果。作者采用了多个 pruning layer 组合进行测试，发现 V2Drop 在不同层组合下都较为鲁棒，且在 192 retained tokens 的设置下平均性能能达到 vanilla 的 <strong>97.3%</strong>。相比之下，FastV 和 SparseVLM 对层选择更敏感，而且 SparseVLM 的 peak memory 明显更高。</p>
+<p><strong>Table 6. Supplementary results on pruned layers selection. Performance with 192 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Benchmark</th>
+          <th style="text-align: right">Vanilla</th>
+          <th style="text-align: right">Pruned Layers (4,14,30)</th>
+          <th style="text-align: right">(3,14,29)</th>
+          <th style="text-align: right">(3,15,27)</th>
+          <th style="text-align: right">(3,16,24)</th>
+          <th style="text-align: right">(3,17,22)</th>
+          <th style="text-align: right">(2,16,21)</th>
+          <th style="text-align: right">FastV</th>
+          <th style="text-align: right">SparseVLM</th>
+          <th style="text-align: right">PDrop</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>GQA</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">57.8</td>
+          <td style="text-align: right">58.6</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">58.8</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">57.9</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">57.6</td>
+      </tr>
+      <tr>
+          <td>SQA</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">68.9</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">69.3</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">69.3</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">68.7</td>
+      </tr>
+      <tr>
+          <td>POPE</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">86.3</td>
+          <td style="text-align: right">85.0</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">85.0</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">83.9</td>
+          <td style="text-align: right">64.8</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">83.6</td>
+      </tr>
+      <tr>
+          <td>MME</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">1753</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">1847</td>
+          <td style="text-align: right">1813</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">1759</td>
+          <td style="text-align: right">1612</td>
+          <td style="text-align: right">1766</td>
+          <td style="text-align: right">1721</td>
+      </tr>
+      <tr>
+          <td>MMB</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">63.4</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">63.5</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">61.2</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">62.5</td>
+      </tr>
+      <tr>
+          <td>TextVQA</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">53.1</td>
+          <td style="text-align: right">54.0</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">55.6</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">56.1</td>
+      </tr>
+      <tr>
+          <td>Avg. (%)</td>
+          <td style="text-align: right">100.0%</td>
+          <td style="text-align: right">96.0%</td>
+          <td style="text-align: right">97.0%</td>
+          <td style="text-align: right">97.5%</td>
+          <td style="text-align: right">97.3%</td>
+          <td style="text-align: right"><strong>97.6%</strong></td>
+          <td style="text-align: right">96.2%</td>
+          <td style="text-align: right">88.2%</td>
+          <td style="text-align: right">96.0%</td>
+          <td style="text-align: right">95.8%</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里可以看出，V2Drop 在不同 pruning layer 组合上波动很小，最优配置（3,17,22）达到 97.6%，说明“在哪几层剪”不会严重影响整体效果。</p>
+<h4 id="effects-of-progressive-token-dropping">Effects of Progressive Token Dropping<a hidden class="anchor" aria-hidden="true" href="#effects-of-progressive-token-dropping">#</a></h4>
+<p>Figure 9 对比了 progressive dropping 与 one-time dropping。结果显示 progressive dropping 明显更优，尤其在 MME 和 POPE 上分别提升 <strong>5.9%</strong> 和 <strong>9.3%</strong>。其原因在于：逐步丢弃能让模型在多个层次上重新筛选 token，避免一次性删除过多关键信息，从而更稳妥地保留视觉语义。</p>
+<p><strong>Table 8. Supplementary results on effects of progressive token dropping. Performance with 192 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">TextVQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">58.2</td>
+      </tr>
+      <tr>
+          <td>One-time dropping</td>
+          <td style="text-align: right">1717</td>
+          <td style="text-align: right">77.1</td>
+          <td style="text-align: right">60.6</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">55.2</td>
+      </tr>
+      <tr>
+          <td>Progressive dropping</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">55.9</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h3 id="43-visualizations">4.3. Visualizations<a hidden class="anchor" aria-hidden="true" href="#43-visualizations">#</a></h3>
+<p>Figure 7 展示了 TextVQA 上的 token compression 可视化结果。作者从左到右展示不同层剪枝后的图像压缩效果：FastV 使用 one-time dropping，会在后续层保留一些冗余 token；SparseVLM 虽然采用 progressive dropping，但仍然存在 positional bias，倾向于保留后序 token，因而会丢失一些前部重要信息；而 V2Drop 则依据 variation 逐步保留关键区域，能更稳定地锁定语义核心。</p>
+<p>Figure 10 提供了更多真实场景下的可视化案例，覆盖诸如品牌识别、文本阅读、动作理解等多种 TextVQA 场景。灰色 mask 表示被丢弃的 token。作者特别指出，在关键区域位于左下、右上、左上等不同位置的情况下，V2Drop 仍能准确保留对应区域，说明 token importance 与 semantic relevance 的对应关系能够通过 variation metric 被稳定识别。</p>
+<hr>
+<h2 id="5-conclusion">5. Conclusion<a hidden class="anchor" aria-hidden="true" href="#5-conclusion">#</a></h2>
+<p>LVLM 在推理阶段会消耗大量计算资源，核心原因是视觉 token 过多。现有 token compression 方法往往依赖 attention weights，或者引入 positional bias，从而限制了实际效果与对 efficient operators 的兼容性。本文提出 V2Drop，从 token variation 的角度重构 token importance 的定义，证明视觉 token variation 具有 task-agnostic 特性，因此可以在不依赖 attention weights 的情况下进行压缩，也不容易受到位置偏置影响。V2Drop 通过 progressively removing minimal-variation tokens 实现 LVLM inference acceleration，并在多种 benchmark 上证明了它能有效平衡性能与效率。</p>
+<hr>
+<h1 id="supplementary-material">Supplementary Material<a hidden class="anchor" aria-hidden="true" href="#supplementary-material">#</a></h1>
+<p>作者在附录中提供了更详细的实验设置、额外实验结果、算法细节、对 content-agnostic positional bias 的进一步讨论，以及更完整的理论分析。</p>
+<h2 id="a-detailed-experimental-settings">A. Detailed Experimental Settings<a hidden class="anchor" aria-hidden="true" href="#a-detailed-experimental-settings">#</a></h2>
+<h3 id="benchmark-details">Benchmark Details<a hidden class="anchor" aria-hidden="true" href="#benchmark-details">#</a></h3>
+<p>作者在多个多模态理解 benchmark 上评估 V2Drop，具体如下：</p>
+<ul>
+<li><strong>GQA</strong>：包含 scene graphs、questions 和 images，用于测试视觉场景理解与组合推理能力。</li>
+<li><strong>MMBench</strong>：采用三层层次结构与 20 个能力维度，综合评估 perception 和 reasoning。</li>
+<li><strong>MME</strong>：包含 14 个子任务，通过人工构造 instruction-answer pairs 评估 perceptual 与 cognitive 能力，并尽量减少数据泄露问题。</li>
+<li><strong>POPE</strong>：以 object presence 二分类问题评估 hallucination，使用 accuracy、recall、precision 和 F1。</li>
+<li><strong>ScienceQA</strong>：覆盖自然、语言和社会科学，强调多步推理与多模态理解。</li>
+<li><strong>TextVQA</strong>：测试模型识别图像中文字并进行推理的能力。</li>
+<li><strong>AI2D</strong>：科学图表与问答数据集，重点考察视觉空间推理。</li>
+<li><strong>MMStar</strong>：高分辨率图像集，强调空间、时间与 commonsense reasoning。</li>
+<li><strong>MVBench</strong>：20 项视频理解任务，要求深度 temporal understanding。</li>
+<li><strong>VideoMME</strong>：900 个视频、2700 个多选题，持续时间从 11 秒到 1 小时，并划分为 short / medium / long 子集。</li>
+</ul>
+<h3 id="baseline-models">Baseline Models<a hidden class="anchor" aria-hidden="true" href="#baseline-models">#</a></h3>
+<ul>
+<li><strong>LLaVA-1.5</strong>：通过视觉指令微调和两阶段训练提升多模态理解能力，在视觉推理、OCR 和 multimodal dialogue 上表现强劲。</li>
+<li><strong>Qwen2-VL</strong>：强调任意分辨率输入与 scaling laws，在文档解析、OCR、视觉推理和视频理解上具有很强表现。</li>
+<li><strong>LLaVA-OneVision</strong>：统一单图、多图与视频任务，把视频视为长视觉 token 序列，以支持 image-video task transfer。</li>
+</ul>
+<h3 id="comparison-methods">Comparison Methods<a hidden class="anchor" aria-hidden="true" href="#comparison-methods">#</a></h3>
+<ul>
+<li><strong>ToMe</strong>：在 ViT 层通过轻量 matching 合并相似 token。</li>
+<li><strong>LLaVA-PruMerge</strong>：结合 pruning 和 merging，基于 CLS-patch attention 和聚类来压缩 token。</li>
+<li><strong>FastV</strong>：利用 attention maps 在早期层执行 token pruning。</li>
+<li><strong>DART</strong>：基于 duplication-aware 机制，按冗余程度而非传统 importance score 选择 token。</li>
+<li><strong>HiRED</strong>：基于 CLS token attention 给不同图像区域分配预算。</li>
+<li><strong>PDrop</strong>：采用 pyramid-like progressive token dropping。</li>
+<li><strong>SparseVLM</strong>：通过 cross-modal attention 与 adaptive sparsity ratio 进行 token sparsification，并引入 token recycling。</li>
+<li><strong>DyCoke</strong>：面向视频的大模型方法，先按时间维度 prune 相似 token，再利用 attention weights 压缩 KV cache，但其依赖显式 attention 权重，因此不兼容更高效的 attention operator。</li>
+</ul>
+<h3 id="implementation-details">Implementation Details<a hidden class="anchor" aria-hidden="true" href="#implementation-details">#</a></h3>
+<p>实验在 <strong>NVIDIA A100-PCIe-80GB</strong> 上完成，使用 <strong>Python 3.10、PyTorch 2.1.2、CUDA 12.1</strong>。所有 baseline 设定都遵循原论文配置。</p>
+<h3 id="experimental-parameter-details-for-v2drop">Experimental Parameter Details for V2Drop<a hidden class="anchor" aria-hidden="true" href="#experimental-parameter-details-for-v2drop">#</a></h3>
+<p>在 <strong>LLaVA-1.5-7B</strong> 上，作者采用三阶段 pruning，位于 <strong>layer 3、17、22</strong>。具体压缩比例为：</p>
+<ul>
+<li>维持 <strong>192 tokens</strong> 时，在三处层分别剪去 <strong>50% / 70% / 100%</strong> 的视觉 token；</li>
+<li>维持 <strong>128 tokens</strong> 时，剪去 <strong>72% / 75% / 100%</strong>；</li>
+<li>维持 <strong>64 tokens</strong> 时，剪去 <strong>95% / 95% / 100%</strong>。</li>
+</ul>
+<p>这说明作者并不是均匀剪枝，而是按层深和剩余 token 数制定不同压缩强度，以兼顾浅层信息保留与深层冗余去除。</p>
+<hr>
+<h2 id="b-additional-experimental-results">B. Additional Experimental Results<a hidden class="anchor" aria-hidden="true" href="#b-additional-experimental-results">#</a></h2>
+<h3 id="supplementary-results-on-variation-metric-selection">Supplementary Results on Variation Metric Selection<a hidden class="anchor" aria-hidden="true" href="#supplementary-results-on-variation-metric-selection">#</a></h3>
+<p>Table 7 和 Table 9 进一步给出了三种 variation metric 在多个数据集上的 throughput 与 performance。结果表明，variation-based pruning 相比 FastV 这类 attention-score-based pruning，不但性能更好，而且吞吐也更高，进一步说明 V2Drop 的稳健性。作者还指出，L2 Norm 是默认选择，因为它兼顾了效果和实现简洁性。</p>
+<h3 id="supplementary-results-on-pruned-layers-selection">Supplementary Results on Pruned Layers Selection<a hidden class="anchor" aria-hidden="true" href="#supplementary-results-on-pruned-layers-selection">#</a></h3>
+<p>Table 6 的结果说明，不同 pruning layer 组合都会带来相近的效果，尤其在 192 retained tokens 下，V2Drop 的平均表现维持在 96%~97.6% 之间，证明它对 layer scheduling 不敏感。换句话说，V2Drop 的效果不是建立在某个“神奇层号”上，而是来自 variation 作为 token importance 信号的有效性。</p>
+<h3 id="supplementary-results-on-effects-of-progressive-token-dropping">Supplementary Results on Effects of Progressive Token Dropping<a hidden class="anchor" aria-hidden="true" href="#supplementary-results-on-effects-of-progressive-token-dropping">#</a></h3>
+<p>Table 8 清晰表明 progressive dropping 优于 one-time dropping，说明“先粗后细”的逐步筛选比一次性硬删更稳健。这也是 V2Drop 设计 multi-stage progressive dropping 的直接经验依据。</p>
+<h3 id="more-visualizations-of-token-compression">More Visualizations of Token Compression<a hidden class="anchor" aria-hidden="true" href="#more-visualizations-of-token-compression">#</a></h3>
+<p>Figure 10 提供了更多样化场景：例如摄像机品牌、酒类品牌、事件识别、食物识别、书籍是否为 reference book、书名、国家队、角色生存、午餐盒偏好、专辑名等。作者用这些案例说明，V2Drop 在不同空间位置、不同语义类型的关键区域上都能较好地定位重要 token，并且与 semantic relevance 保持一致。</p>
+<hr>
+<h2 id="c-algorithm-details-of-v2drop">C. Algorithm Details of V2Drop<a hidden class="anchor" aria-hidden="true" href="#c-algorithm-details-of-v2drop">#</a></h2>
+<p>作者在附录中给出了算法 1 的完整流程。V2Drop 的输入包括：视觉 tokens $F_v \in \mathbb{R}^{M \times D&rsquo;}$、dropping layers $L={l_1,l_2,\ldots,l_K}$ 以及各层对应的 compression targets ${K_{l_1},K_{l_2},\ldots,K_{l_K}}$；输出是压缩后的视觉 tokens。算法的基本流程如下：</p>
+<ol>
+<li>
+<p>初始化当前 token 数量 $M_{\text{curr}} \leftarrow M$。</p>
+</li>
+<li>
+<p>遍历 LLM 的每一层 $l$。</p>
+</li>
+<li>
+<p>若当前层属于预设 pruning layers，则：</p>
+<ul>
+<li>计算每个 token 的 variation score：
+$$
+s_i^{(l)} \leftarrow |f_i^{(l)} - f_i^{(l-1)}|_2
+$$</li>
+<li>汇总得到 $S^{(l)}={s_1^{(l)},s_2^{(l)},\ldots,s_{M_{\text{curr}}}^{(l)}}$；</li>
+<li>按 score 降序排序，取前 $K_l$ 个 token；</li>
+<li>将保留 token 作为新的 $F_{\text{curr}}^v$，并把 $M_{\text{curr}}$ 更新为 $K_l$。</li>
+</ul>
+</li>
+<li>
+<p>若当前层不属于 pruning layers，则直接把 $F_{\text{curr}}^v$ 输入当前 Transformer layer。</p>
+</li>
+<li>
+<p>最终返回压缩后的 $F_{\text{curr}}^v$。</p>
+</li>
+</ol>
+<p>更直白地说：V2Drop 就是在几个关键层里“看谁变化大就留下谁，变化小就删掉谁”，然后继续把这些保留下来的 token 送到后续层处理。</p>
+<hr>
+<h2 id="d-more-discussions-about-content-agnostic-positional-bias">D. More Discussions about Content-agnostic Positional Bias<a hidden class="anchor" aria-hidden="true" href="#d-more-discussions-about-content-agnostic-positional-bias">#</a></h2>
+<p>作者进一步分析了 attention-guided 方法为何会产生 content-agnostic positional bias。Figure 2 和 Figure 3 的结果说明：即使某些重要区域确实获得较高 attention score，这些方法仍然会过度偏向序列末端 token，导致前面真正有用的信息被误删，最终造成 multimodal hallucination。作者在 TextVQA、POPE 和 MME 上按 token index 分段统计保留概率，发现 FastV、SparseVLM 等方法呈现明显的 end-of-sequence bias。</p>
+<p>与之相反，variation-aware evaluation 更接近自然的空间分布：它不是问“这个 token 在序列里靠前还是靠后”，而是问“这个 token 在 LLM 内部变化得是否足够明显”。因此它更容易保留真正与语义相关的区域，并且不会因为绝对位置而系统性偏置。作者由此强调，V2Drop 的优势不仅在于压缩本身，更在于它改变了“重要性”的评估范式。</p>
+<hr>
+<h2 id="e-suppleymentary-theoretical-analysis">E. Suppleymentary Theoretical Analysis<a hidden class="anchor" aria-hidden="true" href="#e-suppleymentary-theoretical-analysis">#</a></h2>
+<h3 id="e1-smoothness-assumption">E.1. Smoothness Assumption<a hidden class="anchor" aria-hidden="true" href="#e1-smoothness-assumption">#</a></h3>
+<p>作者假设模型 $f$ 在表示空间中具有足够的局部光滑性，使得 Taylor 展开中的二阶余项满足：</p>
+<p>$$
+|R_j| = O(|\Delta x_j^{(t)}|^2).
+$$</p>
+<p>这一假设在 Transformer-based LVLM 中是合理的，原因包括：</p>
+<ul>
+<li>residual connections 限制层间变化，使 $|\Delta x_j^{(t)}|$ 相对稳定；</li>
+<li>layer normalization 限制 token 表示范围，从而约束高阶导数；</li>
+<li>GELU、SiLU 等平滑激活函数保证二阶连续性。</li>
+</ul>
+<p>因此，在足够小的局部扰动下，二阶项可忽略，从而得到：</p>
+<p>$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$</p>
+<p>这一步是理论主线的关键，因为它把“token 表示变化量”直接连接到了“输出变化量”。</p>
+<h3 id="e2-justification-of-bounded-jacobian-assumption">E.2. Justification of Bounded Jacobian Assumption<a hidden class="anchor" aria-hidden="true" href="#e2-justification-of-bounded-jacobian-assumption">#</a></h3>
+<p>作者在 corollary 中进一步假设 Jacobian operator norm 有下界 $|J_j|_{\text{op}} \ge \mu &gt; 0$。其合理性主要来自三点：</p>
+<ol>
+<li><strong>Information flow in Transformers</strong>：注意力机制使每个 token 通过多头 attention 与 FFN 参与输出形成，softmax 归一化保证 token 的贡献一般不会完全消失；</li>
+<li><strong>Residual connections preserve gradients</strong>：残差结构 $x^{(t+1)} = x^{(t)} + \text{Block}(x^{(t)})$ 使梯度可沿 identity path 传播，不易消失；</li>
+<li><strong>Layer normalization stabilizes gradients</strong>：layer norm 把梯度规模控制在有限范围内。</li>
+</ol>
+<p>如果某些 token 的 $|J_j|_{\text{op}} \approx 0$，说明这些 token 对输出本就几乎没有影响，那么无论其 variation 多大，删除它们也不会带来显著性能损失；因此这并不会破坏 V2Drop 的基本逻辑。</p>
+<h3 id="e3-connection-to-v2drop-algorithm">E.3. Connection to V2Drop Algorithm<a hidden class="anchor" aria-hidden="true" href="#e3-connection-to-v2drop-algorithm">#</a></h3>
+<p>作者给出了一个更强的优化视角：在有 $n$ 个 token 的情况下，希望选择要删除的 token 集合 $S_{\text{drop}}$，使得删除后总输出扰动最小：</p>
+<p>$$
+S^**{\text{drop}} = \arg\min*{S \subseteq [n], |S|=\alpha n} \sum_{j \in S} |\Delta f_j|.
+$$</p>
+<p>结合 Theorem 1 和 Jacobian 下界假设，有：</p>
+<p>$$
+\sum_{j \in S}|\Delta f_j| \approx \sum_{j \in S}|J_j|<em>{\text{op}} \cdot |\Delta x_j^{(t)}|
+\in
+\left[\mu \sum</em>{j \in S}|\Delta x_j^{(t)}|,;
+M \sum_{j \in S}|\Delta x_j^{(t)}|\right].
+$$</p>
+<p>因此，最小化输出扰动可以近似转化为最小化 variation 之和：</p>
+<p>$$
+S^**{\text{drop}} \approx \arg\min*{S \subseteq [n], |S|=\alpha n} \sum_{j \in S}|\Delta x_j^{(t)}|.
+$$</p>
+<p>这正好解释了 V2Drop 的策略为何合理：<strong>丢弃 variation 最小的 token，近似等价于丢弃对输出影响最小的 token。</strong> 而且这种选择只需要简单的 L2 norm 计算，计算成本极低。</p>
+<h3 id="e4-connection-to-information-flow">E.4. Connection to information flow<a hidden class="anchor" aria-hidden="true" href="#e4-connection-to-information-flow">#</a></h3>
+<p>在 Transformer 的 residual 结构中：</p>
+<p>$$
+x_j^{(t+1)} = x_j^{(t)} + \text{Attn}(x_j^{(t)}) + \text{FFN}(x_j^{(t)}),
+$$</p>
+<p>因此：</p>
+<p>$$
+\Delta x_j^{(t)} = \text{Attn}(x_j^{(t)}) + \text{FFN}(x_j^{(t)}).
+$$</p>
+<p>这意味着 variation 实际上对应每层对 token 的“有效更新量”。变化大的 token，说明它正在被网络积极 refinement，携带并传播任务相关信息；变化小的 token 则更像是被网络“忽略”的部分，因此可以安全丢弃。这个解释把 variation 与 Transformer 中的信息流动机制直接对应起来，也进一步说明了为什么 V2Drop 会比 attention-guided pruning 更符合模型内部计算过程。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="http://localhost:1313/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="http://localhost:1313/blog/tags/token-pruning/">Token Pruning</a></li>
+      <li><a href="http://localhost:1313/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="http://localhost:1313/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

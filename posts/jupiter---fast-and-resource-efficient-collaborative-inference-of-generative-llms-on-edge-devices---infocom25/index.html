@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="auto" data-theme="auto">
 
-<head><meta charset="utf-8">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script><meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="robots" content="index, follow">
+<meta name="robots" content="noindex, nofollow">
 <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
  | JJ&#39;s Blog</title>
 <meta name="keywords" content="Serving, Parallelism, System, Paper Note">
@@ -36,16 +36,16 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 
 在 decoding 阶段，引入并整合 speculative decoding（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 outline-based pipeline parallel decoding —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。">
 <meta name="author" content="">
-<link rel="canonical" href="https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/">
-<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
-<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
-<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
-<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
-<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
-<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<link rel="canonical" href="http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/">
+<link crossorigin="anonymous" href="http://localhost:1313/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="http://localhost:1313/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="http://localhost:1313/blog/safari-pinned-tab.svg">
 <meta name="theme-color" content="#2e2e33">
 <meta name="msapplication-TileColor" content="#2e2e33">
-<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/">
+<link rel="alternate" hreflang="zh-cn" href="http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/">
 <noscript>
     <style>
         #theme-toggle,
@@ -132,113 +132,14 @@ code.has-jax {
     color: #515151;
 }
 </style>
-<meta property="og:url" content="https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/">
-  <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
-">
-  <meta property="og:description" content="
-Conference: INFOCOM&#39;25
-Github: https://github.com/ysyisyourbrother/Jupiter
-1. Motivation 随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。 单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。 现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。 此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。 因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 Jupiter。 2. Contribution 提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。 在 prefill 阶段提出 intra-sequence pipeline parallelism —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。
-设计了基于动态规划（dynamic programming）的资源高效并行规划（parallelism planning），同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。
-在 decoding 阶段，引入并整合 speculative decoding（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 outline-based pipeline parallel decoding —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。">
-  <meta property="og:locale" content="zh-cn">
-  <meta property="og:type" content="article">
-    <meta property="article:section" content="posts">
-    <meta property="article:published_time" content="2025-11-26T00:00:00+00:00">
-    <meta property="article:modified_time" content="2025-11-26T00:00:00+00:00">
-    <meta property="article:tag" content="Serving">
-    <meta property="article:tag" content="Parallelism">
-    <meta property="article:tag" content="System">
-    <meta property="article:tag" content="Paper Note">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
-">
-<meta name="twitter:description" content="
-Conference: INFOCOM&#39;25
-Github: https://github.com/ysyisyourbrother/Jupiter
 
-1. Motivation
-
-随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。
-单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。
-现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。
-此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。
-因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 Jupiter。
-
-
-2. Contribution
-
-
-提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
-
-
-
-在 prefill 阶段提出 intra-sequence pipeline parallelism —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。
-
-
-设计了基于动态规划（dynamic programming）的资源高效并行规划（parallelism planning），同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。
-
-
-在 decoding 阶段，引入并整合 speculative decoding（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 outline-based pipeline parallel decoding —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。">
-
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {
-      "@type": "ListItem",
-      "position":  1 ,
-      "name": "Posts",
-      "item": "https://jjl357.github.io/blog/posts/"
-    }, 
-    {
-      "@type": "ListItem",
-      "position":  2 ,
-      "name": "📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices\n",
-      "item": "https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/"
-    }
-  ]
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices\n",
-  "name": "📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices\n",
-  "description": "\nConference: INFOCOM'25\nGithub: https://github.com/ysyisyourbrother/Jupiter\n1. Motivation 随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。 单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。 现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。 此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。 因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 Jupiter。 2. Contribution 提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。 在 prefill 阶段提出 intra-sequence pipeline parallelism —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。\n设计了基于动态规划（dynamic programming）的资源高效并行规划（parallelism planning），同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。\n在 decoding 阶段，引入并整合 speculative decoding（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 outline-based pipeline parallel decoding —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。\n",
-  "keywords": [
-    "Serving", "Parallelism", "System", "Paper Note"
-  ],
-  "articleBody": "\nConference: INFOCOM'25\nGithub: https://github.com/ysyisyourbrother/Jupiter\n1. Motivation 随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。 单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。 现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。 此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。 因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 Jupiter。 2. Contribution 提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。 在 prefill 阶段提出 intra-sequence pipeline parallelism —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。\n设计了基于动态规划（dynamic programming）的资源高效并行规划（parallelism planning），同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。\n在 decoding 阶段，引入并整合 speculative decoding（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 outline-based pipeline parallel decoding —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。\n在真实边缘测试平台实现并评估 Jupiter，展示在多种场景下（不同模型、设备拓扑和带宽限制）相较最先进方法最高可达 26.1× 的端到端延迟缩减，并保持近似的生成质量（在某些需要强链式推理的任务上 outline 方法略有下降，系统可选择性关闭）。\n3. PRELIMINARIES 3.1 Collaborative Edge Computing for Generative LLMs Decoder-based 模型结构\nDecoder-based LLM（如 GPT、LLaMA、Mistral）由 embedding、若干 decoder layer 叠加和输出 head 组成。每个 decoder layer 包含：QKV projection、Masked MHA、FFN、以及运行时的大量 KVCache（用于 decoding 中重用）。图示：。 两阶段推理\nPrefill Phase（prefill）：将 prompt（上下文）完整前向一次，生成第一个 token，并把每层的 K/V 保存在 KVCache 中，time-to-first-token 是此阶段关键延迟指标。 Autoregressive Decoding（decoding）：逐 token 生成，新的 token 会被反馈并与之前的 KVCache 一起用于下个 token 的生成。长生成会使 decoding 成为主导延迟。 并行化方法对比（四类）\nData Parallelism (DP)：样本维度复制模型，不适合单序列并发。 Sequence Parallelism (SP)：每台设备保留完整模型，将序列按子段并行，但每层需 all-gather 同步（通信高）。 Tensor Parallelism (TP)：将权重切分，需 per-layer all-reduce（通信高）。 Pipeline Parallelism (PP)：按层切分为 stage 映射到设备，通信仅限邻居激活（更低通信），但在单序列下易退化为串行 —— 需要新方法挖掘 intra-sequence 并行机会（见 Jupiter 提案）。表格与复杂度见 Table I/II。 基础符号定义（符号与 Table I 对应） 符号 含义 $P$ 模型参数总量（字节或元素个数） $C$ 完整单序列前向推理的总计算量（FLOPs） $L$ 模型 decoder 层数 $S$ 输入序列长度（prefill 阶段特别重要） $H$ Hidden size（即每个 token 的向量维度） 4. Method 总体流程（系统概览）：\nProfiler：用不同长度的 calibration sequences 在每台边缘设备上进行预填（prefill）测试，记录运行时 trace（层级延迟、内存占用、加速器利用率等），用于并行规划。 LLM Partition Algorithm（模型层划分）：基于 profiling 数据与设备集合 D，使用动态规划求解将 L 层划分为多个 stage 的最优策略，使得最慢 stage 的执行时间最小化（平衡负载），并考虑内存约束（若 stage 模型超过设备内存则该划分不可用）。 Sequence Partition Algorithm（序列划分）：基于设备加速器在不同输入长度下的利用率，选出最小子序列长度 $b$（避免 under-utilization），然后使用动态规划对每种输入长度 $y$ 找到最优的子序列划分数 $k$ 与划分方案，使得慢子序列的延迟平衡且每段长度 $\\ge b$。 Prefill 推理：将子序列并行注入流水线，各 stage 缓存每个子序列的 hidden states，计算时可利用前面子序列的缓存以保证 causal attention 的正确性（详见 Intra-Sequence 部分）。 Decoding：结合 Speculative Decoding（自我 drafting）和 Outline-based 并行扩展两种策略以加速 autoregressive 流程。 在下面的子节中详细展开关键模块。\n4.1 PARALLEL ACCELERATION FOR PREFILL PHASE 4.1.1 Intra-Sequence Pipeline Parallelism for Generative LLMs 基本思想：利用 causal decoder 的单向注意力（token $t_i$ 只依赖此前 token $t_1 … t_{i-1}$），把一个长输入序列划分成 $M$ 个连续子序列 $(s_1, s_2, …, s_M)$，然后把这些子序列顺序注入流水线并并行计算：每个 stage 对每个子序列都保存其 hidden states（KVCache-like），当处理子序列 $s_i$ 时，可以直接利用缓存的 $s_1…s_{i-1}$ 的 hidden states 来正确计算 self-attention，从而不用把整个序列一次性在单台设备上串行处理。见图：、。\n关键工程与正确性注意点：\n每个 stage 需要缓存所有注入过的子序列的 hidden states（内存/KVCache 管理需谨慎），因此需要在 partition planning 时考虑 KVCache 的内存占用。 子序列越短，流水线 bubble 越少并行度越高，但短段会导致加速器 under-utilization；因此序列划分不能一味细分，需要平衡（见下节规划算法）。 对 self-attention 的正确性：只要子序列间缓存和数据传递牢靠（保证 earlier sub-seq hidden states 在 later sub-seq 计算时可用），则 causal mask 的语义保持，从而输出与完整序列顺序计算一致（等价性依赖于实现对 KVCache 的精确维护与传输顺序）。 4.1.2 Resource-Efficient Parallelism Planning 并行规划分为两部分：（A）LLM 层划分与 （B）输入序列划分。两者都使用动态规划方法求解最优（或近似最优）方案。\n（A）LLM Partition（层划分） 目标：把 $L$ 层划分为若干 stage 并映射到设备集 $D={d_1,…,d_n}$，使得 pipeline 的 steady-state throughput 由最慢 stage 决定时，该最慢 stage 的运行时间最小化。 动态规划核心公式为（论文给出的形式）：\n$$ A(1 \\rightarrow y, D_n) = \\min_{1 \\le l \u003c y} \\max { A(1 \\rightarrow l, D_{n-1}),; T(l+1 \\rightarrow y, d_n) } $$\n其中 $T(i\\rightarrow j, n) = \\sum_{l=i}^{j} t^n_l$ 表示设备 $d_n$ 处理层 $i$ 到 $j$ 的时间（通过 profiling 得到 $t^n_l$）。若某个 stage 模型（含参数与 KVCache）超出设备内存预算，则令对应 $T$ 为 $+\\infty$（不可行）。该方法时间复杂度 $O(L^2 |D|)$。\n（B）Sequence Partition（序列划分） 目标：对给定句长 $y$，将其划分为 $k$ 段，使得每段处理延迟尽可能平衡，同时每段长度 $\\ge b$（避免加速器 under-utilization）。论文定义了函数 $q(x,y)$：表示子序列长度为 $x$、其前面累计长度为 $y$ 时，在某 stage 上的推理延迟（通过离线 profiling 获得并可插值）。动态规划公式为：\n$$ W(1 \\rightarrow y, k) = \\min_{1 \\le l \u003c y} \\max { W(1 \\rightarrow l, k-1),; T^*(y-l, l) } $$\n并且\n$$ T^*(y-l, l) = \\begin{cases} +\\infty, \u0026 \\text{if } y-l \u003c b, q(y-l, l), \u0026 \\text{otherwise.} \\end{cases} $$\n解释：$W(1\\to y, k)$ 表示将句子 $1..y$ 划分为 $k$ 段后，最慢段的延迟（该值希望尽可能小）。最终选择 $k$ 时还结合一个对整体预计延迟的估计：\n$$ \\text{Latency} = \\sum_{i=1}^k h_i + (|D|-1)\\times W(1 \\rightarrow y, k) $$\n其中 $h_i$ 是子序列 $s_i$ 在每 stage 的推理延迟（由 $q(\\cdot)$ 得到），$(|D|-1)\\times W$ 表示 pipeline 中填满之后的 steady-state 影响项。论文在实现上为避免开销过大，将 $k$ 限制为 $\\le 4|D|$ 并对 $y$ 迭代到 $S_{max}$，时间复杂度 $O(S_{max}^2 |D|)$。该规划为一次性离线过程，论文中实测在边缘设备上不到 5 分钟即可完成（可被多次推理均摊）。\n实现要点与工程折衷\nprofiling 需覆盖不同 $x,y$ 组合，但可通过并行采样与插值来降低实际开销。 KVCache 内存估计必须包含所有 stage 的缓存需求（特别是当同时存在多个子序列在 pipeline 中），否则会出现 OOM。 划分策略在同一设备集上针对不同输入长度可以预先计算并缓存，运行时只需 lookup 对应策略以快速部署。 4.2 COLLABORATIVE INFERENCE FOR DECODING PHASE Decoding 阶段的难点在于其自回归（autoregressive）性质：每个新 token 依赖前面的完整上下文，传统上难以并行。Jupiter 在这部分提出两条主线优化：Speculative Decoding（草稿式并行） 与 Outline-Based Pipeline Parallel Decoding（大纲引导并行），二者可以组合使用。\n4.2.1 Collaborative Inference with Speculative Decoding 基本思路：在每个 decoding 步，使用额外的 lightweight heads（或小的独立 draft model）基于当前 logits 预测多个 candidate tokens（draft），然后把这些候选并行验证（通过原始 LLM 前向）以确认哪些 candidate 可接受，从而用并行化减少需要逐 token 由原 LLM 处理的轮数（Draft-then-Verify Paradigm）。论文实现采用 Self-Drafting（在主模型上加 FFN heads），流程如下（图示见 ）：\n将当前 token 输入 LLM 前向，得到 logits。 logits 由头部（draft heads，FFN）并行生成多个 candidate tokens。 把 candidate tokens 从最末 stage 传回起始 stage，作为多个并行请求再次送入 LLM 前向；所有 candidate 的 intermediate 计算结果写入 KVCache。 对每个 candidate 计算 posterior probability（或基于验证机制）决定接受/拒绝。被拒绝的 candidate 在 KVCache 中被清除（通知各 stage），被接受的则直接使用其预先算出的 logits 作为生成结果或继续作为下轮 drafting 的输入。 从已接受 token 的输出中提取 logits 继续产生下一批 candidate。 工程亮点：Jupiter 的工作流使每一次 draft + verify 只需要一次完整 LLM 前向（而非多次），并精心管理 KVCache 与候选 token 的同步删除/保留，最大限度避免冗余计算。论文在实验中采用了 Medusa 的 token-tree speculative decoding 算法作为具体实现示例（5 个 draft head，top-1 策略等）。\n4.2.2 Outline-Based Pipeline Parallel Decoding 核心动机：仅用 speculative decoding 虽能并行化 token 生成，但流水线仍可能串行化（尤其当 draft → verify 仍形成串行依赖）。借鉴“人类先列提纲再逐点展开”的思路，Jupiter 提出在 prefill 时先让模型生成回答的大纲（outline），再把大纲中的每个要点作为独立“point-extending request”并行送入 pipeline 扩展，最终把每个点的输出拼接得到完整答案。流程概览（见图 ）：\n在 prefill 阶段，把用户 query 与“大纲生成指令”拼接并进行 prefill（该静态 guide prompt 的 prefill 可离线 cache 到 KVCache）。 模型输出一个有序大纲（例如 3–6 点）。 将大纲中的每一点分别封装为单独请求（point-extending request），每个请求只引导模型针对该点展开，且这些请求可并发注入 pipeline（共享初始 prefill 的 KVCache，避免重复计算）。 等所有 point 扩展完成后把结果按顺序 concat 回来，得到最终回答。 适用/不适用场景：outline 方法在文档摘要、问答、知识类或需要分条回答的任务上效果很好（并行度高、速度快）。但对于需要强链式推理、step-by-step 的数学或编程题，按点并行可能破坏跨点的逻辑依赖，影响生成质量。因此该模块设计为可插拔：系统可自动判断或让用户选择是否启用（paper 中实验显示在 coding/math 类任务上 outline variant 的质量下降明显）。\n5. Evaluation A. Experimental Setups 模型与数据集\n使用 Llama2 系列：Llama2-7B 与 Llama2-13B（均采用 INT4 量化以降低内存）。 使用三种 assistant-style 数据集评估生成质量：LiMA（用于延迟基准主要），Vicuna-80、WizardLM（用于评估生成质量）。 边缘设备与环境\n三类 off-the-shelf 设备：Jetson Xavier NX（384-core Volta，8GB，20W）、Jetson TX2（256-core，8GB，20W）、Jetson Nano（128-core，8GB，10W）。 定义两种实验环境：Homogeneous Environment A（4×NX）与 Heterogeneous Environment B（1×NX + 2×TX2 + 1×Nano）。 带宽仿真：通过调整设备间带宽模拟 100Mbps/500Mbps/1Gbps 等不同网络状况，重点考察带宽受限下的行为。 基线 与 5 种最先进并行/协同方法比较：Sequence Parallelism (SP)、Megatron-LM (M-LM, tensor-parallel)、DeTransformer (DT, TP-based edge)、Galaxy（TP across MHA/FFN + SP in connecting ops）、EdgeShard（pipelined architecture）。论文对这些基线在 decoding 阶段统一采用了 naive token-by-token 生成（以便对比 Jupiter 在 decoding 加速方面的改善）。\nB. End-to-End Performance 实验设置：从 LiMA 中抽样 prompts（平均 prompt 长度 ~260 tokens），max generation length = 64。测量端到端生成延迟（包括 prefill 与 decoding）。结果见 Table IV；下为重要观察与解释（结合表格数据）：\n关键结果与解读：\n在多种带宽与设备拓扑上，Jupiter 恒显著优于所有基线。 对比 TP-based baselines（M-LM、DT、Galaxy），Jupiter 在某些设置下可达 26.1× 的延迟缩减（主要在带宽受限、模型较大时通信成为瓶颈的场景）。 与 SP（sequence-parallel）对比，Jupiter 最多可达 3.3× 的提升；SP 在 decoding 阶段退化为单设备执行，导致资源浪费且在 13B 下出现 OOM。 与纯 pipeline 方法（EdgeShard）相比，Jupiter 凭借 intra-sequence 并行与 decoding 的两项加速技术（speculative + outline）可实现至多 2.7× 的优势。 Heterogeneous 环境下（Env B），Jupiter 依然稳健，原因在于 parallelism planning 能考虑设备异构并做到负载均衡。 图形观察（Fig.10/11） Fig.10（Homogeneous）与 Fig.11（Heterogeneous）分别展示 prefill 与 decoding 阶段的 per-token 延迟：Jupiter 在 prefill 上有稳定的 1.4×–7.4× 提速，而在 decoding 阶段提升更为显著（2.9×–33.2×），表明 decoding 部分的优化（speculative + outline）为本方法带来最大收益。 C. Phase-Wise Analysis 论文把 prefill 与 decoding 分开分析，具体观察如下（并补充更细的解析）：\nPrefill Phase（逐 token prefill 延迟）\n由于 intra-sequence pipeline 的子序列并发注入，prefill 的 time-to-first-token 能被显著缩短；但子序列划分策略需要平衡段长以避免 GPU/NPU under-utilization。Jupiter 的动态规划方案根据 profiling 自动选择切分数与每段长度，从而在不同 prompt 长度下均有较佳表现（见 Fig.10 左侧图）。 Decoding Phase（逐 token 生成延迟）\ndecoding 优化是 Jupiter 的强项：speculative decoding 能减少 LLM 必须进行的严格验证步骤次数，而 outline 并行能将多个“点扩展”并发送入流水线。综合使 per-token generation latency 大幅下降（Fig.10/11 右侧）。 对于 TP/SP 等方法，decoding 时通信/同步频次高导致通信占比放大，从而在带宽受限时表现更糟。Pipeline-only 方法无法并行利用多台设备来扩展 decoding（单序列下），因此收益有限。Jupiter 则能同时兼顾流水线内存拼装与并行化生成。 D. Scalability 4-node homogeneous NX 集群实验（Fig.12）： 在节点数量增加时，Jupiter 的端到端延迟显著下降，且即使在 100Mbps（带宽受限）下也展示良好可扩展性（论文报告最高达 23.7× 缩减相对某些基线）。这体现了采用 pipeline（邻居激活传输）策略相对于 TP/SP 的通信优势，以及并结合 intra-sequence 并行与 decoding 并行化的设计，能让更多设备实际参与到并行工作中而非空闲等待。 E. Decoding Speedup and Generation Quality Assessment 1) Decoding Speedup Analysis（消融）\n论文做了 ablation：分别禁用 Outline-based Parallelism（OP）或 Speculative Decoding（SD），比较速度提升（见 Table V）。结果显示二者均贡献明显：整体 speedup 可达 3.6×（7B）到 3.9×（13B），其中 SD 和 OP 各自能单独带来 1.8–2.4× 级别的 speedup。表格如下（简述）： Model Naive Jupiter w/o OP Jupiter w/o SD Jupiter Llama2-7B 1.0× 1.8× 2.3× 3.6× Llama2-13B 1.0× 2.0× 2.4× 3.9× 这说明 SD 与 OP 有互补性：SD 在加速 token 数量上直接降步数，OP 在并行扩展多个输出点上提升设备并行利用。\n2) Generation Quality Assessment（质量评估）\n采用 FastChat（以 GPT-4o 作为评分器）对 Naive（逐token）与 Jupiter 的 outline-based parallel generation 在 Vicuna-80、WizardLM、LiMA 三数据集上做质量评分（1–10）。总体上，outline 法在多数任务维持接近的质量，但整体略低于 Naive（表 VI）。论文进一步对 Vicuna-80 做了分类评估（Generic, Knowledge, Counterfactual, Coding, Math），发现：\nGeneric/Knowledge/Counterfactual：outline 方法表现可比甚至优于 naive（说明在自由文本或事实类任务中先生成大纲并行扩展不影响质量，可能反而提升结构性）。 Coding/Math（需要逐步链式推理）：outline 方法明显劣于 naive（在这些任务中点之间有强依赖，分点并行破坏了链式上下文连续性）。 因此论文建议将 outline-based decoding 作为可插拔模块：在适合的任务类型自动启用或由用户决定，否则回退到 speculative-only 或 naive 策略以避免质量损失。\n6. Conclusion Jupiter 提出并实现了一个以 pipeline 为原则的协同边缘 LLM 推理系统，系统化地解决了 prefill 与 decoding 两大阶段的并行化瓶颈。 通过 intra-sequence pipeline parallelism + resource-aware dynamic programming planning（解决层划分与序列划分）+ speculative decoding + outline-based pipeline decoding 的组合，Jupiter 在现实边缘设置下显著降低端到端延迟（最高 26.1×），且在带宽受限、设备异构场景中仍保持鲁棒性。 文章同时指出 outline 并行在某些类任务上会牺牲质量，因此把该模块做成可插拔并提供判别机制。总的来说，Jupiter 为边缘场景下生成式 LLM 的实用化部署提供了明确且可复现的系统设计与工程实现路线。 ",
-  "wordCount" : "1024",
-  "inLanguage": "zh-cn",
-  "datePublished": "2025-11-26T00:00:00Z",
-  "dateModified": "2025-11-26T00:00:00Z",
-  "mainEntityOfPage": {
-    "@type": "WebPage",
-    "@id": "https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/"
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "JJ's Blog",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://jjl357.github.io/blog/favicon.ico"
-    }
-  }
-}
-</script>
 </head>
 <body id="top">
     <header class="header">
   <nav class="nav">
     <div class="logo">
       
-      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+      <a href="http://localhost:1313/" accesskey="h" title="☕🍵🥛 (Alt + H)">
         <span>☕🍵🥛</span>
         
       </a>
@@ -283,7 +184,7 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 
 </div>
   </header> 
-  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/title.png"></p>
+  <div class="post-content"><p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/title.png"></p>
 <p><strong>Conference:</strong> <strong>INFOCOM'25</strong></p>
 <p><strong>Github:</strong> <a href="https://github.com/ysyisyourbrother/Jupiter">https://github.com/ysyisyourbrother/Jupiter</a></p>
 <hr>
@@ -300,7 +201,7 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 <ul>
 <li>
 <p>提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
-<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure1.png"></p>
+<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure1.png"></p>
 </li>
 <li>
 <p>在 <strong>prefill</strong> 阶段提出 <strong>intra-sequence pipeline parallelism</strong> —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。</p>
@@ -320,7 +221,7 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 <h3 id="31-collaborative-edge-computing-for-generative-llms">3.1 Collaborative Edge Computing for Generative LLMs<a hidden class="anchor" aria-hidden="true" href="#31-collaborative-edge-computing-for-generative-llms">#</a></h3>
 <p><strong>Decoder-based 模型结构</strong></p>
 <ul>
-<li>Decoder-based LLM（如 GPT、LLaMA、Mistral）由 embedding、若干 decoder layer 叠加和输出 head 组成。每个 decoder layer 包含：QKV projection、Masked MHA、FFN、以及运行时的大量 KVCache（用于 decoding 中重用）。图示：<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure2.png">。</li>
+<li>Decoder-based LLM（如 GPT、LLaMA、Mistral）由 embedding、若干 decoder layer 叠加和输出 head 组成。每个 decoder layer 包含：QKV projection、Masked MHA、FFN、以及运行时的大量 KVCache（用于 decoding 中重用）。图示：<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure2.png">。</li>
 </ul>
 <p><strong>两阶段推理</strong></p>
 <ul>
@@ -328,15 +229,15 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 <li><strong>Autoregressive Decoding（decoding）</strong>：逐 token 生成，新的 token 会被反馈并与之前的 KVCache 一起用于下个 token 的生成。长生成会使 decoding 成为主导延迟。</li>
 </ul>
 <p><strong>并行化方法对比（四类）</strong></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure3.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure3.png"></p>
 <ul>
 <li>Data Parallelism (DP)：样本维度复制模型，不适合单序列并发。</li>
 <li>Sequence Parallelism (SP)：每台设备保留完整模型，将序列按子段并行，但每层需 all-gather 同步（通信高）。</li>
 <li>Tensor Parallelism (TP)：将权重切分，需 per-layer all-reduce（通信高）。</li>
 <li>Pipeline Parallelism (PP)：按层切分为 stage 映射到设备，通信仅限邻居激活（更低通信），但在单序列下易退化为串行 —— 需要新方法挖掘 intra-sequence 并行机会（见 Jupiter 提案）。表格与复杂度见 Table I/II。</li>
 </ul>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table1.png"></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table2.png"></p>
 <h4 id="基础符号定义符号与-table-i-对应">基础符号定义（符号与 Table I 对应）<a hidden class="anchor" aria-hidden="true" href="#基础符号定义符号与-table-i-对应">#</a></h4>
 <table>
   <thead>
@@ -370,7 +271,7 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 </table>
 <hr>
 <h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure4.png"></p>
 <p>总体流程（系统概览）：</p>
 <ol>
 <li><strong>Profiler</strong>：用不同长度的 calibration sequences 在每台边缘设备上进行预填（prefill）测试，记录运行时 trace（层级延迟、内存占用、加速器利用率等），用于并行规划。</li>
@@ -382,7 +283,7 @@ Github: https://github.com/ysyisyourbrother/Jupiter
 <p>在下面的子节中详细展开关键模块。</p>
 <h3 id="41-parallel-acceleration-for-prefill-phase">4.1 PARALLEL ACCELERATION FOR PREFILL PHASE<a hidden class="anchor" aria-hidden="true" href="#41-parallel-acceleration-for-prefill-phase">#</a></h3>
 <h4 id="411-intra-sequence-pipeline-parallelism-for-generative-llms">4.1.1 Intra-Sequence Pipeline Parallelism for Generative LLMs<a hidden class="anchor" aria-hidden="true" href="#411-intra-sequence-pipeline-parallelism-for-generative-llms">#</a></h4>
-<p><strong>基本思想</strong>：利用 causal decoder 的单向注意力（token $t_i$ 只依赖此前 token $t_1 &hellip; t_{i-1}$），把一个长输入序列划分成 $M$ 个连续子序列 $(s_1, s_2, &hellip;, s_M)$，然后把这些子序列<strong>顺序注入流水线并并行计算</strong>：每个 stage 对每个子序列都保存其 hidden states（KVCache-like），当处理子序列 $s_i$ 时，可以直接利用缓存的 $s_1&hellip;s_{i-1}$ 的 hidden states 来正确计算 self-attention，从而不用把整个序列一次性在单台设备上串行处理。见图：<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure5.png">、<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure6.png">。</p>
+<p><strong>基本思想</strong>：利用 causal decoder 的单向注意力（token $t_i$ 只依赖此前 token $t_1 &hellip; t_{i-1}$），把一个长输入序列划分成 $M$ 个连续子序列 $(s_1, s_2, &hellip;, s_M)$，然后把这些子序列<strong>顺序注入流水线并并行计算</strong>：每个 stage 对每个子序列都保存其 hidden states（KVCache-like），当处理子序列 $s_i$ 时，可以直接利用缓存的 $s_1&hellip;s_{i-1}$ 的 hidden states 来正确计算 self-attention，从而不用把整个序列一次性在单台设备上串行处理。见图：<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure5.png">、<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure6.png">。</p>
 <p><strong>关键工程与正确性注意点</strong>：</p>
 <ul>
 <li>每个 stage 需要缓存所有注入过的子序列的 hidden states（内存/KVCache 管理需谨慎），因此需要在 partition planning 时考虑 KVCache 的内存占用。</li>
@@ -426,7 +327,7 @@ $$</p>
 <h3 id="42-collaborative-inference-for-decoding-phase">4.2 COLLABORATIVE INFERENCE FOR DECODING PHASE<a hidden class="anchor" aria-hidden="true" href="#42-collaborative-inference-for-decoding-phase">#</a></h3>
 <p>Decoding 阶段的难点在于其自回归（autoregressive）性质：每个新 token 依赖前面的完整上下文，传统上难以并行。Jupiter 在这部分提出两条主线优化：<strong>Speculative Decoding（草稿式并行）</strong> 与 <strong>Outline-Based Pipeline Parallel Decoding（大纲引导并行）</strong>，二者可以组合使用。</p>
 <h4 id="421-collaborative-inference-with-speculative-decoding">4.2.1 Collaborative Inference with Speculative Decoding<a hidden class="anchor" aria-hidden="true" href="#421-collaborative-inference-with-speculative-decoding">#</a></h4>
-<p><strong>基本思路</strong>：在每个 decoding 步，使用额外的 lightweight heads（或小的独立 draft model）基于当前 logits 预测多个 candidate tokens（draft），然后把这些候选并行验证（通过原始 LLM 前向）以确认哪些 candidate 可接受，从而用并行化减少需要逐 token 由原 LLM 处理的轮数（Draft-then-Verify Paradigm）。论文实现采用 <strong>Self-Drafting（在主模型上加 FFN heads）</strong>，流程如下（图示见 <img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure8.png">）：</p>
+<p><strong>基本思路</strong>：在每个 decoding 步，使用额外的 lightweight heads（或小的独立 draft model）基于当前 logits 预测多个 candidate tokens（draft），然后把这些候选并行验证（通过原始 LLM 前向）以确认哪些 candidate 可接受，从而用并行化减少需要逐 token 由原 LLM 处理的轮数（Draft-then-Verify Paradigm）。论文实现采用 <strong>Self-Drafting（在主模型上加 FFN heads）</strong>，流程如下（图示见 <img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure8.png">）：</p>
 <ol>
 <li>将当前 token 输入 LLM 前向，得到 logits。</li>
 <li>logits 由头部（draft heads，FFN）并行生成多个 candidate tokens。</li>
@@ -436,7 +337,7 @@ $$</p>
 </ol>
 <p><strong>工程亮点</strong>：Jupiter 的工作流使每一次 draft + verify 只需要一次完整 LLM 前向（而非多次），并精心管理 KVCache 与候选 token 的同步删除/保留，最大限度避免冗余计算。论文在实验中采用了 Medusa 的 token-tree speculative decoding 算法作为具体实现示例（5 个 draft head，top-1 策略等）。</p>
 <h4 id="422-outline-based-pipeline-parallel-decoding">4.2.2 Outline-Based Pipeline Parallel Decoding<a hidden class="anchor" aria-hidden="true" href="#422-outline-based-pipeline-parallel-decoding">#</a></h4>
-<p><strong>核心动机</strong>：仅用 speculative decoding 虽能并行化 token 生成，但流水线仍可能串行化（尤其当 draft → verify 仍形成串行依赖）。借鉴“人类先列提纲再逐点展开”的思路，Jupiter 提出在 prefill 时先让模型生成回答的大纲（outline），再把大纲中的每个要点作为独立“point-extending request”并行送入 pipeline 扩展，最终把每个点的输出拼接得到完整答案。流程概览（见图 <img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure9.png">）：</p>
+<p><strong>核心动机</strong>：仅用 speculative decoding 虽能并行化 token 生成，但流水线仍可能串行化（尤其当 draft → verify 仍形成串行依赖）。借鉴“人类先列提纲再逐点展开”的思路，Jupiter 提出在 prefill 时先让模型生成回答的大纲（outline），再把大纲中的每个要点作为独立“point-extending request”并行送入 pipeline 扩展，最终把每个点的输出拼接得到完整答案。流程概览（见图 <img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure9.png">）：</p>
 <ol>
 <li>在 prefill 阶段，把用户 query 与“大纲生成指令”拼接并进行 prefill（该静态 guide prompt 的 prefill 可离线 cache 到 KVCache）。</li>
 <li>模型输出一个有序大纲（例如 3–6 点）。</li>
@@ -453,7 +354,7 @@ $$</p>
 <li>使用三种 assistant-style 数据集评估生成质量：LiMA（用于延迟基准主要），Vicuna-80、WizardLM（用于评估生成质量）。</li>
 </ul>
 <p><strong>边缘设备与环境</strong></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table3.png"></p>
 <ul>
 <li>三类 off-the-shelf 设备：Jetson Xavier NX（384-core Volta，8GB，20W）、Jetson TX2（256-core，8GB，20W）、Jetson Nano（128-core，8GB，10W）。</li>
 <li>定义两种实验环境：Homogeneous Environment A（4×NX）与 Heterogeneous Environment B（1×NX + 2×TX2 + 1×Nano）。</li>
@@ -464,7 +365,7 @@ $$</p>
 <hr>
 <h3 id="b-end-to-end-performance">B. End-to-End Performance<a hidden class="anchor" aria-hidden="true" href="#b-end-to-end-performance">#</a></h3>
 <p><strong>实验设置</strong>：从 LiMA 中抽样 prompts（平均 prompt 长度 ~260 tokens），max generation length = 64。测量端到端生成延迟（包括 prefill 与 decoding）。结果见 Table IV；下为重要观察与解释（结合表格数据）：</p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table4.png"></p>
 <p><strong>关键结果与解读</strong>：</p>
 <ul>
 <li>在多种带宽与设备拓扑上，Jupiter 恒显著优于所有基线。</li>
@@ -474,15 +375,15 @@ $$</p>
 <li>Heterogeneous 环境下（Env B），Jupiter 依然稳健，原因在于 parallelism planning 能考虑设备异构并做到负载均衡。</li>
 </ul>
 <p><strong>图形观察（Fig.10/11）</strong>
-<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure10.png"></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure11.png"></p>
+<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure10.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure11.png"></p>
 <ul>
 <li>Fig.10（Homogeneous）与 Fig.11（Heterogeneous）分别展示 prefill 与 decoding 阶段的 per-token 延迟：Jupiter 在 prefill 上有稳定的 1.4×–7.4× 提速，而在 decoding 阶段提升更为显著（2.9×–33.2×），表明 decoding 部分的优化（speculative + outline）为本方法带来最大收益。</li>
 </ul>
 <hr>
 <h3 id="c-phase-wise-analysis">C. Phase-Wise Analysis<a hidden class="anchor" aria-hidden="true" href="#c-phase-wise-analysis">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure10.png"></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure11.png">
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure10.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure11.png">
 论文把 prefill 与 decoding 分开分析，具体观察如下（并补充更细的解析）：</p>
 <p><strong>Prefill Phase（逐 token prefill 延迟）</strong></p>
 <ul>
@@ -496,15 +397,15 @@ $$</p>
 <hr>
 <h3 id="d-scalability">D. Scalability<a hidden class="anchor" aria-hidden="true" href="#d-scalability">#</a></h3>
 <p><strong>4-node homogeneous NX 集群实验（Fig.12）</strong>：
-<img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/figure12.png"></p>
+<img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/figure12.png"></p>
 <ul>
 <li>在节点数量增加时，Jupiter 的端到端延迟显著下降，且即使在 100Mbps（带宽受限）下也展示良好可扩展性（论文报告最高达 23.7× 缩减相对某些基线）。这体现了采用 pipeline（邻居激活传输）策略相对于 TP/SP 的通信优势，以及并结合 intra-sequence 并行与 decoding 并行化的设计，能让更多设备实际参与到并行工作中而非空闲等待。</li>
 </ul>
 <hr>
 <h3 id="e-decoding-speedup-and-generation-quality-assessment">E. Decoding Speedup and Generation Quality Assessment<a hidden class="anchor" aria-hidden="true" href="#e-decoding-speedup-and-generation-quality-assessment">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table5.png"></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table6.png"></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/Jupiter/table7.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table6.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/Jupiter/table7.png"></p>
 <p><strong>1) Decoding Speedup Analysis（消融）</strong></p>
 <ul>
 <li>论文做了 ablation：分别禁用 Outline-based Parallelism（OP）或 Speculative Decoding（SD），比较速度提升（见 Table V）。结果显示二者均贡献明显：整体 speedup 可达 3.6×（7B）到 3.9×（13B），其中 SD 和 OP 各自能单独带来 1.8–2.4× 级别的 speedup。表格如下（简述）：</li>
@@ -564,17 +465,17 @@ $$</p>
 
   <footer class="post-footer">
     <ul class="post-tags">
-      <li><a href="https://jjl357.github.io/blog/tags/serving/">Serving</a></li>
-      <li><a href="https://jjl357.github.io/blog/tags/parallelism/">Parallelism</a></li>
-      <li><a href="https://jjl357.github.io/blog/tags/system/">System</a></li>
-      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+      <li><a href="http://localhost:1313/blog/tags/serving/">Serving</a></li>
+      <li><a href="http://localhost:1313/blog/tags/parallelism/">Parallelism</a></li>
+      <li><a href="http://localhost:1313/blog/tags/system/">System</a></li>
+      <li><a href="http://localhost:1313/blog/tags/paper-note/">Paper Note</a></li>
     </ul>
   </footer>
 </article>
     </main>
     
 <footer class="footer">
-        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+        <span>&copy; 2026 <a href="http://localhost:1313/blog/">JJ&#39;s Blog</a></span> · 
 
     <span>
         Powered by

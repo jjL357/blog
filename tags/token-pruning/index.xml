@@ -2,18 +2,36 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Token Pruning on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/token-pruning/</link>
+    <link>http://localhost:1313/blog/tags/token-pruning/</link>
     <description>Recent content in Token Pruning on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 01 Mar 2026 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/token-pruning/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 23 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/blog/tags/token-pruning/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models</title>
+      <link>http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</link>
+      <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;CVPR&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/xuyang-liu16/V2Drop&#34;&gt;https://github.com/xuyang-liu16/V2Drop&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：&lt;strong&gt;positional bias&lt;/strong&gt; 和 &lt;strong&gt;incompatibility with efficient operators&lt;/strong&gt;，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了&lt;strong&gt;首个从动态 token variation 视角出发的方法&lt;/strong&gt;，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 &lt;strong&gt;Variation-aware Vision Token Dropping（V2Drop）&lt;/strong&gt;，在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 &lt;strong&gt;94.0%&lt;/strong&gt; 和 &lt;strong&gt;98.6%&lt;/strong&gt;，同时将 LLM generation latency 分别降低了 &lt;strong&gt;31.5%&lt;/strong&gt; 和 &lt;strong&gt;74.2%&lt;/strong&gt;。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY</title>
-      <link>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
+      <link>http://localhost:1313/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
       <pubDate>Sun, 01 Mar 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/PruneSID/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;ICLR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/ZhengyaoFang/PruneSID&#34;&gt;https://github.com/ZhengyaoFang/PruneSID&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -26,7 +44,7 @@
 &lt;p&gt;此外，PRUNESID 引入 &lt;strong&gt;信息感知动态压缩率（information-aware dynamic compression ratio）&lt;/strong&gt;，根据图像复杂度动态分配 token 预算，从而在多样化场景上实现更优的平均信息保留。大量实验表明：在 LLaVA-1.5 上仅保留 $11.1%$ token（64 tokens）时可达 $96.3%$ 精度；在极端压缩（$5.6%$）下在 LLaVA-NeXT 仍达 $92.8%$，相较此前方法有显著提升，并在 prefilling 时间上有 $7.8\times$ 的加速。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/PruneSID/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;
 &lt;p&gt;现状：主流 VLM（如 LLaVA-1.5 与 LLaVA-NeXT）通常为每张图像产生数百到几千 visual tokens（例如 576 或 2880），远超捕捉图像语义所需。相关研究表明约 $70%$ tokens 可丢弃而对准确率影响甚微。&lt;/p&gt;
@@ -43,24 +61,24 @@
     </item>
     <item>
       <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
-      <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
+      <link>http://localhost:1313/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
       <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
+      <guid>http://localhost:1313/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
       <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR 2026&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; &lt;a href=&#34;https://zhuanlan.zhihu.com/p/1944299907109348831&#34;&gt;https://zhuanlan.zhihu.com/p/1944299907109348831&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
-      <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
+      <link>http://localhost:1313/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
       <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/lern-to-write/STC&#34;&gt;https://github.com/lern-to-write/STC&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对&lt;strong&gt;流式视频理解 (Streaming Video Understanding, SVU)&lt;/strong&gt; 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/STC/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;通过图 1 的推理时间分解可以发现：视频理解与图像理解存在显著差异 。在 Qwen2-VL 和 LLaVA-OV 等模型中，ViT 编码的计算成本通常比图像理解高出 2-3 倍，成为主要的延迟瓶颈 。例如，当 LLaVA-OV 处理 32 帧视频时，会有  个视觉标记输入 LLM，是普通图像任务（约 1,900 个标记）的三倍以上 。&lt;/p&gt;
 &lt;p&gt;针对流式场景，本研究通过实证分析揭示了两个关键特征：&lt;/p&gt;
 &lt;ol&gt;
@@ -81,10 +99,10 @@
     </item>
     <item>
       <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More</title>
-      <link>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
+      <link>http://localhost:1313/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Dart/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Dart/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ZichenWen1/DART&#34;&gt;https://github.com/ZichenWen1/DART&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
@@ -102,10 +120,10 @@
     </item>
     <item>
       <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
-      <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
+      <link>http://localhost:1313/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -122,7 +140,7 @@
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;challenges&#34;&gt;Challenges&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
   </channel>

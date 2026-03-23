@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="auto" data-theme="auto">
 
-<head><meta charset="utf-8">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script><meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="robots" content="index, follow">
+<meta name="robots" content="noindex, nofollow">
 <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS | JJ&#39;s Blog</title>
 <meta name="keywords" content="Quantization, Paper Note">
 <meta name="description" content="
@@ -23,16 +23,16 @@ My Thoughts
 1. Motivation
 Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。">
 <meta name="author" content="">
-<link rel="canonical" href="https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
-<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
-<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
-<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
-<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
-<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
-<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<link rel="canonical" href="http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
+<link crossorigin="anonymous" href="http://localhost:1313/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="http://localhost:1313/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="http://localhost:1313/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="http://localhost:1313/blog/safari-pinned-tab.svg">
 <meta name="theme-color" content="#2e2e33">
 <meta name="msapplication-TileColor" content="#2e2e33">
-<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
+<link rel="alternate" hreflang="zh-cn" href="http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
 <noscript>
     <style>
         #theme-toggle,
@@ -119,99 +119,14 @@ code.has-jax {
     color: #515151;
 }
 </style>
-<meta property="og:url" content="https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/">
-  <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
-  <meta property="og:description" content="
-Conference: ICLR&#39;25
-Github: https://github.com/facebookresearch/SpinQuant
-My Thoughts 这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。
-就像论文中提到的：
-“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived…”
-作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。
-1. Motivation Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。">
-  <meta property="og:locale" content="zh-cn">
-  <meta property="og:type" content="article">
-    <meta property="article:section" content="posts">
-    <meta property="article:published_time" content="2025-11-06T00:00:00+00:00">
-    <meta property="article:modified_time" content="2025-11-06T00:00:00+00:00">
-    <meta property="article:tag" content="Quantization">
-    <meta property="article:tag" content="Paper Note">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS">
-<meta name="twitter:description" content="
-Conference: ICLR&#39;25
-Github: https://github.com/facebookresearch/SpinQuant
 
-My Thoughts
-这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。
-理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。
-就像论文中提到的：
-
-“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived&hellip;”
-
-作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。
-
-1. Motivation
-Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。">
-
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    {
-      "@type": "ListItem",
-      "position":  1 ,
-      "name": "Posts",
-      "item": "https://jjl357.github.io/blog/posts/"
-    }, 
-    {
-      "@type": "ListItem",
-      "position":  2 ,
-      "name": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
-      "item": "https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/"
-    }
-  ]
-}
-</script>
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BlogPosting",
-  "headline": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
-  "name": "📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS",
-  "description": "\nConference: ICLR'25\nGithub: https://github.com/facebookresearch/SpinQuant\nMy Thoughts 这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。\n就像论文中提到的：\n“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived\u0026hellip;”\n作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。\n1. Motivation Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。\n",
-  "keywords": [
-    "Quantization", "Paper Note"
-  ],
-  "articleBody": "\nConference: ICLR'25\nGithub: https://github.com/facebookresearch/SpinQuant\nMy Thoughts 这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。\n就像论文中提到的：\n“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived…”\n作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。\n1. Motivation Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。\nSpinQuant 的核心动机是： 通过对激活或权重矩阵进行旋转（rotation），可以消除 outlier，使分布更高斯化，从而更易量化。\nFigure 3 (a) 展示了在旋转前后激活的峰度（Kurtosis, $\\kappa$）变化情况。 峰度 $\\kappa$ 用来衡量分布的“尾部厚度”：\n较大的 $\\kappa$ 表示存在更多离群值； $\\kappa \\approx 3$ 表示近似高斯分布。 结果显示：在 Transformer 中，旋转前许多层的 $\\kappa$ 高达 200+，说明激活中含有大量极值；而乘以随机旋转矩阵后，$\\kappa$ 降至约 3，呈现更高斯的分布，有利于量化。\nFigure 3 (b) 进一步验证：旋转后的激活张量量化误差显著降低。\n然而，虽然随机旋转能改善量化，但并非所有随机旋转的效果相同。 Figure 4 显示：在 LLaMA-2 7B 进行 W4A4 量化的 100 次随机旋转实验中，最好和最差旋转的性能差达 13 个点；随机 Hadamard 矩阵整体优于随机旋转矩阵，但其结果仍存在最高 6 点差距。\n因此，作者提出核心问题：\n“Is it possible to optimize the rotation to maximize the benefit of quantization?”\nSpinQuant 便是对此的正面回答——通过学习（优化）旋转矩阵以获得最优量化效果。\n2. Challenge 量化中的主要挑战在于 outlier 拉伸量化范围，使有效比特减少，从而使大多数值被粗糙近似。\n尽管随机旋转统计上可减轻 outlier，但不同旋转对最终性能影响巨大，差异可达十余点。因此我们需要一种可学习、可吸收、且保证数值等价的旋转策略，以稳定提升低比特量化性能。\n3. Contribution SpinQuant 的两个核心变体：\nSpinQuant_no_had：只使用两种可吸收旋转（$R_1$, $R_2$），并可直接并入权重矩阵，在推理时替换即可，无需修改网络结构。 SpinQuant_had：在此基础上额外引入在线 Hadamard 旋转矩阵（$R_3$, $R_4$），用于进一步削减极端低比特激活和 KV-cache 的离群值。 主要贡献总结：\n提出首个通过 学习旋转（learned rotations） 缓解权重与激活分布离群问题的方法。 在 Stiefel manifold 上直接优化旋转矩阵，使其最小化量化网络的最终损失。 在 Mistral-7B W4A8KV8 设置中将量化性能差距从 12.1 降至 1.6； 在极端 W4A4KV4 设置下，SpinQuant_had 将 LLaMA-2 7B 的性能差距从 22.0 点缩小至 2.9 点。 4. Method SpinQuant 框架整体目标： 在保持全精度网络数值等价的前提下，通过插入旋转矩阵使激活与权重分布更均衡，从而降低量化误差。 核心包括四个旋转矩阵的定义与优化。\n4.1 ROTATION PARAMETERIZATION (1) Rotation 基础 Hadamard matrix $H$ 是一种特殊的旋转矩阵，其元素仅为 $\\pm \\sqrt{n}$。 通过对角矩阵 $S$（对角元素为 $\\pm 1$）相乘，可生成 $2^n$ 种不同的随机 Hadamard 矩阵。\n(2) Residual Path Rotation ($R_1$) 在 residual 路径上对激活进行旋转： $$ X’ = X R_1, \\quad \\text{then revert by } R_1^\\top. $$ 这样可以在不改变数值的情况下均衡激活幅度，减少输入 FC 层的 outliers。 当量化关闭时，无论 $R_1$ 如何取值，网络输出保持不变。 $R_1$ 可直接合并进相应权重矩阵，不增加额外参数。\n(3) Attention Block Rotation ($R_2$) 在注意力模块中：\n对 value 矩阵施加 $R_2$； 对 out-projection 的输入施加 $R_2^\\top$。 由于 $R_2$ 与 $R_2^\\top$ 间无非线性算子，故在全精度下两者可互相抵消，保证数值等价。 这种 head-wise 旋转有助于改善 KV cache 与 out-projection 激活的量化表现。\n包含 $R_1$ 与 $R_2$ 的方案即 SpinQuant_no_had。\n(4) Online Hadamard Rotations ($R_3$, $R_4$) 为了进一步减少 4-bit 激活的 outlier，作者引入在线 Hadamard 旋转：\n$R_3$：应用于 KV cache； $R_4$：应用于 MLP 的输入激活（尤其 down-projection 前）。 Hadamard 旋转可通过快速哈达玛变换（FHT）高效实现，几乎不增加推理时延。 包含所有四个旋转的完整版本即 SpinQuant_had。\n为什么 $R_3$ 不需要转置（$R_3^T$）？ 这是因为 $R_3$ 的旋转被同时作用在 Query 和 Key 的相同空间方向上，它的作用是保证注意力分数（即 $QK^T$）的内积保持不变，因此不需要显式使用 $R_3^T$。\n(1) 自注意力计算核心： $$ \\text{Attn}(Q, K, V) = \\text{Softmax}\\left(\\frac{QK^\\top}{\\sqrt{d}}\\right) V $$\n在 SpinQuant 中，引入旋转后： $$ Q’ = Q R_3, \\quad K’ = K R_3 $$\n此时注意力分数变为： $$ Q’ (K’)^\\top = (Q R_3)(K R_3)^\\top = Q (R_3 R_3^\\top) K^\\top $$\n(2) 若 $R_3$ 是正交矩阵（orthogonal rotation matrix）： 即： $$ R_3 R_3^\\top = I $$\n则有： $$ Q’ (K’)^\\top = Q K^\\top $$\n也就是说：\n不论是否显式写出 $R_3^T$，旋转不会改变内积值； 因此，为了避免重复计算或矩阵转置操作，在实现上只需要一次旋转（$Q R_3$ 与 $K R_3$）即可。 4.2 Cayley-OPTIMIZED ROTATION (1) 目标函数 给定冻结的权重 $W$ 与输入 $X$，优化旋转矩阵以最小化量化后的损失： $$ \\min_{R \\in \\mathcal{M}} L_Q(R_1, R_2 | W, X) $$ 其中 $\\mathcal{M}$ 是 Stiefel manifold（所有正交矩阵的集合），$L_Q$ 表示量化网络的任务损失（如交叉熵）。\n(2) 优化方法：Cayley SGD 采用 Cayley SGD（Li et al., 2020）在流形上更新旋转矩阵： $$ R’ = \\Delta_R(Y) R = (I - \\frac{\\alpha}{2} Y)^{-1} (I + \\frac{\\alpha}{2} Y) R $$ 其中 $Y^\\top = -Y$，$Y$ 由梯度 $G = \\nabla_R L_Q$ 投影后得到： $$ \\hat{G} = G R^\\top - \\frac{1}{2} R R^\\top G R^\\top, \\quad Y = \\hat{G} - \\hat{G}^\\top $$ 该更新规则保证若 $R$ 为正交矩阵，则 $R’$ 仍正交，即保持 $R’^\\top R’ = I$。 相较普通 SGD，计算复杂度约为其两倍。\n(3) 实际优化过程 网络权重保持冻结，仅优化 ${R_1, R_2}$； 旋转矩阵参数量仅占总权重的约 0.26%； 优化使用 800 个 WikiText2 样本，100 次迭代即可收敛； 初始化使用随机 Hadamard 矩阵； Cayley 优化结果稳定且优于所有随机初始化的旋转。 5. Evaluation 5.1 Experimental Settings 优化参数：\n优化器：Cayley SGD； 学习率从 1.5 线性衰减至 0； 迭代次数：100； 数据：WikiText-2 的 800 个样本； 优化后再用 GPTQ 对旋转后的权重进行量化（128 个样本，seq len=2048）。 训练耗时： LLaMA-3 1B/3B/8B：13/18/30 分钟； LLaMA-2 7B/13B：25/30 分钟； LLaMA-2 70B：约 3.5 小时； Mistral-7B：16 分钟。\n5.2 Main Results SpinQuant_no_had：仅通过 $R_1$、$R_2$ 学得的旋转即可在 W4A8 设置下显著提升性能（如 Mistral 7B 提升 10.5 点）。 对 LLaMA3-8B（W4A8）提升 4.1 点，距 FP 仅 1.0 点。 SpinQuant_had：在激活极低比特 (A4/KV4) 情况下进一步改善，例如 LLaMA-2 7B/13B/70B W4A4KV4 分别仅落后 FP 2.9/1.4/1.7 点，领先旧方法 15~20 点。 SpinQuant_no_had 的实现简单，仅需替换旋转权重即可推理，无需改 forward。 SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销），但可在极端量化场景显著提升精度。\n5.3 Ablation Studies Ablation 分析表明：\n使用 Cayley 优化学习到的旋转优于任何随机初始化； Hadamard 初始化最稳定； 旋转学习在不同随机种子下方差极小； 对比 RTN（round-to-nearest）量化方式，SpinQuant 仍显著领先。 5.4 Illustrative Analysis of the Rotation Efficacy 论文通过二维示例直观解释旋转的意义： 若激活向量 $x = [x_1, x_2]$，其中 $x_1$ 较大，则量化范围由 $x_1$ 决定，$x_2$ 的精度受限。 旋转 45° 后可使两个分量幅值均衡，提高整体量化精度。\n在三维场景中，如 $x_1$ 的幅值为 $x_2, x_3$ 的四倍，通过合理旋转可将极值分布从 $[2, 0.5, 0.5]$ 调整为近似均衡的 $[1, 1, 1.414]$，从信息熵角度提升量化效率。 这说明学习旋转能自动发现最优的能量分布方向。\n5.5 SPEED MEASUREMENT 在 MacBook M1 Pro CPU 上测得：\nW4A8 模型相比 W16A16 提速约 3 倍； 加入在线 Hadamard 旋转仅增加约 8% 延迟。 因此，SpinQuant_no_had 适用于一般量化任务（高效无额外延迟），而 SpinQuant_had 适合极端低比特场景（略慢但精度更高）。\n6. Conclusion SpinQuant 提出了一个新的量化框架，通过学习旋转矩阵在不改变全精度网络输出的情况下有效减少 outliers，使得权重、激活和 KV cache 的 4-bit 量化在保持高精度的同时获得显著加速。\n核心特性：\n旋转不改变全精度输出（rotation invariance）； Cayley 优化保持正交性； 兼容现有 GPTQ、AWQ 等量化框架； 在多个模型与设置下达到 SOTA 表现。 SpinQuant 展示了一个全新的研究方向——基于旋转的量化优化，并为未来探索“解析最优旋转矩阵”的闭式解提供了启发。\n",
-  "wordCount" : "661",
-  "inLanguage": "zh-cn",
-  "datePublished": "2025-11-06T00:00:00Z",
-  "dateModified": "2025-11-06T00:00:00Z",
-  "mainEntityOfPage": {
-    "@type": "WebPage",
-    "@id": "https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/"
-  },
-  "publisher": {
-    "@type": "Organization",
-    "name": "JJ's Blog",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://jjl357.github.io/blog/favicon.ico"
-    }
-  }
-}
-</script>
 </head>
 <body id="top">
     <header class="header">
   <nav class="nav">
     <div class="logo">
       
-      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+      <a href="http://localhost:1313/" accesskey="h" title="☕🍵🥛 (Alt + H)">
         <span>☕🍵🥛</span>
         
       </a>
@@ -255,10 +170,10 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
 
 </div>
   </header> 
-  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/title.png"></p>
+  <div class="post-content"><p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/title.png"></p>
 <p><strong>Conference:</strong> <strong>ICLR'25</strong></p>
 <p><strong>Github:</strong> <a href="https://github.com/facebookresearch/SpinQuant">https://github.com/facebookresearch/SpinQuant</a></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure1.png"></p>
 <h2 id="my-thoughts">My Thoughts<a hidden class="anchor" aria-hidden="true" href="#my-thoughts">#</a></h2>
 <p>这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。
 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。</p>
@@ -272,8 +187,8 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
 <p>Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。</p>
 <p>SpinQuant 的核心动机是：
 <strong>通过对激活或权重矩阵进行旋转（rotation），可以消除 outlier，使分布更高斯化，从而更易量化。</strong></p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure2.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure3.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure2.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure3.png"></p>
 <p>Figure 3 (a) 展示了在旋转前后激活的峰度（Kurtosis, $\kappa$）变化情况。
 峰度 $\kappa$ 用来衡量分布的“尾部厚度”：</p>
 <ul>
@@ -282,7 +197,7 @@ Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进�
 </ul>
 <p>结果显示：在 Transformer 中，旋转前许多层的 $\kappa$ 高达 200+，说明激活中含有大量极值；而乘以随机旋转矩阵后，$\kappa$ 降至约 3，呈现更高斯的分布，有利于量化。</p>
 <p>Figure 3 (b) 进一步验证：旋转后的激活张量量化误差显著降低。</p>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure4.png"></p>
 <p>然而，虽然随机旋转能改善量化，但并非所有随机旋转的效果相同。
 Figure 4 显示：在 LLaMA-2 7B 进行 W4A4 量化的 100 次随机旋转实验中，最好和最差旋转的性能差达 13 个点；随机 Hadamard 矩阵整体优于随机旋转矩阵，但其结果仍存在最高 6 点差距。</p>
 <p>因此，作者提出核心问题：</p>
@@ -296,7 +211,7 @@ Figure 4 显示：在 LLaMA-2 7B 进行 W4A4 量化的 100 次随机旋转实验
 <p>尽管随机旋转统计上可减轻 outlier，但不同旋转对最终性能影响巨大，差异可达十余点。因此我们需要一种<strong>可学习、可吸收、且保证数值等价的旋转策略</strong>，以稳定提升低比特量化性能。</p>
 <hr>
 <h2 id="3-contribution">3. Contribution<a hidden class="anchor" aria-hidden="true" href="#3-contribution">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure1.png"></p>
 <p>SpinQuant 的两个核心变体：</p>
 <ul>
 <li><strong>SpinQuant_no_had</strong>：只使用两种可吸收旋转（$R_1$, $R_2$），并可直接并入权重矩阵，在推理时替换即可，无需修改网络结构。</li>
@@ -311,7 +226,7 @@ Figure 4 显示：在 LLaMA-2 7B 进行 W4A4 量化的 100 次随机旋转实验
 </ul>
 <hr>
 <h2 id="4-method">4. Method<a hidden class="anchor" aria-hidden="true" href="#4-method">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure1.png"></p>
 <p>SpinQuant 框架整体目标：
 在保持全精度网络数值等价的前提下，通过插入旋转矩阵使激活与权重分布更均衡，从而降低量化误差。
 核心包括四个旋转矩阵的定义与优化。</p>
@@ -328,7 +243,7 @@ $$
 当量化关闭时，无论 $R_1$ 如何取值，网络输出保持不变。
 $R_1$ 可直接合并进相应权重矩阵，不增加额外参数。</p>
 <h4 id="3-attention-block-rotation-r_2">(3) Attention Block Rotation ($R_2$)<a hidden class="anchor" aria-hidden="true" href="#3-attention-block-rotation-r_2">#</a></h4>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure5.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure5.png"></p>
 <p>在注意力模块中：</p>
 <ul>
 <li>对 value 矩阵施加 $R_2$；</li>
@@ -338,7 +253,7 @@ $R_1$ 可直接合并进相应权重矩阵，不增加额外参数。</p>
 这种 head-wise 旋转有助于改善 KV cache 与 out-projection 激活的量化表现。</p>
 <p>包含 $R_1$ 与 $R_2$ 的方案即 <strong>SpinQuant_no_had</strong>。</p>
 <h4 id="4-online-hadamard-rotations-r_3-r_4">(4) Online Hadamard Rotations ($R_3$, $R_4$)<a hidden class="anchor" aria-hidden="true" href="#4-online-hadamard-rotations-r_3-r_4">#</a></h4>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure1.png"></p>
 <p>为了进一步减少 4-bit 激活的 outlier，作者引入在线 Hadamard 旋转：</p>
 <ul>
 <li>$R_3$：应用于 KV cache；</li>
@@ -421,7 +336,7 @@ LLaMA-2 7B/13B：25/30 分钟；
 LLaMA-2 70B：约 3.5 小时；
 Mistral-7B：16 分钟。</p>
 <h3 id="52-main-results">5.2 Main Results<a hidden class="anchor" aria-hidden="true" href="#52-main-results">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table1.png"></p>
 <ul>
 <li><strong>SpinQuant_no_had</strong>：仅通过 $R_1$、$R_2$ 学得的旋转即可在 W4A8 设置下显著提升性能（如 Mistral 7B 提升 10.5 点）。
 对 LLaMA3-8B（W4A8）提升 4.1 点，距 FP 仅 1.0 点。</li>
@@ -431,10 +346,10 @@ Mistral-7B：16 分钟。</p>
 SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销），但可在极端量化场景显著提升精度。</p>
 <hr>
 <h3 id="53-ablation-studies">5.3 Ablation Studies<a hidden class="anchor" aria-hidden="true" href="#53-ablation-studies">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table2.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table3.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table4.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table2.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table3.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table4.png">
+<img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table5.png"></p>
 <p>Ablation 分析表明：</p>
 <ul>
 <li>使用 Cayley 优化学习到的旋转优于任何随机初始化；</li>
@@ -444,7 +359,7 @@ SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销）�
 </ul>
 <hr>
 <h3 id="54-illustrative-analysis-of-the-rotation-efficacy">5.4 Illustrative Analysis of the Rotation Efficacy<a hidden class="anchor" aria-hidden="true" href="#54-illustrative-analysis-of-the-rotation-efficacy">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/figure6.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/figure6.png"></p>
 <p>论文通过二维示例直观解释旋转的意义：
 若激活向量 $x = [x_1, x_2]$，其中 $x_1$ 较大，则量化范围由 $x_1$ 决定，$x_2$ 的精度受限。
 旋转 45° 后可使两个分量幅值均衡，提高整体量化精度。</p>
@@ -452,7 +367,7 @@ SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销）�
 这说明<strong>学习旋转</strong>能自动发现最优的能量分布方向。</p>
 <hr>
 <h3 id="55-speed-measurement">5.5 SPEED MEASUREMENT<a hidden class="anchor" aria-hidden="true" href="#55-speed-measurement">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SpinQuant/table6.png"></p>
+<p><img loading="lazy" src="http://localhost:1313/blog/image/SpinQuant/table6.png"></p>
 <p>在 MacBook M1 Pro CPU 上测得：</p>
 <ul>
 <li>W4A8 模型相比 W16A16 提速约 3 倍；</li>
@@ -477,15 +392,15 @@ SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销）�
 
   <footer class="post-footer">
     <ul class="post-tags">
-      <li><a href="https://jjl357.github.io/blog/tags/quantization/">Quantization</a></li>
-      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+      <li><a href="http://localhost:1313/blog/tags/quantization/">Quantization</a></li>
+      <li><a href="http://localhost:1313/blog/tags/paper-note/">Paper Note</a></li>
     </ul>
   </footer>
 </article>
     </main>
     
 <footer class="footer">
-        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+        <span>&copy; 2026 <a href="http://localhost:1313/blog/">JJ&#39;s Blog</a></span> · 
 
     <span>
         Powered by

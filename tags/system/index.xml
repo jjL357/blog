@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>System on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/system/</link>
+    <link>http://localhost:1313/blog/tags/system/</link>
     <description>Recent content in System on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Mon, 15 Dec 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/system/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/system/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 Empower Vision Applications with LoRA LMM</title>
-      <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
+      <link>http://localhost:1313/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VaLora/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VaLora/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;Eurosys&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;尽管 LMMs (Large Multimodal Models) 在通用视觉任务上表现出色，但在应用于需要&lt;strong&gt;领域特定知识 (Domain-specific knowledge)&lt;/strong&gt; 的实际场景时，其表现往往不如人意，类似于早期 LLM 的幻觉问题。&lt;/p&gt;
@@ -32,21 +32,21 @@
     </item>
     <item>
       <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
-      <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
+      <link>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation-动机&#34;&gt;1. Motivation (动机)&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;图 1 抽象了一个部署在智能家居场景中的&lt;strong&gt;基于VLM（视觉-语言模型）的在线视频理解应用&lt;/strong&gt;。在这个应用中，家庭成员可以随时发起针对当前或历史录制视频片段的查询。该应用包含三个关键模块：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;流媒体感知模块 (Streaming Perception Module):&lt;/strong&gt; 配备板载计算能力的边缘摄像头持续捕获家庭场景的视频，并即时处理多模态数据。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;历史记忆模块 (Historical Memory Module):&lt;/strong&gt; 构建历史视频流并存储在记忆数据库中，以支持高效准确地检索与查询相关的信息。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;推理模块 (Reasoning Module):&lt;/strong&gt; 在接收到用户查询后，利用云托管的 VLM 进行推理并生成答案，由历史记忆提供上下文基础 (contextual grounding)。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;AI 社区中新兴的研究工作（如 [13]–[15]）探索了 VLM 在视频理解中的有效性，但大多数工作都侧重于&lt;strong&gt;算法性能 (algorithmic performance)&lt;/strong&gt;，而&lt;strong&gt;忽略了部署相关的约束 (deployment-related constraints)&lt;/strong&gt;，这限制了它们在边缘智能场景中的直接适用性。&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;纯云端部署 (Fully Cloud-based Deployment):&lt;/strong&gt;
@@ -70,10 +70,10 @@
     </item>
     <item>
       <title>📝 Elastic On-Device LLM Service</title>
-      <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
+      <link>http://localhost:1313/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;MobiCom &amp;lsquo;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yinwangsong/ElastiLM&#34;&gt;https://github.com/yinwangsong/ElastiLM&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
@@ -83,7 +83,7 @@
 &lt;li&gt;&lt;strong&gt;Prefill（预填充阶段）&lt;/strong&gt;：处理 Prompt 的速度，由 &lt;strong&gt;Time-To-First-Token (TTFT)&lt;/strong&gt; 衡量。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Decode（解码阶段）&lt;/strong&gt;：生成 Token 的速度，由 &lt;strong&gt;Time-Per-Output-Token (TPOT)&lt;/strong&gt; 衡量。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/table1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/table1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;不同的应用对这两个指标有截然不同的要求（如上表所示）：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Chatbot&lt;/strong&gt;：需要低 TTFT 和低 TPOT 以匹配人类阅读速度。&lt;/li&gt;
@@ -91,7 +91,7 @@
 &lt;li&gt;&lt;strong&gt;后台屏幕录制器&lt;/strong&gt;：对 TTFT/TPOT 的容忍度都很高。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;如果无法满足 SLO，会导致用户体验严重下降或 Agent 交互失败。理想情况下，请求发送给弹性 LLM 时会附带 Prompt 和预期的 SLO，LLM 需要在不违反 SLO 的前提下提供最高的文本生成质量。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;作者的先导实验表明（如图2）：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;TTFT&lt;/strong&gt; 与 Prompt 长度和模型大小均成正比：$TTFT \propto PromptLength \times ModelSize$。&lt;/li&gt;
@@ -101,15 +101,15 @@
     </item>
     <item>
       <title>📝 RServe: Overlapping Encoding and Prefill for Efficient LMM Inference</title>
-      <link>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
+      <link>http://localhost:1313/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
       <pubDate>Sat, 06 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;大型多模态模型（LMMs）通常采用编码模块将多模态数据输入转换为 Embedding，然后将其馈送给语言模型进行进一步处理。然而，由于其推理流程的固有复杂性，高效地服务 LMM 仍然极具挑战性。传统的服务引擎将编码模块和语言模型部署在一起，导致显著的资源干扰和紧密的数据依赖。最近的研究通过将编码模块从模型中解（Disaggregating），采用预填充-解码（Prefill-Decode）分离的设计风格来缓解这一问题。尽管如此，这些方法未能充分利用单个请求内（Intra-request）和多个请求间（Inter-request）的并行性。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;与纯语言模型相比，多模态模型推理通常依赖于更丰富的提示输入，如图 1 所示。当前的 LMM 依赖额外的编码器来生成与传统 LLM 兼容的多模态输入 Embedding。尽管如此，LMM 面临另一个挑战：在单个请求内编码所有多模态数据会引入显著的延迟（其比例可高达 26%，如图 2 所示），这会干扰 LLM 的前向计算。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;随着模型规模的不断增长，LLM 或 LMM 的分布式部署已成为主流。最广泛使用的方法包括张量并行（Tensor Parallelism, TP）和流水线并行（Pipeline Parallelism, PP）。&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;张量并行 (TP):&lt;/strong&gt; 通常用于具有高带宽互连的节点内，可有效降低推理延迟。&lt;/li&gt;
@@ -133,10 +133,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     </item>
     <item>
       <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving </title>
-      <link>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
+      <link>http://localhost:1313/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/title.png&#34;&gt;
+      <guid>http://localhost:1313/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/title.png&#34;&gt;
 &lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;SoCC&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;h3 id=&#34;1-动机motivation&#34;&gt;1. 动机（Motivation）&lt;/h3&gt;
 &lt;p&gt;大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：&lt;/p&gt;
@@ -146,7 +146,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;li&gt;&lt;strong&gt;语言模型后端：&lt;/strong&gt; 结合文本提示和图像标记生成文本输出。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;当前，这些阶段通常以&lt;strong&gt;单体系统&lt;/strong&gt;[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。&lt;/p&gt;
-&lt;p&gt;这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足&lt;strong&gt;首令牌时间（TTFT）的服务水平目标（SLOs）。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞&lt;/strong&gt;，进而降低系统响应能力并导致资源过度配置。&lt;/p&gt;
+&lt;p&gt;这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足&lt;strong&gt;首令牌时间（TTFT）的服务水平目标（SLOs）。&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞&lt;/strong&gt;，进而降低系统响应能力并导致资源过度配置。&lt;/p&gt;
 &lt;h3 id=&#34;2-贡献contribution&#34;&gt;2. 贡献（Contribution）&lt;/h3&gt;
 &lt;p&gt;&lt;strong&gt;作者的工作：&lt;/strong&gt; 本文首次对两种主流LMM架构——&lt;strong&gt;交叉注意力（CroAttn）和仅解码器（DecOnly）&lt;/strong&gt;——进行了全面的系统分析。分析对象包括六个代表性的开源LMMs以及来自Azure数据中心的真实生产LMM推理轨迹。作者深入剖析了它们的多阶段推理流程、性能与资源之间的权衡，以及生产工作负载模式（包括可变的请求率、多样化的多模态输入和突发流量）。为促进研究，作者发布了来自生产集群的首个开源多模态轨迹，以供社区研究真实世界的部署模式。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;关键洞察（Insights）：&lt;/strong&gt; 作者的分析确定了三个优化LMM推理的关键洞察：&lt;/p&gt;
@@ -158,20 +158,20 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;ModServe架构：&lt;/strong&gt; 基于上述洞察，作者提出了&lt;strong&gt;ModServe&lt;/strong&gt;，一种新型的模块化架构，专为可扩展和资源高效的LMM服务而设计，旨在直接解决分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;图像实例：&lt;/strong&gt; 处理图像预处理和编码。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;文本实例：&lt;/strong&gt; 管理LLM的预填充和解码（见&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文本实例：&lt;/strong&gt; 管理LLM的预填充和解码（见&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;）。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;请求流：&lt;/strong&gt; 纯文本请求绕过图像实例直接由文本实例服务；图像-文本请求则先通过图像实例将图像转换为标记，再转发给文本实例进行文本生成。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;strong&gt;ModServe的优化能力：&lt;/strong&gt; 这种模块化架构实现了阶段特定的优化：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;独立资源管理：&lt;/strong&gt; ModServe独立地使用阶段感知自动扩展、模型分片和批处理来管理图像和文本实例。通过单独扩展各个阶段，它最大程度地减少了资源过度配置。例如，在生产流量中观察到的图像驱动突发期间，图像实例可以独立扩展，从而比单体推理系统更具资源效率。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;并行化编码：&lt;/strong&gt; 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;并行化编码：&lt;/strong&gt; 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;模态感知路由：&lt;/strong&gt; 为管理图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，图像-文本请求中的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;strong&gt;性能表现：&lt;/strong&gt; 作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过在运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群上进行广泛评估，验证了ModServe的有效性。与最先进的基线相比，ModServe在静态资源分配下实现了&lt;strong&gt;3.3至5.5倍&lt;/strong&gt;更高的吞吐量，同时在满足P99 TTFT SLOs的前提下，将LMM服务成本降低了&lt;strong&gt;25%至41.3%&lt;/strong&gt;。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;互补性：&lt;/strong&gt; 虽然现有的PD分解技术[46, 65]有助于优化LLM推理（通过分离预填充和解码），但它们对于处理多模态工作负载来说是不够的。生产环境中异构且突发的多模态流量性质，使得在以文本为中心背景下研究的PD分解难以扩展；模态特定的优化（如并行化编码、模态感知路由和阶段自动扩展）对于在保持资源效率的同时满足SLOs至关重要。作者在第5节中证明，ModServe可以与LLM后端的两种配置（共置LLM后端/混合PD批处理，以及文本节点的PD分解）结合，且提出的模态感知技术在两种配置下都能改善服务延迟。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;适用范围：&lt;/strong&gt; 作者重点研究了图像-文本到文本和视频-文本到文本（视频被视为图像帧序列处理[31]）任务，但其洞察可推广到其他多模态场景，例如音频-文本到文本任务[23]，因为它们与研究所用的模型具有相似的模型架构和推理阶段。&lt;/p&gt;
 &lt;h3 id=&#34;3-基础知识preliminary&#34;&gt;3. 基础知识（Preliminary）&lt;/h3&gt;
-&lt;p&gt;LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure2.png&#34;&gt;描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：&lt;/p&gt;
+&lt;p&gt;LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure2.png&#34;&gt;描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;图像预处理：&lt;/strong&gt; 将原始图像转换为统一大小的图块。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;图像编码：&lt;/strong&gt; 编码器提取视觉特征并生成一系列图像标记。&lt;/li&gt;
@@ -182,10 +182,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     <item>
       <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
 </title>
-      <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
+      <link>http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
       <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Jupiter/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ysyisyourbrother/Jupiter&#34;&gt;https://github.com/ysyisyourbrother/Jupiter&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -202,7 +202,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;ul&gt;
 &lt;li&gt;
 &lt;p&gt;提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
-&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Jupiter/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;在 &lt;strong&gt;prefill&lt;/strong&gt; 阶段提出 &lt;strong&gt;intra-sequence pipeline parallelism&lt;/strong&gt; —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。&lt;/p&gt;
@@ -215,12 +215,12 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     </item>
     <item>
       <title>📝 Breaking the Wall: Unifying Edge GPUs and NPUs into Pipeline Parallelism for Efficient LLM Fine-Tuning</title>
-      <link>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</link>
+      <link>http://localhost:1313/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</guid>
+      <guid>http://localhost:1313/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</guid>
       <description>&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;目前边缘GPU（e-GPUs）和边缘NPU（e-NPUs）在硬件架构上存在显著差异，导致运行性能上有很大不同。例如，研究测量显示，某些e-NPUs仅进行前向传播的计算能力在进行反向传播时会降低10倍。具体来说，大多数边缘NPU（e-NPU）设备专为推理任务设计，只支持前向传播（FP），缺乏反向传播（BP）所需的BroadcastGradient和ReluGrad操作，这使得它们不兼容训练或微调任务。以Atlas 200I（e-NPU）的测量结果为例，如图1所示，其仅进行前向传播的计算能力为20 TOPS，而在进行反向传播时会降低约10倍至2.4 TOPS。这与Jetson Orin Nano等e-GPUs形成鲜明对比，后者的前向传播（FP）和反向传播（BP）计算能力保持相同的34 TOPS。因此，当使用现有并行方法将e-NPUs和e-GPUs统一用于LLMs微调时，e-NPUs上的慢速反向传播必然会增加整体延迟，如图5a所示。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;因此，如何将e-GPUs和e-NPUs统一到单一的流水线并行中，以实现高效的LLMs微调，是一个尚未充分探索且具有挑战性的问题。&lt;/p&gt;
 &lt;h2 id=&#34;2-preliminary&#34;&gt;2. Preliminary&lt;/h2&gt;
 &lt;p&gt;与通过反向传播计算梯度的BP-enable设备（e-GPUs）不同，BP-free设备（e-NPUs）仅使用前向传播基于方向导数估计梯度。具体来说，当使用参数高效方法如LoRA微调LLM $\Theta$时，带有可训练参数$\theta$和损失函数$L$的$\Theta$，在小批量$B = {b_1, &amp;hellip;, b_M}$上的估计梯度可计算如下：&lt;/p&gt;
@@ -229,7 +229,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;图2a显示了估计梯度与通过带反向传播的一阶优化计算的梯度之间的相似性。作者观察到，添加扰动可以使估计梯度更接近BP梯度，同时仍比一阶优化实现更低的执行时间，如图2a所示。因此，为进一步减少估计方差并稳定微调，估计梯度可以通过对$Q$个独立采样方向$\mathbf{z}_q \sim \mathcal{N}(0, I_d)$取平均来计算：&lt;/p&gt;
 &lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$&lt;/p&gt;
 &lt;p&gt;此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;作者首次提出了一种统一e-GPUs和e-NPUs的单一pipeline并行方案，用于高效的LLMs微调，该方案融合了无BP的零阶优化和一阶优化，以加速整体微调收敛。&lt;/li&gt;
@@ -237,26 +237,26 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;li&gt;大量实验表明了HybridOP的收敛性和有效性。与最先进的基线Asteroid相比，HybridOP将计算利用率提高了0.8倍，吞吐量提高了27.7%，并减少了41.2%的收敛时间，用于使用4个e-NPUs和6个e-GPUs微调LLaMA-3.1-8B模型。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id=&#34;4-hybridop-system-design&#34;&gt;4. HYBRIDOP SYSTEM DESIGN&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
 &lt;h3 id=&#34;41-overview&#34;&gt;4.1 Overview&lt;/h3&gt;
 &lt;p&gt;在HybridOP并行方案中，e-GPUs使用反向传播计算BP梯度，而e-NPUs使用多次前向传播计算估计梯度。首先，这些e-GPUs和e-NPUs协作执行第一次前向传播，并获取相应的无扰动基础损失（蓝色箭头）。然后，e-NPU设备生成可训练参数的随机扰动，并基于这些扰动参数执行前向传播（绿色箭头）。同时，e-GPU设备执行反向传播以计算BP梯度（橙色箭头）。流水线的最后一个设备计算损失和对应于随机扰动的方向导数$g(\mathbf{z})$，并将$g(\mathbf{z})$传输到所有e-NPU设备。e-NPU设备基于公式(10)计算估计梯度。最后，所有异构设备在流水线中获取小批量$b_i$的梯度。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
-      <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
+      <link>http://localhost:1313/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/vbdi/epdserve&#34;&gt;https://github.com/vbdi/epdserve&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Large Multimodal Models (LMMs) 将视觉/音频/视频等感知模态引入到 LLM 的推理流程中，从而带来更强的能力，但随之而来的是&lt;strong&gt;额外的编码（encoding）阶段&lt;/strong&gt;，该阶段会产生大量视觉（或音频）token，显著增加计算与内存消耗，并对关键的 SLO（如 TTFT、TPOT）造成负面影响。当前主流的 LLM-serving 系统（如 vLLM、DistServe 等）要么将编码与 prefill 聚合在同一资源上导致干扰与内存竞争，要么只对 LLM 的 prefill/decode 做优化，无法从根本上缓解 LMM 的编码瓶颈。因此论文提出通过**将 Encoding / Prefill / Decode 三阶段进行严格分离（EPD Disaggregation）**来重新设计服务架构，以解耦资源、并提供针对每阶段的定制优化，从而减少延迟、提升 SLO 达成率并大幅节省内存。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;现有 LLM 服务（vLLM、SARATHI、Orca 等）与 Disaggregated-serving（SplitWise、DistServe、DéjàVu 等）对 LLM 的 prefill/decode 分离带来了可观改进，但这些工作&lt;strong&gt;通常忽略或未充分优化编码（encoding）阶段&lt;/strong&gt;，因此不适用于 LMM 的编码密集型工作负载。相较之下，本文填补该空白，提出将编码也作为独立可调度阶段，从而开启新的并行化、缓存与资源分配策略。&lt;/li&gt;
 &lt;/ul&gt;
@@ -274,16 +274,16 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
     </item>
     <item>
       <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
-      <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
+      <link>http://localhost:1313/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
       <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticMM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Oral&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-background-and-motivation&#34;&gt;1. Background and Motivation&lt;/h2&gt;
 &lt;p&gt;多模态大语言模型（Multimodal Large Language Models, MLLMs）在传统 LLM 的基础上扩展了图像、视频、音频等输入模态，使模型能够进行跨模态理解与推理。然而，这些额外组件（如视觉编码器、投影模块等）带来了显著的推理开销。由于多模态推理流程复杂、任务异构，MLLM 的高效部署成为一个重大挑战。&lt;/p&gt;
 &lt;p&gt;现有的大多数推理服务架构（serving architecture）采用紧耦合（tightly coupled）设计，无法区分不同请求类型，也无法在不同阶段灵活地调整并行策略，导致 &lt;strong&gt;time-to-first-token (TTFT)&lt;/strong&gt; 延迟增大、GPU 资源利用率低下。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticMM/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;与传统仅处理文本的 LLM 不同，MLLM 需要同时处理多种模态的输入，因此推理流程更复杂，通常包括：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;Image Preprocessing&lt;/strong&gt;：对原始图像进行裁剪、缩放、分块；&lt;/li&gt;

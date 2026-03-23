@@ -2,29 +2,29 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Cloud-Edge on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/cloud-edge/</link>
+    <link>http://localhost:1313/blog/tags/cloud-edge/</link>
     <description>Recent content in Cloud-Edge on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Fri, 12 Dec 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/cloud-edge/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/cloud-edge/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
-      <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
+      <link>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation-动机&#34;&gt;1. Motivation (动机)&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;图 1 抽象了一个部署在智能家居场景中的&lt;strong&gt;基于VLM（视觉-语言模型）的在线视频理解应用&lt;/strong&gt;。在这个应用中，家庭成员可以随时发起针对当前或历史录制视频片段的查询。该应用包含三个关键模块：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;流媒体感知模块 (Streaming Perception Module):&lt;/strong&gt; 配备板载计算能力的边缘摄像头持续捕获家庭场景的视频，并即时处理多模态数据。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;历史记忆模块 (Historical Memory Module):&lt;/strong&gt; 构建历史视频流并存储在记忆数据库中，以支持高效准确地检索与查询相关的信息。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;推理模块 (Reasoning Module):&lt;/strong&gt; 在接收到用户查询后，利用云托管的 VLM 进行推理并生成答案，由历史记忆提供上下文基础 (contextual grounding)。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;AI 社区中新兴的研究工作（如 [13]–[15]）探索了 VLM 在视频理解中的有效性，但大多数工作都侧重于&lt;strong&gt;算法性能 (algorithmic performance)&lt;/strong&gt;，而&lt;strong&gt;忽略了部署相关的约束 (deployment-related constraints)&lt;/strong&gt;，这限制了它们在边缘智能场景中的直接适用性。&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;纯云端部署 (Fully Cloud-based Deployment):&lt;/strong&gt;
@@ -48,10 +48,10 @@
     </item>
     <item>
       <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
-      <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/kaist-ina/specedge&#34;&gt;https://github.com/kaist-ina/specedge&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;

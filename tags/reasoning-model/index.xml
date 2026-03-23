@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Reasoning Model on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/reasoning-model/</link>
+    <link>http://localhost:1313/blog/tags/reasoning-model/</link>
     <description>Recent content in Reasoning Model on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Sat, 25 Oct 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/reasoning-model/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/reasoning-model/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
-      <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Zefan-Cai/R-KV&#34;&gt;https://github.com/Zefan-Cai/R-KV&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;

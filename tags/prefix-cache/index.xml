@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Prefix Cache on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/prefix-cache/</link>
+    <link>http://localhost:1313/blog/tags/prefix-cache/</link>
     <description>Recent content in Prefix Cache on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Tue, 06 Jan 2026 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/prefix-cache/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/prefix-cache/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference</title>
-      <link>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
+      <link>http://localhost:1313/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
       <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;

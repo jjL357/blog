@@ -2,18 +2,36 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Paper Note on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/categories/paper-note/</link>
+    <link>http://localhost:1313/blog/categories/paper-note/</link>
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 01 Mar 2026 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 23 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="http://localhost:1313/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models</title>
+      <link>http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</link>
+      <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;CVPR&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/xuyang-liu16/V2Drop&#34;&gt;https://github.com/xuyang-liu16/V2Drop&lt;/a&gt;&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：&lt;strong&gt;positional bias&lt;/strong&gt; 和 &lt;strong&gt;incompatibility with efficient operators&lt;/strong&gt;，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了&lt;strong&gt;首个从动态 token variation 视角出发的方法&lt;/strong&gt;，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 &lt;strong&gt;Variation-aware Vision Token Dropping（V2Drop）&lt;/strong&gt;，在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 &lt;strong&gt;94.0%&lt;/strong&gt; 和 &lt;strong&gt;98.6%&lt;/strong&gt;，同时将 LLM generation latency 分别降低了 &lt;strong&gt;31.5%&lt;/strong&gt; 和 &lt;strong&gt;74.2%&lt;/strong&gt;。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/V2drop/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY</title>
-      <link>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
+      <link>http://localhost:1313/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
       <pubDate>Sun, 01 Mar 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/PruneSID/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;ICLR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/ZhengyaoFang/PruneSID&#34;&gt;https://github.com/ZhengyaoFang/PruneSID&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -26,7 +44,7 @@
 &lt;p&gt;此外，PRUNESID 引入 &lt;strong&gt;信息感知动态压缩率（information-aware dynamic compression ratio）&lt;/strong&gt;，根据图像复杂度动态分配 token 预算，从而在多样化场景上实现更优的平均信息保留。大量实验表明：在 LLaVA-1.5 上仅保留 $11.1%$ token（64 tokens）时可达 $96.3%$ 精度；在极端压缩（$5.6%$）下在 LLaVA-NeXT 仍达 $92.8%$，相较此前方法有显著提升，并在 prefilling 时间上有 $7.8\times$ 的加速。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/PruneSID/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/PruneSID/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;
 &lt;p&gt;现状：主流 VLM（如 LLaVA-1.5 与 LLaVA-NeXT）通常为每张图像产生数百到几千 visual tokens（例如 576 或 2880），远超捕捉图像语义所需。相关研究表明约 $70%$ tokens 可丢弃而对准确率影响甚微。&lt;/p&gt;
@@ -43,18 +61,18 @@
     </item>
     <item>
       <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
-      <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
+      <link>http://localhost:1313/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
       <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
+      <guid>http://localhost:1313/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
       <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR 2026&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Note:&lt;/strong&gt; &lt;a href=&#34;https://zhuanlan.zhihu.com/p/1944299907109348831&#34;&gt;https://zhuanlan.zhihu.com/p/1944299907109348831&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS</title>
-      <link>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</link>
+      <link>http://localhost:1313/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</link>
       <pubDate>Mon, 02 Feb 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</guid>
+      <guid>http://localhost:1313/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</guid>
       <description>&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; ICLR&#39;26&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-abstract&#34;&gt;1. Abstract&lt;/h2&gt;
@@ -64,7 +82,7 @@
 &lt;p&gt;为此，论文提出 &lt;strong&gt;Adaptive Patching（AdaPatch）&lt;/strong&gt;：一种&lt;strong&gt;无需额外训练&lt;/strong&gt;、可直接插入到现有固定 patch MLLMs 中的策略。AdaPatch 根据图像的&lt;strong&gt;原生分辨率&lt;/strong&gt;和&lt;strong&gt;信息密度&lt;/strong&gt;动态调整 patch size，从而在不同类型、不同分辨率的图像上取得更稳定、更优的性能。实验表明，该方法在不增加训练成本的前提下，显著提升了 AnyRes 场景下的准确率和稳定性；此外，论文还提出了一种&lt;strong&gt;训练版方法&lt;/strong&gt;，进一步增强模型对动态 patch size 的适应能力。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaPatch/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaPatch/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;早期的多模态大模型（如 LLaVA、InternVL 系列）通常依赖&lt;strong&gt;固定分辨率的视觉编码器&lt;/strong&gt;：要么将输入图像统一 resize 到某个标准尺寸，要么先切分成多个 tile 再分别处理。这类预处理不可避免地会改变原始视觉内容，对于需要保留细粒度细节或整体结构的任务（例如图表、示意图）尤其不利。&lt;/p&gt;
 &lt;p&gt;受 NaViT 启发，近期工作开始直接保留图像的&lt;strong&gt;原生分辨率&lt;/strong&gt;，并将图像划分为固定大小的 non-overlapping patches，使 token 数量随分辨率线性增长。随后通过 &lt;strong&gt;sequence packing&lt;/strong&gt; 将多张图像的 token 序列拼接为一个长序列，并通过 block-diagonal attention mask 保证不同图像之间不互相注意。Qwen2.5-VL、Ovis2.5、Kimi-VL 等 SOTA 模型均采用了这一范式，并宣称支持任意分辨率输入。&lt;/p&gt;
 &lt;p&gt;然而，本文通过系统性实验指出：&lt;strong&gt;当前 AnyRes 设计并未真正实现“原生分辨率鲁棒性”&lt;/strong&gt;。在跨越大范围像素预算的测试中，模型性能在不同分辨率区间显著波动，且在极低或极高分辨率下普遍退化。&lt;/p&gt;
@@ -77,24 +95,24 @@
     </item>
     <item>
       <title>📝 Matryoshka Multimodal Models</title>
-      <link>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</link>
+      <link>http://localhost:1313/blog/posts/matryoshka-multimodal-models---iclr25/</link>
       <pubDate>Fri, 30 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/M3/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/matryoshka-multimodal-models---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/M3/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mu-cai/matryoshka-mm&#34;&gt;https://github.com/mu-cai/matryoshka-mm&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/M3/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/M3/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;Large Multimodal Models (LMMs) such as LLaVA have shown strong performance in visual-linguistic reasoning. These models first embed images into a fixed large number of visual tokens and then feed them into a Large Language Model (LLM). However, this design causes an excessive number of tokens for dense visual scenarios such as high-resolution images and videos, leading to great inefficiency.&lt;/p&gt;
 &lt;p&gt;While token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 &lt;strong&gt;Matryoshka Multimodal Models (M³)&lt;/strong&gt;。该模型学习将视觉内容表示为&lt;strong&gt;嵌套的视觉 Token 集合&lt;/strong&gt;（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models</title>
-      <link>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</link>
+      <link>http://localhost:1313/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</link>
       <pubDate>Thu, 22 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VidCom2/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VidCom2/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/xuyang-liu16/VidCom2&#34;&gt;https://github.com/xuyang-liu16/VidCom2&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -118,10 +136,10 @@
     </item>
     <item>
       <title>📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees</title>
-      <link>https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</link>
+      <link>http://localhost:1313/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</link>
       <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
 &lt;p&gt;投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。&lt;/p&gt;
 &lt;p&gt;然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建&lt;strong&gt;固定宽度、固定深度&lt;/strong&gt;的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。&lt;/p&gt;
@@ -135,7 +153,7 @@
 &lt;p&gt;为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h3 id=&#34;41-the-acceptance-funnel-phenomenon-接受漏斗现象&#34;&gt;4.1 The &amp;ldquo;Acceptance Funnel&amp;rdquo; Phenomenon (接受漏斗现象)&lt;/h3&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/figure3.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;深层宽度的边际收益递减&lt;/strong&gt;：如图 3 所示，接受分布呈现出&lt;strong&gt;漏斗状模式&lt;/strong&gt;。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。&lt;/li&gt;
@@ -144,14 +162,14 @@
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h3 id=&#34;42-variance-in-real-world-accepted-length-实际接受长度的方差&#34;&gt;4.2 Variance in Real-World Accepted Length (实际接受长度的方差)&lt;/h3&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/figure4.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference</title>
-      <link>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
+      <link>http://localhost:1313/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>
       <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VLCACHE/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;
@@ -196,15 +214,15 @@
     </item>
     <item>
       <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
-      <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
+      <link>http://localhost:1313/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
       <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/lern-to-write/STC&#34;&gt;https://github.com/lern-to-write/STC&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对&lt;strong&gt;流式视频理解 (Streaming Video Understanding, SVU)&lt;/strong&gt; 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/STC/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;通过图 1 的推理时间分解可以发现：视频理解与图像理解存在显著差异 。在 Qwen2-VL 和 LLaVA-OV 等模型中，ViT 编码的计算成本通常比图像理解高出 2-3 倍，成为主要的延迟瓶颈 。例如，当 LLaVA-OV 处理 32 帧视频时，会有  个视觉标记输入 LLM，是普通图像任务（约 1,900 个标记）的三倍以上 。&lt;/p&gt;
 &lt;p&gt;针对流式场景，本研究通过实证分析揭示了两个关键特征：&lt;/p&gt;
 &lt;ol&gt;
@@ -225,12 +243,12 @@
     </item>
     <item>
       <title>📝 HyperVL: An Efficient and Dynamic Multimodal Large Language Model for Edge Devices</title>
-      <link>https://jjl357.github.io/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</link>
+      <link>http://localhost:1313/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</link>
       <pubDate>Tue, 23 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HyperVL/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HyperVL/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HyperVL/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HyperVL/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;随着数据质量的提高和模型架构设计的成熟，LLM 的 &lt;strong&gt;Densing Law&lt;/strong&gt; [Yao et al., 2024] 不断提升，使得小参数模型也能获得强大的通用能力。这一趋势为大模型的端侧部署（On-device deployment）提供了实际的基础。最近，紧凑型 MLLM（如 Qwen3 VL 2B [Bai et al., 2025a] 和 InternVL 2B [Zhu et al., 2025, Wang et al., 2025]）展示了极具竞争力的性能。&lt;/p&gt;
 &lt;p&gt;然而，一个关键的瓶颈依然存在：这些模型通常依赖标准的 &lt;strong&gt;Vision Transformer (ViT)&lt;/strong&gt; 编码器，而 ViT 具有二次复杂度（Quadratic Complexity）。当处理高分辨率输入（这在用户界面 UI 理解和 grounding 等典型端侧场景中至关重要）时，它们在端侧部署期间容易产生高内存消耗和明显的推理延迟。为了缓解这一问题，一些尝试（如 Apple 的 FastVLM [Vasu et al., 2025]）通常诉诸于通过激进的卷积下采样（Convolutional Downsampling）来减少视觉 token，但这往往以性能大幅下降为代价。&lt;/p&gt;
 &lt;h2 id=&#34;2-conclusion&#34;&gt;2. Conclusion&lt;/h2&gt;
@@ -244,15 +262,15 @@
     </item>
     <item>
       <title>📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning</title>
-      <link>https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</link>
       <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VisionThink/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VisionThink/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/dvlab-research/VisionThink&#34;&gt;https://github.com/dvlab-research/VisionThink&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VisionThink/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VisionThink/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;最近，视觉语言模型（VLMs） 通过将视觉标记（visual tokens）投影并适配到大语言模型（LLM）空间中，在通用视觉问答（General VQA）和各种现实场景中取得了显著成就。然而，随着 VLM 性能的不断提升，视觉标记的消耗呈指数级增长。例如，一张使用智能手机拍摄的 $2048 \times 1024$ 照片在 LLaVA 1.5 中需要 576 个视觉标记，而现在在 Qwen2.5-VL 中则需要 2,678 个。因此，避免过度使用视觉标记已成为当务之急。&lt;/p&gt;
 &lt;p&gt;目前已经有大量关于视觉标记压缩的研究被提出。大多数方法使用预定义的阈值来修剪或合并固定数量的视觉标记。然而，不同问题和图像的冗余程度各不相同，这引发了一个自然的问题：作者真的应该在所有场景中应用统一的标记压缩比吗？为了回答这个问题，作者简单地通过降低图像分辨率来减少视觉标记的数量，并评估了 Qwen2.5-VL 在多个基准测试上的性能。如 Fig. 1 左侧所示，作者发现对于大多数现实场景（如 MME 和 RealWorldQA），即使将图像分辨率降低四倍（显著减少 75% 的视觉标记），对模型性能的影响也微乎其微。然而，如 Fig. 1 右侧所示，对于 ChartQA 和 OCRBench 等需要细节理解和 OCR 相关能力的基准测试，减少视觉标记会导致性能大幅下降。&lt;/p&gt;
 &lt;p&gt;基于这些观察，作者发现大多数现实世界的问题并不需要带有长视觉标记的高分辨率图像，而一小部分 OCR 相关任务对这类细节输入的要求非常高 。因此，如果作者能够动态区分哪些样本需要高分辨率处理，哪些不需要，那么效率优化将具有巨大的潜力 。&lt;/p&gt;
@@ -263,32 +281,32 @@
     </item>
     <item>
       <title>📝 SpecBranch: Speculative Decoding via Hybrid Drafting and Rollback-Aware Branch Parallelism</title>
-      <link>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
+      <link>http://localhost:1313/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 Submitted&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;&lt;strong&gt;核心痛点：投机解码（Speculative Decoding, SD）中的串行瓶颈与回滚代价&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;受到现代处理器分支预测技术的启发 ，作者允许 Draft Model（草稿模型）在 Target Model（目标模型）进行验证的同时，主动生成推测性的分支。这种并行 SD 范式创建了一个两阶段流水线，使得 Draft Model 的 token 生成与 Target Model 的验证在时间上重叠，从而有效地填补了传统 SD 中固有的流水线气泡（Pipeline Bubbles）。&lt;/p&gt;
 &lt;p&gt;先前的研究（如 PEARL ）尝试在 Drafting 阶段利用 Target Model 预验证第一个 token，并在验证阶段让 Draft Model 继续生成。然而，与传统 SD 仅面临局部惩罚（即丢弃部分 token）不同，&lt;strong&gt;并行 SD 面临全局失效的风险&lt;/strong&gt; 。如果并行生成的某个关键 token 被拒绝，会导致后续所有并行计算的 token 全部失效（Global Invalidation），从而严重阻碍并行效率。这种现象在生成长度较长时尤为严重，因为被接受的 token 数量通常服从截断几何分布（Truncated Geometric Distribution），这在并行性和回滚代价之间制造了一个艰难的权衡（Trade-off）。&lt;/p&gt;
 &lt;p&gt;遗憾的是，PEARL 并未充分解决这些挑战：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecBranch/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;strong&gt;Pre-verify Rollback（预验证回滚）：&lt;/strong&gt; PEARL 忽视了并行加速的一个关键条件：验证期间生成的 token 必须被 &lt;strong&gt;“全部接受（All-Accepted）”&lt;/strong&gt; 。否则，PEARL 会退化为串行执行并失去并行能力。它仅验证第一个 token，而系统对序列中间发生的拒绝（例如 Fig. 1(b) 中  被拒绝）一无所知，直到并行验证结束才发现，导致大量浪费 。&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter</title>
-      <link>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
+      <link>http://localhost:1313/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ASPLOS&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mit-han-lab/fastrl&#34;&gt;https://github.com/mit-han-lab/fastrl&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;强化学习（RL）已成为赋予大语言模型（LLMs）强大推理能力（如OpenAI-o1, DeepSeek-R1）的标准方法。然而，这种RL方法面临独特的效率挑战。通过分析自收集的轨迹和来自字节跳动（ByteDance）的生产环境轨迹，作者确定了推理RL过程中的关键特征：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;em&gt;(Figure 1展示了推理RL中的长尾生成问题和工作负载不平衡)&lt;/em&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;(1) 极不平衡的Rollout（采样）与训练时间 (Unbalanced Rollout and Training Time):&lt;/strong&gt;&lt;br&gt;
@@ -297,7 +315,7 @@
 Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽然大多数生成的序列相对较短，但一小部分序列会达到极长的长度（例如达到最大上下文限制）。这种长尾模式并非偶发，而是贯穿整个长期训练过程的持续模式。在大多数RL步骤中，少数响应达到最大配置长度，而绝大多数则短得多，导致显着的资源未充分利用（即GPU在等待最长序列完成时处于闲置状态）。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;(3)巨大的时间和资源需求 (Substantial Time and Resource Demands):&lt;/strong&gt;&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;ByteDance的生产轨迹显示，使用128个GPU训练一个32B模型，仅完成385步就需要11天。单步训练平均耗时约40分钟，极度消耗资源。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;为什么选择投机解码 (Why Speculative Decoding - SD)?&lt;/strong&gt;&lt;br&gt;
 作者认为投机解码（SD）是非常适合解决此问题的方法。SD利用轻量级草稿模型（Draft Model）快速生成token序列，然后由目标模型并行验证。SD适合RL训练主要基于两个优点：&lt;/p&gt;
@@ -317,10 +335,10 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 Empower Vision Applications with LoRA LMM</title>
-      <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
+      <link>http://localhost:1313/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VaLora/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/VaLora/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;Eurosys&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;尽管 LMMs (Large Multimodal Models) 在通用视觉任务上表现出色，但在应用于需要&lt;strong&gt;领域特定知识 (Domain-specific knowledge)&lt;/strong&gt; 的实际场景时，其表现往往不如人意，类似于早期 LLM 的幻觉问题。&lt;/p&gt;
@@ -339,21 +357,21 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
-      <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
+      <link>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation-动机&#34;&gt;1. Motivation (动机)&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;图 1 抽象了一个部署在智能家居场景中的&lt;strong&gt;基于VLM（视觉-语言模型）的在线视频理解应用&lt;/strong&gt;。在这个应用中，家庭成员可以随时发起针对当前或历史录制视频片段的查询。该应用包含三个关键模块：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;流媒体感知模块 (Streaming Perception Module):&lt;/strong&gt; 配备板载计算能力的边缘摄像头持续捕获家庭场景的视频，并即时处理多模态数据。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;历史记忆模块 (Historical Memory Module):&lt;/strong&gt; 构建历史视频流并存储在记忆数据库中，以支持高效准确地检索与查询相关的信息。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;推理模块 (Reasoning Module):&lt;/strong&gt; 在接收到用户查询后，利用云托管的 VLM 进行推理并生成答案，由历史记忆提供上下文基础 (contextual grounding)。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Venus/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;AI 社区中新兴的研究工作（如 [13]–[15]）探索了 VLM 在视频理解中的有效性，但大多数工作都侧重于&lt;strong&gt;算法性能 (algorithmic performance)&lt;/strong&gt;，而&lt;strong&gt;忽略了部署相关的约束 (deployment-related constraints)&lt;/strong&gt;，这限制了它们在边缘智能场景中的直接适用性。&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;纯云端部署 (Fully Cloud-based Deployment):&lt;/strong&gt;
@@ -377,10 +395,10 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 Elastic On-Device LLM Service</title>
-      <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
+      <link>http://localhost:1313/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;MobiCom &amp;lsquo;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yinwangsong/ElastiLM&#34;&gt;https://github.com/yinwangsong/ElastiLM&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
@@ -390,7 +408,7 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
 &lt;li&gt;&lt;strong&gt;Prefill（预填充阶段）&lt;/strong&gt;：处理 Prompt 的速度，由 &lt;strong&gt;Time-To-First-Token (TTFT)&lt;/strong&gt; 衡量。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;Decode（解码阶段）&lt;/strong&gt;：生成 Token 的速度，由 &lt;strong&gt;Time-Per-Output-Token (TPOT)&lt;/strong&gt; 衡量。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/table1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/table1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;不同的应用对这两个指标有截然不同的要求（如上表所示）：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;Chatbot&lt;/strong&gt;：需要低 TTFT 和低 TPOT 以匹配人类阅读速度。&lt;/li&gt;
@@ -398,7 +416,7 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
 &lt;li&gt;&lt;strong&gt;后台屏幕录制器&lt;/strong&gt;：对 TTFT/TPOT 的容忍度都很高。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;如果无法满足 SLO，会导致用户体验严重下降或 Agent 交互失败。理想情况下，请求发送给弹性 LLM 时会附带 Prompt 和预期的 SLO，LLM 需要在不违反 SLO 的前提下提供最高的文本生成质量。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticLM/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticLM/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;作者的先导实验表明（如图2）：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;TTFT&lt;/strong&gt; 与 Prompt 长度和模型大小均成正比：$TTFT \propto PromptLength \times ModelSize$。&lt;/li&gt;
@@ -408,15 +426,15 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 RServe: Overlapping Encoding and Prefill for Efficient LMM Inference</title>
-      <link>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
+      <link>http://localhost:1313/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</link>
       <pubDate>Sat, 06 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/rserve---overlapping-encoding-and-prefill-for-efficient--lmminference/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;大型多模态模型（LMMs）通常采用编码模块将多模态数据输入转换为 Embedding，然后将其馈送给语言模型进行进一步处理。然而，由于其推理流程的固有复杂性，高效地服务 LMM 仍然极具挑战性。传统的服务引擎将编码模块和语言模型部署在一起，导致显著的资源干扰和紧密的数据依赖。最近的研究通过将编码模块从模型中解（Disaggregating），采用预填充-解码（Prefill-Decode）分离的设计风格来缓解这一问题。尽管如此，这些方法未能充分利用单个请求内（Intra-request）和多个请求间（Inter-request）的并行性。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;与纯语言模型相比，多模态模型推理通常依赖于更丰富的提示输入，如图 1 所示。当前的 LMM 依赖额外的编码器来生成与传统 LLM 兼容的多模态输入 Embedding。尽管如此，LMM 面临另一个挑战：在单个请求内编码所有多模态数据会引入显著的延迟（其比例可高达 26%，如图 2 所示），这会干扰 LLM 的前向计算。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Rserve/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Rserve/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;随着模型规模的不断增长，LLM 或 LMM 的分布式部署已成为主流。最广泛使用的方法包括张量并行（Tensor Parallelism, TP）和流水线并行（Pipeline Parallelism, PP）。&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;张量并行 (TP):&lt;/strong&gt; 通常用于具有高带宽互连的节点内，可有效降低推理延迟。&lt;/li&gt;
@@ -440,10 +458,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     </item>
     <item>
       <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving </title>
-      <link>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
+      <link>http://localhost:1313/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/title.png&#34;&gt;
+      <guid>http://localhost:1313/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/title.png&#34;&gt;
 &lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;SoCC&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;h3 id=&#34;1-动机motivation&#34;&gt;1. 动机（Motivation）&lt;/h3&gt;
 &lt;p&gt;大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：&lt;/p&gt;
@@ -453,7 +471,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;li&gt;&lt;strong&gt;语言模型后端：&lt;/strong&gt; 结合文本提示和图像标记生成文本输出。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;当前，这些阶段通常以&lt;strong&gt;单体系统&lt;/strong&gt;[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。&lt;/p&gt;
-&lt;p&gt;这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足&lt;strong&gt;首令牌时间（TTFT）的服务水平目标（SLOs）。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞&lt;/strong&gt;，进而降低系统响应能力并导致资源过度配置。&lt;/p&gt;
+&lt;p&gt;这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足&lt;strong&gt;首令牌时间（TTFT）的服务水平目标（SLOs）。&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞&lt;/strong&gt;，进而降低系统响应能力并导致资源过度配置。&lt;/p&gt;
 &lt;h3 id=&#34;2-贡献contribution&#34;&gt;2. 贡献（Contribution）&lt;/h3&gt;
 &lt;p&gt;&lt;strong&gt;作者的工作：&lt;/strong&gt; 本文首次对两种主流LMM架构——&lt;strong&gt;交叉注意力（CroAttn）和仅解码器（DecOnly）&lt;/strong&gt;——进行了全面的系统分析。分析对象包括六个代表性的开源LMMs以及来自Azure数据中心的真实生产LMM推理轨迹。作者深入剖析了它们的多阶段推理流程、性能与资源之间的权衡，以及生产工作负载模式（包括可变的请求率、多样化的多模态输入和突发流量）。为促进研究，作者发布了来自生产集群的首个开源多模态轨迹，以供社区研究真实世界的部署模式。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;关键洞察（Insights）：&lt;/strong&gt; 作者的分析确定了三个优化LMM推理的关键洞察：&lt;/p&gt;
@@ -465,20 +483,20 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;ModServe架构：&lt;/strong&gt; 基于上述洞察，作者提出了&lt;strong&gt;ModServe&lt;/strong&gt;，一种新型的模块化架构，专为可扩展和资源高效的LMM服务而设计，旨在直接解决分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;图像实例：&lt;/strong&gt; 处理图像预处理和编码。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;文本实例：&lt;/strong&gt; 管理LLM的预填充和解码（见&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;文本实例：&lt;/strong&gt; 管理LLM的预填充和解码（见&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;）。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;请求流：&lt;/strong&gt; 纯文本请求绕过图像实例直接由文本实例服务；图像-文本请求则先通过图像实例将图像转换为标记，再转发给文本实例进行文本生成。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;strong&gt;ModServe的优化能力：&lt;/strong&gt; 这种模块化架构实现了阶段特定的优化：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;独立资源管理：&lt;/strong&gt; ModServe独立地使用阶段感知自动扩展、模型分片和批处理来管理图像和文本实例。通过单独扩展各个阶段，它最大程度地减少了资源过度配置。例如，在生产流量中观察到的图像驱动突发期间，图像实例可以独立扩展，从而比单体推理系统更具资源效率。&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;并行化编码：&lt;/strong&gt; 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure1.png&#34;&gt;）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;并行化编码：&lt;/strong&gt; 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure1.png&#34;&gt;）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;模态感知路由：&lt;/strong&gt; 为管理图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，图像-文本请求中的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;&lt;strong&gt;性能表现：&lt;/strong&gt; 作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过在运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群上进行广泛评估，验证了ModServe的有效性。与最先进的基线相比，ModServe在静态资源分配下实现了&lt;strong&gt;3.3至5.5倍&lt;/strong&gt;更高的吞吐量，同时在满足P99 TTFT SLOs的前提下，将LMM服务成本降低了&lt;strong&gt;25%至41.3%&lt;/strong&gt;。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;互补性：&lt;/strong&gt; 虽然现有的PD分解技术[46, 65]有助于优化LLM推理（通过分离预填充和解码），但它们对于处理多模态工作负载来说是不够的。生产环境中异构且突发的多模态流量性质，使得在以文本为中心背景下研究的PD分解难以扩展；模态特定的优化（如并行化编码、模态感知路由和阶段自动扩展）对于在保持资源效率的同时满足SLOs至关重要。作者在第5节中证明，ModServe可以与LLM后端的两种配置（共置LLM后端/混合PD批处理，以及文本节点的PD分解）结合，且提出的模态感知技术在两种配置下都能改善服务延迟。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;适用范围：&lt;/strong&gt; 作者重点研究了图像-文本到文本和视频-文本到文本（视频被视为图像帧序列处理[31]）任务，但其洞察可推广到其他多模态场景，例如音频-文本到文本任务[23]，因为它们与研究所用的模型具有相似的模型架构和推理阶段。&lt;/p&gt;
 &lt;h3 id=&#34;3-基础知识preliminary&#34;&gt;3. 基础知识（Preliminary）&lt;/h3&gt;
-&lt;p&gt;LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ModServe/figure2.png&#34;&gt;描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：&lt;/p&gt;
+&lt;p&gt;LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ModServe/figure2.png&#34;&gt;描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;图像预处理：&lt;/strong&gt; 将原始图像转换为统一大小的图块。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;图像编码：&lt;/strong&gt; 编码器提取视觉特征并生成一系列图像标记。&lt;/li&gt;
@@ -488,10 +506,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     </item>
     <item>
       <title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding</title>
-      <link>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SubSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SubSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/NYCU-EDgeAi/subspec&#34;&gt;https://github.com/NYCU-EDgeAi/subspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -511,10 +529,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     <item>
       <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
 </title>
-      <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
+      <link>http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
       <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Jupiter/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;INFOCOM&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ysyisyourbrother/Jupiter&#34;&gt;https://github.com/ysyisyourbrother/Jupiter&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -531,7 +549,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;ul&gt;
 &lt;li&gt;
 &lt;p&gt;提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
-&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Jupiter/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Jupiter/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;/li&gt;
 &lt;li&gt;
 &lt;p&gt;在 &lt;strong&gt;prefill&lt;/strong&gt; 阶段提出 &lt;strong&gt;intra-sequence pipeline parallelism&lt;/strong&gt; —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。&lt;/p&gt;
@@ -544,10 +562,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
     </item>
     <item>
       <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction</title>
-      <link>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</link>
+      <link>http://localhost:1313/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</link>
       <pubDate>Fri, 21 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/KVzip/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeuIPS&#39;25 Oral&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;GIthub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/snu-mllab/KVzip&#34;&gt;https://github.com/snu-mllab/KVzip&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -569,7 +587,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;li&gt;得到的重要 token 只对当前 query 有效，不可复用。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;论文的动机部分指出：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/KVzip/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;&lt;strong&gt;在 multi-query 复用场景中，query-aware 方法的性能快速退化。&lt;/strong&gt;&lt;/p&gt;
 &lt;/blockquote&gt;
@@ -578,14 +596,14 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;hr&gt;
 &lt;h1 id=&#34;2-challenge&#34;&gt;&lt;strong&gt;2. Challenge&lt;/strong&gt;&lt;/h1&gt;
 &lt;h2 id=&#34;21-为什么-query-aware-kv-importance-无法泛化&#34;&gt;&lt;strong&gt;2.1 为什么 query-aware KV importance 无法泛化？&lt;/strong&gt;&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure6.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/KVzip/figure6.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications</title>
-      <link>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
       <pubDate>Tue, 18 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/snowflakedb/ArcticInference&#34;&gt;https://github.com/snowflakedb/ArcticInference&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -601,12 +619,12 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
     </item>
     <item>
       <title>📝 Breaking the Wall: Unifying Edge GPUs and NPUs into Pipeline Parallelism for Efficient LLM Fine-Tuning</title>
-      <link>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</link>
+      <link>http://localhost:1313/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</guid>
+      <guid>http://localhost:1313/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</guid>
       <description>&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;目前边缘GPU（e-GPUs）和边缘NPU（e-NPUs）在硬件架构上存在显著差异，导致运行性能上有很大不同。例如，研究测量显示，某些e-NPUs仅进行前向传播的计算能力在进行反向传播时会降低10倍。具体来说，大多数边缘NPU（e-NPU）设备专为推理任务设计，只支持前向传播（FP），缺乏反向传播（BP）所需的BroadcastGradient和ReluGrad操作，这使得它们不兼容训练或微调任务。以Atlas 200I（e-NPU）的测量结果为例，如图1所示，其仅进行前向传播的计算能力为20 TOPS，而在进行反向传播时会降低约10倍至2.4 TOPS。这与Jetson Orin Nano等e-GPUs形成鲜明对比，后者的前向传播（FP）和反向传播（BP）计算能力保持相同的34 TOPS。因此，当使用现有并行方法将e-NPUs和e-GPUs统一用于LLMs微调时，e-NPUs上的慢速反向传播必然会增加整体延迟，如图5a所示。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;因此，如何将e-GPUs和e-NPUs统一到单一的流水线并行中，以实现高效的LLMs微调，是一个尚未充分探索且具有挑战性的问题。&lt;/p&gt;
 &lt;h2 id=&#34;2-preliminary&#34;&gt;2. Preliminary&lt;/h2&gt;
 &lt;p&gt;与通过反向传播计算梯度的BP-enable设备（e-GPUs）不同，BP-free设备（e-NPUs）仅使用前向传播基于方向导数估计梯度。具体来说，当使用参数高效方法如LoRA微调LLM $\Theta$时，带有可训练参数$\theta$和损失函数$L$的$\Theta$，在小批量$B = {b_1, &amp;hellip;, b_M}$上的估计梯度可计算如下：&lt;/p&gt;
@@ -615,7 +633,7 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 &lt;p&gt;图2a显示了估计梯度与通过带反向传播的一阶优化计算的梯度之间的相似性。作者观察到，添加扰动可以使估计梯度更接近BP梯度，同时仍比一阶优化实现更低的执行时间，如图2a所示。因此，为进一步减少估计方差并稳定微调，估计梯度可以通过对$Q$个独立采样方向$\mathbf{z}_q \sim \mathcal{N}(0, I_d)$取平均来计算：&lt;/p&gt;
 &lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$&lt;/p&gt;
 &lt;p&gt;此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;作者首次提出了一种统一e-GPUs和e-NPUs的单一pipeline并行方案，用于高效的LLMs微调，该方案融合了无BP的零阶优化和一阶优化，以加速整体微调收敛。&lt;/li&gt;
@@ -623,17 +641,17 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 &lt;li&gt;大量实验表明了HybridOP的收敛性和有效性。与最先进的基线Asteroid相比，HybridOP将计算利用率提高了0.8倍，吞吐量提高了27.7%，并减少了41.2%的收敛时间，用于使用4个e-NPUs和6个e-GPUs微调LLaMA-3.1-8B模型。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h2 id=&#34;4-hybridop-system-design&#34;&gt;4. HYBRIDOP SYSTEM DESIGN&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
 &lt;h3 id=&#34;41-overview&#34;&gt;4.1 Overview&lt;/h3&gt;
 &lt;p&gt;在HybridOP并行方案中，e-GPUs使用反向传播计算BP梯度，而e-NPUs使用多次前向传播计算估计梯度。首先，这些e-GPUs和e-NPUs协作执行第一次前向传播，并获取相应的无扰动基础损失（蓝色箭头）。然后，e-NPU设备生成可训练参数的随机扰动，并基于这些扰动参数执行前向传播（绿色箭头）。同时，e-GPU设备执行反向传播以计算BP梯度（橙色箭头）。流水线的最后一个设备计算损失和对应于随机扰动的方向导数$g(\mathbf{z})$，并将$g(\mathbf{z})$传输到所有e-NPU设备。e-NPU设备基于公式(10)计算估计梯度。最后，所有异构设备在流水线中获取小批量$b_i$的梯度。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 TINY BUT MIGHTY: A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES</title>
-      <link>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</link>
+      <link>http://localhost:1313/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/NANOMIND/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/NANOMIND/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 submitted&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;在设备端运行大语言模型（On-device LLMs）通过将数据保留在本地，显著增强了安全性，降低了数据泄露风险，同时支持实时智能和用户隐私保护。然而，其实际部署仍受到紧凑系统严苛的功耗与计算预算限制。随着对高级模型需求的增长——尤其是在离线或弱连接场景下——亟需在资源效率与隐私之间取得平衡的解决方案。当前这些模型已被广泛部署于智能手机、桌面设备与机器人，以支持自然语言交互、实时任务执行以及更强的用户隐私保障。&lt;/p&gt;
@@ -646,19 +664,19 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
     </item>
     <item>
       <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
-      <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
+      <link>http://localhost:1313/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/vbdi/epdserve&#34;&gt;https://github.com/vbdi/epdserve&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Large Multimodal Models (LMMs) 将视觉/音频/视频等感知模态引入到 LLM 的推理流程中，从而带来更强的能力，但随之而来的是&lt;strong&gt;额外的编码（encoding）阶段&lt;/strong&gt;，该阶段会产生大量视觉（或音频）token，显著增加计算与内存消耗，并对关键的 SLO（如 TTFT、TPOT）造成负面影响。当前主流的 LLM-serving 系统（如 vLLM、DistServe 等）要么将编码与 prefill 聚合在同一资源上导致干扰与内存竞争，要么只对 LLM 的 prefill/decode 做优化，无法从根本上缓解 LMM 的编码瓶颈。因此论文提出通过**将 Encoding / Prefill / Decode 三阶段进行严格分离（EPD Disaggregation）**来重新设计服务架构，以解耦资源、并提供针对每阶段的定制优化，从而减少延迟、提升 SLO 达成率并大幅节省内存。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPDServe/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPDServe/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;现有 LLM 服务（vLLM、SARATHI、Orca 等）与 Disaggregated-serving（SplitWise、DistServe、DéjàVu 等）对 LLM 的 prefill/decode 分离带来了可观改进，但这些工作&lt;strong&gt;通常忽略或未充分优化编码（encoding）阶段&lt;/strong&gt;，因此不适用于 LMM 的编码密集型工作负载。相较之下，本文填补该空白，提出将编码也作为独立可调度阶段，从而开启新的并行化、缓存与资源分配策略。&lt;/li&gt;
 &lt;/ul&gt;
@@ -676,16 +694,16 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
     </item>
     <item>
       <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
-      <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
+      <link>http://localhost:1313/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
       <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticMM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Oral&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-background-and-motivation&#34;&gt;1. Background and Motivation&lt;/h2&gt;
 &lt;p&gt;多模态大语言模型（Multimodal Large Language Models, MLLMs）在传统 LLM 的基础上扩展了图像、视频、音频等输入模态，使模型能够进行跨模态理解与推理。然而，这些额外组件（如视觉编码器、投影模块等）带来了显著的推理开销。由于多模态推理流程复杂、任务异构，MLLM 的高效部署成为一个重大挑战。&lt;/p&gt;
 &lt;p&gt;现有的大多数推理服务架构（serving architecture）采用紧耦合（tightly coupled）设计，无法区分不同请求类型，也无法在不同阶段灵活地调整并行策略，导致 &lt;strong&gt;time-to-first-token (TTFT)&lt;/strong&gt; 延迟增大、GPU 资源利用率低下。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ElasticMM/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ElasticMM/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;与传统仅处理文本的 LLM 不同，MLLM 需要同时处理多种模态的输入，因此推理流程更复杂，通常包括：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;Image Preprocessing&lt;/strong&gt;：对原始图像进行裁剪、缩放、分块；&lt;/li&gt;
@@ -711,10 +729,10 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
     </item>
     <item>
       <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference</title>
-      <link>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ChunkKv/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: NeurIPS&#39;25&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/NVIDIA/kvpress&#34;&gt;https://github.com/NVIDIA/kvpress&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -731,13 +749,13 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;&lt;strong&gt;问题&lt;/strong&gt;：如何避免孤立 token 重要度评估，并在 KV cache 压缩时最大限度保存语义信息？&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ChunkKv/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;以往方法在 token 维度上进行稀疏化/删减，忽略了自然语言语义通常以连续片段（chunk）出现的事实；因此需要一个&lt;strong&gt;按语义连续段（chunk）作为压缩单位&lt;/strong&gt;的方法以保留“完整的语义单元”。&lt;/li&gt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ChunkKv/table1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ChunkKv/table1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;发现并量化了“离散 token 压缩会破坏语义”的现象&lt;/li&gt;
 &lt;li&gt;提出 &lt;strong&gt;ChunkKV&lt;/strong&gt;：以固定大小（或可调整）chunk 为单位做 KV 压缩，保留最有信息量的 chunk，尽可能保留主谓宾等语义完整性，并设计了&lt;strong&gt;layer-wise index reuse&lt;/strong&gt; 技术来复用所选索引，从而显著降低额外计算开销。&lt;/li&gt;
@@ -754,10 +772,10 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
     </item>
     <item>
       <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More</title>
-      <link>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
+      <link>http://localhost:1313/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Dart/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/Dart/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ZichenWen1/DART&#34;&gt;https://github.com/ZichenWen1/DART&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
@@ -775,10 +793,10 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
     </item>
     <item>
       <title>📝 MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders </title>
-      <link>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</link>
+      <link>http://localhost:1313/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/MoVE-KD/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/MoVE-KD/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;CVPR 2025&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github：&lt;/strong&gt; &lt;a href=&#34;https://github.com/hey-cjj/MoVE-KD&#34;&gt;https://github.com/hey-cjj/MoVE-KD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -797,7 +815,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压缩进单一学生模型中，同时解决知识冲突与效率问题。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/MoVE-KD/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/MoVE-KD/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;MoVE-KD 的提出灵感来自 ViT 的 token 扩展方法 [9]，其核心思想是利用注意力机制引导多教师的知识蒸馏过程，通过 [CLS] token 判断视觉 token 的重要性，并分配动态权重，从而“选择性”吸收有价值的信息。&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
@@ -820,10 +838,10 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
     </item>
     <item>
       <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization</title>
-      <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -843,7 +861,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 这正是 DartQuant 要解决的痛点：&lt;strong&gt;如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
@@ -852,15 +870,15 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
     </item>
     <item>
       <title>📝 HEADINFER: Memory-Efficient LLM Inference by Head-wise Offloading</title>
-      <link>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</link>
+      <link>http://localhost:1313/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadInfer/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/headinfer---memory-efficient-llm-inference-by-head-wise-offloading/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HeadInfer/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25 Workshop on Long-Context Foundation Models&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/wdlctc/headinfer&#34;&gt;https://github.com/wdlctc/headinfer&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadInfer/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HeadInfer/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;Transformer-based LLM 在长上下文场景下的推理性能显著，但随着上下文长度的扩展，&lt;strong&gt;KV cache&lt;/strong&gt;（key-value cache）迅速成为内存占用的主要瓶颈。论文指出：例如对 Llama-3-8B 进行 1M token 推理时，KV cache 可达 128 GB，整体内存可达 207 GB（权重 + activation + KV cache），这是在常见 BF16 设置下的估算，使得在消费级 GPU（如 RTX-4090，24GB）上无法直接执行长上下文推理。为解决此类问题，作者提出 HEADINFER —— 通过&lt;strong&gt;按 attention head 维度进行细粒度 KV cache 离线/回传（offload）&lt;/strong&gt;，仅在 GPU 上保留部分 attention heads 的 KV，从而极大地压缩 GPU 端 KV 的占用，同时保证数学等价性（lossless）和兼容各种 attention 形式（dense / sparse）。论文摘要与引言的核心论点与数据来自原文说明。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-relative-work&#34;&gt;2. Relative Work&lt;/h2&gt;
@@ -870,13 +888,13 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
     </item>
     <item>
       <title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation</title>
-      <link>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</link>
       <pubDate>Fri, 07 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPIC/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference：&lt;/strong&gt; NeurIPS 2025&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github：&lt;/strong&gt; &lt;a href=&#34;https://github.com/ZichenWen1/EPIC&#34;&gt;https://github.com/ZichenWen1/EPIC&lt;/a&gt;&lt;/p&gt;
-&lt;h2&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC/figure3.png&#34;&gt;&lt;/h2&gt;
+&lt;h2&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/EPIC/figure3.png&#34;&gt;&lt;/h2&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
 &lt;p&gt;EPIC 这篇论文的核心思想是在&lt;strong&gt;不改动模型结构&lt;/strong&gt;的前提下，通过&lt;strong&gt;渐进式一致性蒸馏（Progressive Consistency Distillation）&lt;/strong&gt;，让多模态大语言模型在&lt;strong&gt;token 层面（Token Consistency Distillation, TCD）&lt;/strong&gt; 和 &lt;strong&gt;层级层面（Layer Consistency Distillation, LCD）&lt;/strong&gt; 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。&lt;/p&gt;
 &lt;p&gt;日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。&lt;/p&gt;
@@ -900,13 +918,13 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
     </item>
     <item>
       <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
-      <link>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
+      <link>http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
       <pubDate>Thu, 06 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpinQuant/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpinQuant/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/facebookresearch/SpinQuant&#34;&gt;https://github.com/facebookresearch/SpinQuant&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpinQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpinQuant/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
 &lt;p&gt;这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。
 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。&lt;/p&gt;
@@ -921,10 +939,10 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
     </item>
     <item>
       <title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
-      <link>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
       <pubDate>Wed, 05 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ViSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/KangJialiang/ViSpec&#34;&gt;https://github.com/KangJialiang/ViSpec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -946,16 +964,16 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 &lt;p&gt;这些问题说明：在现有的 speculative decoding 框架中，草稿模型无法充分理解和整合图像特征信息。因此，作者需要一个 &lt;strong&gt;能高效处理视觉与语言双模态特征并保持高预测精度&lt;/strong&gt; 的专门框架。ViSpec 即是在此背景下提出。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ViSpec/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面的弱点。作者观察到，大型 VLM 能逐层过滤图像中冗余信息而保持语义理解，但小模型无法做到这一点。&lt;br&gt;
 为解决这一问题，ViSpec 提出了 &lt;strong&gt;Vision-Aware Speculative Decoding&lt;/strong&gt; 框架，核心贡献如下：&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
-      <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/kaist-ina/specedge&#34;&gt;https://github.com/kaist-ina/specedge&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -973,10 +991,10 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
     </item>
     <item>
       <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference</title>
-      <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
       <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaKV/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaKV/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/FFY0/AdaKV&#34;&gt;https://github.com/FFY0/AdaKV&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -985,7 +1003,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;大型语言模型（LLM）在各个领域表现出色，但由于长序列推理所需的不断增长的键值（KV）cache，面临着效率挑战。LLM 的广泛应用推动了其处理扩展序列能力的发展。例如，GPT 支持长达 128K 的序列，Claude3 支持 200K，Gemini-Pro-1.5 甚至支持高达 2M 个 token。然而，这种 token 长度的增长带来了显著的挑战，尤其是在推理过程中cache大小的急剧膨胀。对于一个 8B 的 LLM，处理一个 2M token 的序列可能需要高达 256GB 的cache，这严重影响了 GPU 内存效率和计算运行时效率。&lt;/p&gt;
 &lt;p&gt;现有的 KV cache驱逐方法通常在所有注意力head上&lt;strong&gt;均匀分配&lt;/strong&gt;压缩预算，忽略了每个head独特的注意力模式。如 &lt;strong&gt;Figure 1a&lt;/strong&gt; 所示，不同head的注意力集中度（concentration）差异巨大：一些head（sparse heads）的注意力高度集中在少数几个 token 上，而另一些head（dispersed heads）的注意力则分布得更广。这种均匀分配导致了效率低下——要么在稀疏集中的head上浪费cache预算，要么在分散分布的head上造成显著的驱逐损失。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaKV/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaKV/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;2-relative-work&#34;&gt;2. Relative Work&lt;/h2&gt;
 &lt;h3 id=&#34;21-cache-eviction-methods&#34;&gt;2.1 Cache Eviction Methods&lt;/h3&gt;
 &lt;p&gt;cache驱逐方法主要分为两类：滑动窗口驱逐和 Top-k 驱逐。&lt;/p&gt;
@@ -998,10 +1016,10 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
     </item>
     <item>
       <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
-      <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
+      <link>http://localhost:1313/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
       <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HeadKV/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HeadKV/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; ICLR&#39;25&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/FYYFU/HeadKV&#34;&gt;https://github.com/FYYFU/HeadKV&lt;/a&gt;.&lt;/p&gt;
 &lt;hr&gt;
@@ -1016,10 +1034,10 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
     </item>
     <item>
       <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
-      <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -1036,7 +1054,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;li&gt;保持模型性能；&lt;/li&gt;
 &lt;li&gt;支持低精度硬件部署。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/QSVD/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
 &lt;h3 id=&#34;21-svd-in-large-models&#34;&gt;2.1 SVD in Large Models&lt;/h3&gt;
@@ -1057,10 +1075,10 @@ $$&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
-      <link>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
+      <link>http://localhost:1313/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -1078,10 +1096,10 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
     </item>
     <item>
       <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
-      <link>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
       <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -1091,16 +1109,16 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaSpec/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;SD 的加速性能依赖于 draft 与 target 模型的&lt;strong&gt;对齐度（alignment）&lt;/strong&gt;。传统 Knowledge Distillation (KD) 的目标是最小化 KL 散度，但这与 SD 的最终目标——&lt;strong&gt;最大化 token acceptance rate（被 target 接受的比例）&lt;/strong&gt;——并不一致。&lt;/p&gt;
 &lt;p&gt;因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
-      <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/RKV/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; NeurIPS&#39;25&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Zefan-Cai/R-KV&#34;&gt;https://github.com/Zefan-Cai/R-KV&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -1114,10 +1132,10 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
     </item>
     <item>
       <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
-      <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
+      <link>http://localhost:1313/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -1134,21 +1152,21 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;challenges&#34;&gt;Challenges&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
-      <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
+      <link>http://localhost:1313/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
       <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/C2C/title.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-motivation动机--背景&#34;&gt;💡 Motivation（动机 / 背景）&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/C2C/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;现状：多-LLM 系统通常通过 &lt;strong&gt;文本（Text-to-Text, T2T）&lt;/strong&gt; 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 &lt;strong&gt;串行解码带来的延迟&lt;/strong&gt; 等问题。&lt;/li&gt;
 &lt;li&gt;问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。&lt;/li&gt;
@@ -1160,7 +1178,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-challenges挑战&#34;&gt;⚔ Challenges（挑战）&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/C2C/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;&lt;strong&gt;跨模型的 KV-Cache 表示差异&lt;/strong&gt;：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;对齐问题（token-level &amp;amp; layer-level）&lt;/strong&gt;：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。&lt;/li&gt;
@@ -1170,7 +1188,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;/ol&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-observations--analysis&#34;&gt;🔍 Observations / Analysis&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/f34t12.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/C2C/f34t12.png&#34;&gt;&lt;/p&gt;</description>
     </item>
   </channel>
 </rss>

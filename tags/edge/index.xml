@@ -2,20 +2,20 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Edge on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/edge/</link>
+    <link>http://localhost:1313/blog/tags/edge/</link>
     <description>Recent content in Edge on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Tue, 23 Dec 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/edge/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/edge/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 HyperVL: An Efficient and Dynamic Multimodal Large Language Model for Edge Devices</title>
-      <link>https://jjl357.github.io/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</link>
+      <link>http://localhost:1313/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</link>
       <pubDate>Tue, 23 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HyperVL/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/hypervl---an-efficient-and-dynamic-multimodal-large-language-model-for-edge-devices/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HyperVL/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HyperVL/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/HyperVL/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;随着数据质量的提高和模型架构设计的成熟，LLM 的 &lt;strong&gt;Densing Law&lt;/strong&gt; [Yao et al., 2024] 不断提升，使得小参数模型也能获得强大的通用能力。这一趋势为大模型的端侧部署（On-device deployment）提供了实际的基础。最近，紧凑型 MLLM（如 Qwen3 VL 2B [Bai et al., 2025a] 和 InternVL 2B [Zhu et al., 2025, Wang et al., 2025]）展示了极具竞争力的性能。&lt;/p&gt;
 &lt;p&gt;然而，一个关键的瓶颈依然存在：这些模型通常依赖标准的 &lt;strong&gt;Vision Transformer (ViT)&lt;/strong&gt; 编码器，而 ViT 具有二次复杂度（Quadratic Complexity）。当处理高分辨率输入（这在用户界面 UI 理解和 grounding 等典型端侧场景中至关重要）时，它们在端侧部署期间容易产生高内存消耗和明显的推理延迟。为了缓解这一问题，一些尝试（如 Apple 的 FastVLM [Vasu et al., 2025]）通常诉诸于通过激进的卷积下采样（Convolutional Downsampling）来减少视觉 token，但这往往以性能大幅下降为代价。&lt;/p&gt;
 &lt;h2 id=&#34;2-conclusion&#34;&gt;2. Conclusion&lt;/h2&gt;

@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Quantization on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/quantization/</link>
+    <link>http://localhost:1313/blog/tags/quantization/</link>
     <description>Recent content in Quantization on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/quantization/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/quantization/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization</title>
-      <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -33,7 +33,7 @@
 这正是 DartQuant 要解决的痛点：&lt;strong&gt;如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
@@ -42,13 +42,13 @@
     </item>
     <item>
       <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
-      <link>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
+      <link>http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
       <pubDate>Thu, 06 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpinQuant/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpinQuant/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/facebookresearch/SpinQuant&#34;&gt;https://github.com/facebookresearch/SpinQuant&lt;/a&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpinQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpinQuant/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
 &lt;p&gt;这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。
 理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。&lt;/p&gt;
@@ -63,10 +63,10 @@
     </item>
     <item>
       <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
-      <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
+      <link>http://localhost:1313/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/QSVD/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/SAI-Lab-NYU/QSVD&#34;&gt;https://github.com/SAI-Lab-NYU/QSVD&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -83,7 +83,7 @@
 &lt;li&gt;保持模型性能；&lt;/li&gt;
 &lt;li&gt;支持低精度硬件部署。&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/QSVD/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/QSVD/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-related-work&#34;&gt;2. Related Work&lt;/h2&gt;
 &lt;h3 id=&#34;21-svd-in-large-models&#34;&gt;2.1 SVD in Large Models&lt;/h3&gt;

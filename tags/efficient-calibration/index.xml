@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Efficient Calibration on JJ&#39;s Blog</title>
-    <link>https://jjl357.github.io/blog/tags/efficient-calibration/</link>
+    <link>http://localhost:1313/blog/tags/efficient-calibration/</link>
     <description>Recent content in Efficient Calibration on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="https://jjl357.github.io/blog/tags/efficient-calibration/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/blog/tags/efficient-calibration/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization</title>
-      <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
+      <link>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
+      <guid>http://localhost:1313/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -33,7 +33,7 @@
 这正是 DartQuant 要解决的痛点：&lt;strong&gt;如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;2-challenge&#34;&gt;2. Challenge&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/DartQuant/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
