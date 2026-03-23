@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Agent on JJ&#39;s Blog</title>
-    <link>http://localhost:1313/blog/tags/agent/</link>
+    <link>https://jjl357.github.io/blog/tags/agent/</link>
     <description>Recent content in Agent on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Tue, 18 Nov 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="http://localhost:1313/blog/tags/agent/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://jjl357.github.io/blog/tags/agent/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications</title>
-      <link>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
+      <link>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
       <pubDate>Tue, 18 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/snowflakedb/ArcticInference&#34;&gt;https://github.com/snowflakedb/ArcticInference&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;

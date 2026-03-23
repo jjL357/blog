@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-cn" dir="auto" data-theme="auto">
 
-<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=1313&amp;path=blog/livereload" data-no-instant defer></script><meta charset="utf-8">
+<head><meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<meta name="robots" content="noindex, nofollow">
+<meta name="robots" content="index, follow">
 <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Token Pruning, Paper Note">
 <meta name="description" content="
@@ -20,16 +20,16 @@ Large vision-language models（LVLMs）在多模态理解任务上表现强大�
 
 Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。">
 <meta name="author" content="">
-<link rel="canonical" href="http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
-<link crossorigin="anonymous" href="http://localhost:1313/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
-<link rel="icon" href="http://localhost:1313/blog/favicon.ico">
-<link rel="icon" type="image/png" sizes="16x16" href="http://localhost:1313/blog/favicon-16x16.png">
-<link rel="icon" type="image/png" sizes="32x32" href="http://localhost:1313/blog/favicon-32x32.png">
-<link rel="apple-touch-icon" href="http://localhost:1313/blog/apple-touch-icon.png">
-<link rel="mask-icon" href="http://localhost:1313/blog/safari-pinned-tab.svg">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
 <meta name="theme-color" content="#2e2e33">
 <meta name="msapplication-TileColor" content="#2e2e33">
-<link rel="alternate" hreflang="zh-cn" href="http://localhost:1313/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
 <noscript>
     <style>
         #theme-toggle,
@@ -116,14 +116,94 @@ code.has-jax {
     color: #515151;
 }
 </style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models">
+  <meta property="og:description" content="
+Conference: CVPR&#39;26
+Github: https://github.com/xuyang-liu16/V2Drop
+Abstract Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。
+1. Introduction Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-03-23T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-03-23T00:00:00+00:00">
+    <meta property="article:tag" content="MLLM">
+    <meta property="article:tag" content="Token Pruning">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models">
+<meta name="twitter:description" content="
+Conference: CVPR&#39;26
+Github: https://github.com/xuyang-liu16/V2Drop
 
+Abstract
+Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。
+
+1. Introduction
+
+
+
+Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
+      "item": "https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
+  "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
+  "description": "\nConference: CVPR'26\nGithub: https://github.com/xuyang-liu16/V2Drop\nAbstract Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。\n1. Introduction Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。\n",
+  "keywords": [
+    "MLLM", "Token Pruning", "Paper Note"
+  ],
+  "articleBody": "\nConference: CVPR'26\nGithub: https://github.com/xuyang-liu16/V2Drop\nAbstract Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。\n1. Introduction Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。\n为缓解这一问题，已有大量 token compression 方法被提出，用于去除冗余视觉 token 并尽可能保留性能。其中，Inner-LLM compression 因其 architecture-agnostic 和 plug-and-play 的性质受到特别关注：这类方法不需要修改主干结构，而是在 LLM forward 过程中进行 token 剪枝或合并。典型方法往往依赖 LLM attention weights 来选择“重要 token”，但作者强调，这类策略存在根本缺陷。\n作者进一步分析了 attention-guided 方法（如 FastV、SparseVLM）与 variation-aware evaluation 的 token 保留分布：前者会显著偏向保留视觉序列末端 token，而不管内容是否真的重要；后者则能产生更自然、更均匀的空间分布。Figure 2 和 Figure 3 共同说明了这一点：attention-guided 方法表现出information-agnostic positional bias，即高重要性偏置与内容无关，更多与 token 位置相关；而 variation-aware 方法则更符合视觉语义的实际分布。这个偏差会导致早期重要 token 被误删，进而加剧 multimodal hallucination。与此同时，attention weight 的显式计算还会与 FlashAttention 等 efficient operators 冲突，造成额外显存开销，甚至峰值显存高于不压缩模型。\n基于上述问题，作者提出了一个核心问题：是否可以不依赖间接 attention signal，而是直接利用 token 在模型内部的行为变化来判断其重要性？ 为此，本文从 token variation 的角度重新审视“什么才是真正重要的视觉 token”。作者的核心洞察是：真正参与 LLM 计算的 token，会在层与层之间表现出更显著的表征变化；而作用较小的 token 则在多个层之间保持相对静态。 因此，作者定义这类变化缓慢的 token 为 lazy tokens，并提出 V2Drop：通过识别并逐步丢弃 lazy tokens，实现高效的 LVLM 推理加速，同时避免 positional bias，并保持与 efficient operators 的兼容性。\n最终，V2Drop 在图像理解和视频理解上都取得了良好的 performance-efficiency trade-off：图像理解任务上达到 1.30× 加速，视频理解任务上达到 1.87× 加速。作者总结了三点贡献：第一，系统性分析 token variation pattern，证明 variation magnitude 与任务相关性和 token 重要性相关；第二，提出 variation-aware token dropping，在不依赖 attention weights 的情况下实现 progressive dropping；第三，通过大量实验验证其在不同 LVLM 和 VideoLLM 上均能兼顾准确率与效率。\n2. Related Work Large Vision-Language Models LVLM 通常采用 ViT-Projector-LLM 范式：视觉编码器首先将图像或视频编码为视觉 embeddings，再通过 projector（通常是两层 MLP）映射为 vision tokens，最后交由 LLM 进行文本生成。近年来，LVLM 为适应更高分辨率输入和更长视频序列，开始引入动态裁剪、native resolution 和长上下文建模等策略，例如 InternVL-3、LLaVA-OneVision、Qwen2-VL、Seed1.5-VL、VideoLLaMA3 等。但这些改进也使 visual token 数量进一步增长，导致二次复杂度问题更加严重，影响 scalability 和 practical deployment。\nToken Compression for LVLMs Token compression 的目标是直接缩短 token 序列，从而提升模型效率。相关工作从 training-aware paradigm 逐步发展到 training-free 方法，后者更适合 plug-and-play 式的推理加速。作者将方法分为两类：\nPre-LLM compression：在进入 LLM 之前对视觉 token 进行压缩； Inner-LLM compression：在 LLM forward 过程中完成压缩。 然而，大多数 Inner-LLM 方法依赖 attention weights，因而存在两个问题：一是无法与 FlashAttention 等 efficient attention operator 兼容，导致显存峰值上升；二是容易产生 positional bias，偏向保留序列末端 token，而忽略真正关键的视觉区域。作者因此转向低 variation token 的渐进式丢弃，以实现无需 attention weights 的训练自由加速。\n3. Methodology 3.1. Preliminary: LVLMs LVLM 主要遵循 “ViT-Projector-LLM” 架构。给定图像 $I \\in \\mathbb{R}^{H \\times W \\times 3}$ 或视频 $V = {v_i}{i=1}^{T} \\in \\mathbb{R}^{T \\times H \\times W \\times 3}$，其处理流程可概括为三步： (i) Visual encoder（ViT） 将输入映射为视觉 embeddings $E \\in \\mathbb{R}^{N \\times D}$（图像）或 $E = {e_i}{i=1}^{T} \\in \\mathbb{R}^{T \\times N \\times D}$（视频）； (ii) Projector（通常为 2-layer MLP） 将 embeddings 映射为 vision tokens $F_v \\in \\mathbb{R}^{M \\times D’}$（图像）或 $F_v = {f_v^i}_{i=1}^{T} \\in \\mathbb{R}^{T \\times M \\times D’}$（视频），其中 $M \\le N$； (iii) LLM decoder 在 prefilling 阶段同时处理视觉 token 和文本 token $F_t$，并在 decoding 阶段自回归地产生答案。生成过程可写为：\n$$ p(Y \\mid F_v, F_t)=\\prod_{j=1}^{L} p\\left(y_j \\mid F_v, F_t, Y_{1:j-1}\\right), $$\n其中 $Y={y_j}_{j=1}^{L}$ 表示最终生成 token 序列。这里作者强调，不同 LVLM 的 token 数变化存在差异：例如 LLaVA-1.5 在 projector 后 token 数通常保持不变（$M=N$），而部分 VideoLLM 会为了效率在 projector 阶段提前压缩 token（$M",
+  "wordCount" : "2947",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-03-23T00:00:00Z",
+  "dateModified": "2026-03-23T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
 </head>
 <body id="top">
     <header class="header">
   <nav class="nav">
     <div class="logo">
       
-      <a href="http://localhost:1313/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
         <span>☕🍵🥛</span>
         
       </a>
@@ -167,7 +247,7 @@ code.has-jax {
 
 </div>
   </header> 
-  <div class="post-content"><p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/title.png"></p>
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/title.png"></p>
 <p><strong>Conference:</strong> <strong>CVPR'26</strong></p>
 <p><strong>Github:</strong> <a href="https://github.com/xuyang-liu16/V2Drop">https://github.com/xuyang-liu16/V2Drop</a></p>
 <hr>
@@ -175,9 +255,9 @@ code.has-jax {
 <p>Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：<strong>positional bias</strong> 和 <strong>incompatibility with efficient operators</strong>，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了<strong>首个从动态 token variation 视角出发的方法</strong>，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 <strong>Variation-aware Vision Token Dropping（V2Drop）</strong>，在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 <strong>94.0%</strong> 和 <strong>98.6%</strong>，同时将 LLM generation latency 分别降低了 <strong>31.5%</strong> 和 <strong>74.2%</strong>。</p>
 <hr>
 <h2 id="1-introduction">1. Introduction<a hidden class="anchor" aria-hidden="true" href="#1-introduction">#</a></h2>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure1.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure2.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure3.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure1.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure2.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure3.png"></p>
 <p>Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。</p>
 <p>为缓解这一问题，已有大量 token compression 方法被提出，用于去除冗余视觉 token 并尽可能保留性能。其中，<strong>Inner-LLM compression</strong> 因其 architecture-agnostic 和 plug-and-play 的性质受到特别关注：这类方法不需要修改主干结构，而是在 LLM forward 过程中进行 token 剪枝或合并。典型方法往往依赖 LLM attention weights 来选择“重要 token”，但作者强调，这类策略存在根本缺陷。</p>
 <p>作者进一步分析了 attention-guided 方法（如 FastV、SparseVLM）与 variation-aware evaluation 的 token 保留分布：前者会显著偏向保留视觉序列末端 token，而不管内容是否真的重要；后者则能产生更自然、更均匀的空间分布。Figure 2 和 Figure 3 共同说明了这一点：attention-guided 方法表现出<strong>information-agnostic positional bias</strong>，即高重要性偏置与内容无关，更多与 token 位置相关；而 variation-aware 方法则更符合视觉语义的实际分布。这个偏差会导致早期重要 token 被误删，进而加剧 multimodal hallucination。与此同时，attention weight 的显式计算还会与 FlashAttention 等 efficient operators 冲突，造成额外显存开销，甚至峰值显存高于不压缩模型。</p>
@@ -196,8 +276,8 @@ code.has-jax {
 <p>然而，大多数 Inner-LLM 方法依赖 attention weights，因而存在两个问题：一是无法与 FlashAttention 等 efficient attention operator 兼容，导致显存峰值上升；二是容易产生 positional bias，偏向保留序列末端 token，而忽略真正关键的视觉区域。作者因此转向<strong>低 variation token 的渐进式丢弃</strong>，以实现无需 attention weights 的训练自由加速。</p>
 <hr>
 <h2 id="3-methodology">3. Methodology<a hidden class="anchor" aria-hidden="true" href="#3-methodology">#</a></h2>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure4.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure5.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure4.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure5.png"></p>
 <h3 id="31-preliminary-lvlms">3.1. Preliminary: LVLMs<a hidden class="anchor" aria-hidden="true" href="#31-preliminary-lvlms">#</a></h3>
 <p>LVLM 主要遵循 “ViT-Projector-LLM” 架构。给定图像 $I \in \mathbb{R}^{H \times W \times 3}$ 或视频 $V = {v_i}<em>{i=1}^{T} \in \mathbb{R}^{T \times H \times W \times 3}$，其处理流程可概括为三步：
 (i) <strong>Visual encoder（ViT）</strong> 将输入映射为视觉 embeddings $E \in \mathbb{R}^{N \times D}$（图像）或 $E = {e_i}</em>{i=1}^{T} \in \mathbb{R}^{T \times N \times D}$（视频）；
@@ -298,14 +378,14 @@ $$</p>
 <hr>
 <h3 id="41-main-comparisons">4.1. Main Comparisons<a hidden class="anchor" aria-hidden="true" href="#41-main-comparisons">#</a></h3>
 <h4 id="image-understanding">Image Understanding<a hidden class="anchor" aria-hidden="true" href="#image-understanding">#</a></h4>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table1.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table2&3.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table4.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/table9.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure6.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure7.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure8.png"></p>
-<p><img loading="lazy" src="http://localhost:1313/blog/image/V2drop/figure9.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/table1.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/table2&3.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/table4.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/table9.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure6.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure7.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure8.png"></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/V2drop/figure9.png"></p>
 <p>Table 1 比较了 V2Drop 与多种 token compression 方法在 LLaVA-1.5-7B 上的图像理解性能，分别在保留 192、128、64 个 token 的情况下进行对比。作者重点强调了三个结论：</p>
 <ol>
 <li><strong>State-of-the-art performance</strong>：在保留 192 tokens（即减少 66.7%）时，V2Drop 的平均性能达到 <strong>97.6%</strong>，比第二名 PDrop 高 <strong>1.6%</strong>；即使压缩更激进，V2Drop 依旧保持稳定。</li>
@@ -1479,16 +1559,16 @@ $$</p>
 
   <footer class="post-footer">
     <ul class="post-tags">
-      <li><a href="http://localhost:1313/blog/tags/mllm/">MLLM</a></li>
-      <li><a href="http://localhost:1313/blog/tags/token-pruning/">Token Pruning</a></li>
-      <li><a href="http://localhost:1313/blog/tags/paper-note/">Paper Note</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/token-pruning/">Token Pruning</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
     </ul>
   </footer>
 </article>
     </main>
     
 <footer class="footer">
-        <span>&copy; 2026 <a href="http://localhost:1313/blog/">JJ&#39;s Blog</a></span> · 
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
 
     <span>
         Powered by

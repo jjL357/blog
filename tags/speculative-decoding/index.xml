@@ -2,18 +2,18 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Speculative Decoding on JJ&#39;s Blog</title>
-    <link>http://localhost:1313/blog/tags/speculative-decoding/</link>
+    <link>https://jjl357.github.io/blog/tags/speculative-decoding/</link>
     <description>Recent content in Speculative Decoding on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Wed, 21 Jan 2026 00:00:00 +0000</lastBuildDate>
-    <atom:link href="http://localhost:1313/blog/tags/speculative-decoding/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://jjl357.github.io/blog/tags/speculative-decoding/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>📝 TALON: Confidence-Aware Speculative Decoding with Adaptive Token Trees</title>
-      <link>http://localhost:1313/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</link>
+      <link>https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</link>
       <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/talon---confidence-aware-speculative-decoding-with-adaptive-token-trees/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/title.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
 &lt;p&gt;投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。&lt;/p&gt;
 &lt;p&gt;然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建&lt;strong&gt;固定宽度、固定深度&lt;/strong&gt;的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。&lt;/p&gt;
@@ -27,7 +27,7 @@
 &lt;p&gt;为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h3 id=&#34;41-the-acceptance-funnel-phenomenon-接受漏斗现象&#34;&gt;4.1 The &amp;ldquo;Acceptance Funnel&amp;rdquo; Phenomenon (接受漏斗现象)&lt;/h3&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/figure3.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/figure3.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;深层宽度的边际收益递减&lt;/strong&gt;：如图 3 所示，接受分布呈现出&lt;strong&gt;漏斗状模式&lt;/strong&gt;。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。&lt;/li&gt;
@@ -36,36 +36,36 @@
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h3 id=&#34;42-variance-in-real-world-accepted-length-实际接受长度的方差&#34;&gt;4.2 Variance in Real-World Accepted Length (实际接受长度的方差)&lt;/h3&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TALON/figure4.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TALON/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 SpecBranch: Speculative Decoding via Hybrid Drafting and Rollback-Aware Branch Parallelism</title>
-      <link>http://localhost:1313/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
+      <link>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 Submitted&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;&lt;strong&gt;核心痛点：投机解码（Speculative Decoding, SD）中的串行瓶颈与回滚代价&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;受到现代处理器分支预测技术的启发 ，作者允许 Draft Model（草稿模型）在 Target Model（目标模型）进行验证的同时，主动生成推测性的分支。这种并行 SD 范式创建了一个两阶段流水线，使得 Draft Model 的 token 生成与 Target Model 的验证在时间上重叠，从而有效地填补了传统 SD 中固有的流水线气泡（Pipeline Bubbles）。&lt;/p&gt;
 &lt;p&gt;先前的研究（如 PEARL ）尝试在 Drafting 阶段利用 Target Model 预验证第一个 token，并在验证阶段让 Draft Model 继续生成。然而，与传统 SD 仅面临局部惩罚（即丢弃部分 token）不同，&lt;strong&gt;并行 SD 面临全局失效的风险&lt;/strong&gt; 。如果并行生成的某个关键 token 被拒绝，会导致后续所有并行计算的 token 全部失效（Global Invalidation），从而严重阻碍并行效率。这种现象在生成长度较长时尤为严重，因为被接受的 token 数量通常服从截断几何分布（Truncated Geometric Distribution），这在并行性和回滚代价之间制造了一个艰难的权衡（Trade-off）。&lt;/p&gt;
 &lt;p&gt;遗憾的是，PEARL 并未充分解决这些挑战：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecBranch/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;
 &lt;p&gt;&lt;strong&gt;Pre-verify Rollback（预验证回滚）：&lt;/strong&gt; PEARL 忽视了并行加速的一个关键条件：验证期间生成的 token 必须被 &lt;strong&gt;“全部接受（All-Accepted）”&lt;/strong&gt; 。否则，PEARL 会退化为串行执行并失去并行能力。它仅验证第一个 token，而系统对序列中间发生的拒绝（例如 Fig. 1(b) 中  被拒绝）一无所知，直到并行验证结束才发现，导致大量浪费 。&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter</title>
-      <link>http://localhost:1313/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
+      <link>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ASPLOS&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mit-han-lab/fastrl&#34;&gt;https://github.com/mit-han-lab/fastrl&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;强化学习（RL）已成为赋予大语言模型（LLMs）强大推理能力（如OpenAI-o1, DeepSeek-R1）的标准方法。然而，这种RL方法面临独特的效率挑战。通过分析自收集的轨迹和来自字节跳动（ByteDance）的生产环境轨迹，作者确定了推理RL过程中的关键特征：&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;em&gt;(Figure 1展示了推理RL中的长尾生成问题和工作负载不平衡)&lt;/em&gt;&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;&lt;strong&gt;(1) 极不平衡的Rollout（采样）与训练时间 (Unbalanced Rollout and Training Time):&lt;/strong&gt;&lt;br&gt;
@@ -74,7 +74,7 @@
 Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽然大多数生成的序列相对较短，但一小部分序列会达到极长的长度（例如达到最大上下文限制）。这种长尾模式并非偶发，而是贯穿整个长期训练过程的持续模式。在大多数RL步骤中，少数响应达到最大配置长度，而绝大多数则短得多，导致显着的资源未充分利用（即GPU在等待最长序列完成时处于闲置状态）。&lt;/li&gt;
 &lt;li&gt;&lt;strong&gt;(3)巨大的时间和资源需求 (Substantial Time and Resource Demands):&lt;/strong&gt;&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/TLT/figure2.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TLT/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;ByteDance的生产轨迹显示，使用128个GPU训练一个32B模型，仅完成385步就需要11天。单步训练平均耗时约40分钟，极度消耗资源。&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;为什么选择投机解码 (Why Speculative Decoding - SD)?&lt;/strong&gt;&lt;br&gt;
 作者认为投机解码（SD）是非常适合解决此问题的方法。SD利用轻量级草稿模型（Draft Model）快速生成token序列，然后由目标模型并行验证。SD适合RL训练主要基于两个优点：&lt;/p&gt;
@@ -94,10 +94,10 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding</title>
-      <link>http://localhost:1313/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</link>
+      <link>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SubSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SubSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/NYCU-EDgeAi/subspec&#34;&gt;https://github.com/NYCU-EDgeAi/subspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -116,10 +116,10 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
     </item>
     <item>
       <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications</title>
-      <link>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
+      <link>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
       <pubDate>Tue, 18 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SuffixDecoding/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/snowflakedb/ArcticInference&#34;&gt;https://github.com/snowflakedb/ArcticInference&lt;/a&gt;&lt;/p&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
@@ -135,10 +135,10 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
     </item>
     <item>
       <title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
-      <link>http://localhost:1313/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
+      <link>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
       <pubDate>Wed, 05 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ViSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/KangJialiang/ViSpec&#34;&gt;https://github.com/KangJialiang/ViSpec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -160,16 +160,16 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 &lt;p&gt;这些问题说明：在现有的 speculative decoding 框架中，草稿模型无法充分理解和整合图像特征信息。因此，作者需要一个 &lt;strong&gt;能高效处理视觉与语言双模态特征并保持高预测精度&lt;/strong&gt; 的专门框架。ViSpec 即是在此背景下提出。&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/ViSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ViSpec/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面的弱点。作者观察到，大型 VLM 能逐层过滤图像中冗余信息而保持语义理解，但小模型无法做到这一点。&lt;br&gt;
 为解决这一问题，ViSpec 提出了 &lt;strong&gt;Vision-Aware Speculative Decoding&lt;/strong&gt; 框架，核心贡献如下：&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
-      <link>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
+      <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecEdge/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/kaist-ina/specedge&#34;&gt;https://github.com/kaist-ina/specedge&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -187,10 +187,10 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
     </item>
     <item>
       <title>📝 SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
-      <link>http://localhost:1313/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
+      <link>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecVLM/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;EMNLP&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/zju-jiyicheng/SpecVLM&#34;&gt;https://github.com/zju-jiyicheng/SpecVLM&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -208,10 +208,10 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
     </item>
     <item>
       <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
-      <link>http://localhost:1313/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
+      <link>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
       <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
-      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
+      <guid>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25 Spotlight&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/yuezhouhu/adaspec&#34;&gt;https://github.com/yuezhouhu/adaspec&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
@@ -221,7 +221,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;Speculative Decoding (SD) accelerates large language model inference by employing a small &lt;strong&gt;draft model&lt;/strong&gt; to generate predictions, which are then verified by a larger &lt;strong&gt;target model&lt;/strong&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;http://localhost:1313/blog/image/AdaSpec/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/AdaSpec/figure1.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;SD 的加速性能依赖于 draft 与 target 模型的&lt;strong&gt;对齐度（alignment）&lt;/strong&gt;。传统 Knowledge Distillation (KD) 的目标是最小化 KL 散度，但这与 SD 的最终目标——&lt;strong&gt;最大化 token acceptance rate（被 target 接受的比例）&lt;/strong&gt;——并不一致。&lt;/p&gt;
 &lt;p&gt;因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。&lt;/p&gt;</description>
     </item>

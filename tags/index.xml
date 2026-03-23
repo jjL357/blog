@@ -2,241 +2,241 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Tags on JJ&#39;s Blog</title>
-    <link>http://localhost:1313/blog/tags/</link>
+    <link>https://jjl357.github.io/blog/tags/</link>
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
     <lastBuildDate>Mon, 23 Mar 2026 00:00:00 +0000</lastBuildDate>
-    <atom:link href="http://localhost:1313/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>MLLM</title>
-      <link>http://localhost:1313/blog/tags/mllm/</link>
+      <link>https://jjl357.github.io/blog/tags/mllm/</link>
       <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/mllm/</guid>
+      <guid>https://jjl357.github.io/blog/tags/mllm/</guid>
       <description></description>
     </item>
     <item>
       <title>Paper Note</title>
-      <link>http://localhost:1313/blog/tags/paper-note/</link>
+      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
       <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/paper-note/</guid>
+      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
       <description></description>
     </item>
     <item>
       <title>Token Pruning</title>
-      <link>http://localhost:1313/blog/tags/token-pruning/</link>
+      <link>https://jjl357.github.io/blog/tags/token-pruning/</link>
       <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/token-pruning/</guid>
+      <guid>https://jjl357.github.io/blog/tags/token-pruning/</guid>
       <description></description>
     </item>
     <item>
       <title>Adaptive Patch Size</title>
-      <link>http://localhost:1313/blog/tags/adaptive-patch-size/</link>
+      <link>https://jjl357.github.io/blog/tags/adaptive-patch-size/</link>
       <pubDate>Mon, 02 Feb 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/adaptive-patch-size/</guid>
+      <guid>https://jjl357.github.io/blog/tags/adaptive-patch-size/</guid>
       <description></description>
     </item>
     <item>
       <title>Vision Token Pruning</title>
-      <link>http://localhost:1313/blog/tags/vision-token-pruning/</link>
+      <link>https://jjl357.github.io/blog/tags/vision-token-pruning/</link>
       <pubDate>Thu, 22 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/vision-token-pruning/</guid>
+      <guid>https://jjl357.github.io/blog/tags/vision-token-pruning/</guid>
       <description></description>
     </item>
     <item>
       <title>Speculative Decoding</title>
-      <link>http://localhost:1313/blog/tags/speculative-decoding/</link>
+      <link>https://jjl357.github.io/blog/tags/speculative-decoding/</link>
       <pubDate>Wed, 21 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/speculative-decoding/</guid>
+      <guid>https://jjl357.github.io/blog/tags/speculative-decoding/</guid>
       <description></description>
     </item>
     <item>
       <title>Marathon</title>
-      <link>http://localhost:1313/blog/tags/marathon/</link>
+      <link>https://jjl357.github.io/blog/tags/marathon/</link>
       <pubDate>Fri, 16 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/marathon/</guid>
+      <guid>https://jjl357.github.io/blog/tags/marathon/</guid>
       <description></description>
     </item>
     <item>
       <title>Running</title>
-      <link>http://localhost:1313/blog/tags/running/</link>
+      <link>https://jjl357.github.io/blog/tags/running/</link>
       <pubDate>Fri, 16 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/running/</guid>
+      <guid>https://jjl357.github.io/blog/tags/running/</guid>
       <description></description>
     </item>
     <item>
       <title>Sports</title>
-      <link>http://localhost:1313/blog/tags/sports/</link>
+      <link>https://jjl357.github.io/blog/tags/sports/</link>
       <pubDate>Fri, 16 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/sports/</guid>
+      <guid>https://jjl357.github.io/blog/tags/sports/</guid>
       <description></description>
     </item>
     <item>
       <title>KV Cache</title>
-      <link>http://localhost:1313/blog/tags/kv-cache/</link>
+      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
       <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/kv-cache/</guid>
+      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
       <description></description>
     </item>
     <item>
       <title>Prefix Cache</title>
-      <link>http://localhost:1313/blog/tags/prefix-cache/</link>
+      <link>https://jjl357.github.io/blog/tags/prefix-cache/</link>
       <pubDate>Tue, 06 Jan 2026 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/prefix-cache/</guid>
+      <guid>https://jjl357.github.io/blog/tags/prefix-cache/</guid>
       <description></description>
     </item>
     <item>
       <title>Edge</title>
-      <link>http://localhost:1313/blog/tags/edge/</link>
+      <link>https://jjl357.github.io/blog/tags/edge/</link>
       <pubDate>Tue, 23 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/edge/</guid>
+      <guid>https://jjl357.github.io/blog/tags/edge/</guid>
       <description></description>
     </item>
     <item>
       <title>Reinforcement Learning</title>
-      <link>http://localhost:1313/blog/tags/reinforcement-learning/</link>
+      <link>https://jjl357.github.io/blog/tags/reinforcement-learning/</link>
       <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/reinforcement-learning/</guid>
+      <guid>https://jjl357.github.io/blog/tags/reinforcement-learning/</guid>
       <description></description>
     </item>
     <item>
       <title>LoRA</title>
-      <link>http://localhost:1313/blog/tags/lora/</link>
+      <link>https://jjl357.github.io/blog/tags/lora/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/lora/</guid>
+      <guid>https://jjl357.github.io/blog/tags/lora/</guid>
       <description></description>
     </item>
     <item>
       <title>Serving</title>
-      <link>http://localhost:1313/blog/tags/serving/</link>
+      <link>https://jjl357.github.io/blog/tags/serving/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/serving/</guid>
+      <guid>https://jjl357.github.io/blog/tags/serving/</guid>
       <description></description>
     </item>
     <item>
       <title>System</title>
-      <link>http://localhost:1313/blog/tags/system/</link>
+      <link>https://jjl357.github.io/blog/tags/system/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/system/</guid>
+      <guid>https://jjl357.github.io/blog/tags/system/</guid>
       <description></description>
     </item>
     <item>
       <title>Cloud-Edge</title>
-      <link>http://localhost:1313/blog/tags/cloud-edge/</link>
+      <link>https://jjl357.github.io/blog/tags/cloud-edge/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/cloud-edge/</guid>
+      <guid>https://jjl357.github.io/blog/tags/cloud-edge/</guid>
       <description></description>
     </item>
     <item>
       <title>Pruning</title>
-      <link>http://localhost:1313/blog/tags/pruning/</link>
+      <link>https://jjl357.github.io/blog/tags/pruning/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/pruning/</guid>
+      <guid>https://jjl357.github.io/blog/tags/pruning/</guid>
       <description></description>
     </item>
     <item>
       <title>Parallelism</title>
-      <link>http://localhost:1313/blog/tags/parallelism/</link>
+      <link>https://jjl357.github.io/blog/tags/parallelism/</link>
       <pubDate>Sat, 06 Dec 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/parallelism/</guid>
+      <guid>https://jjl357.github.io/blog/tags/parallelism/</guid>
       <description></description>
     </item>
     <item>
       <title>Offloading</title>
-      <link>http://localhost:1313/blog/tags/offloading/</link>
+      <link>https://jjl357.github.io/blog/tags/offloading/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/offloading/</guid>
+      <guid>https://jjl357.github.io/blog/tags/offloading/</guid>
       <description></description>
     </item>
     <item>
       <title>Agent</title>
-      <link>http://localhost:1313/blog/tags/agent/</link>
+      <link>https://jjl357.github.io/blog/tags/agent/</link>
       <pubDate>Tue, 18 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/agent/</guid>
+      <guid>https://jjl357.github.io/blog/tags/agent/</guid>
       <description></description>
     </item>
     <item>
       <title>Fine-Tune</title>
-      <link>http://localhost:1313/blog/tags/fine-tune/</link>
+      <link>https://jjl357.github.io/blog/tags/fine-tune/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/fine-tune/</guid>
+      <guid>https://jjl357.github.io/blog/tags/fine-tune/</guid>
       <description></description>
     </item>
     <item>
       <title>NPU</title>
-      <link>http://localhost:1313/blog/tags/npu/</link>
+      <link>https://jjl357.github.io/blog/tags/npu/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/npu/</guid>
+      <guid>https://jjl357.github.io/blog/tags/npu/</guid>
       <description></description>
     </item>
     <item>
       <title>Disaggregation</title>
-      <link>http://localhost:1313/blog/tags/disaggregation/</link>
+      <link>https://jjl357.github.io/blog/tags/disaggregation/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/disaggregation/</guid>
+      <guid>https://jjl357.github.io/blog/tags/disaggregation/</guid>
       <description></description>
     </item>
     <item>
       <title>Knowledge Distillation</title>
-      <link>http://localhost:1313/blog/tags/knowledge-distillation/</link>
+      <link>https://jjl357.github.io/blog/tags/knowledge-distillation/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/knowledge-distillation/</guid>
+      <guid>https://jjl357.github.io/blog/tags/knowledge-distillation/</guid>
       <description></description>
     </item>
     <item>
       <title>MoE</title>
-      <link>http://localhost:1313/blog/tags/moe/</link>
+      <link>https://jjl357.github.io/blog/tags/moe/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/moe/</guid>
+      <guid>https://jjl357.github.io/blog/tags/moe/</guid>
       <description></description>
     </item>
     <item>
       <title>Vision Encoder</title>
-      <link>http://localhost:1313/blog/tags/vision-encoder/</link>
+      <link>https://jjl357.github.io/blog/tags/vision-encoder/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/vision-encoder/</guid>
+      <guid>https://jjl357.github.io/blog/tags/vision-encoder/</guid>
       <description></description>
     </item>
     <item>
       <title>Efficient Calibration</title>
-      <link>http://localhost:1313/blog/tags/efficient-calibration/</link>
+      <link>https://jjl357.github.io/blog/tags/efficient-calibration/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/efficient-calibration/</guid>
+      <guid>https://jjl357.github.io/blog/tags/efficient-calibration/</guid>
       <description></description>
     </item>
     <item>
       <title>Offload</title>
-      <link>http://localhost:1313/blog/tags/offload/</link>
+      <link>https://jjl357.github.io/blog/tags/offload/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/offload/</guid>
+      <guid>https://jjl357.github.io/blog/tags/offload/</guid>
       <description></description>
     </item>
     <item>
       <title>Quantization</title>
-      <link>http://localhost:1313/blog/tags/quantization/</link>
+      <link>https://jjl357.github.io/blog/tags/quantization/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/quantization/</guid>
+      <guid>https://jjl357.github.io/blog/tags/quantization/</guid>
       <description></description>
     </item>
     <item>
       <title>Rotation</title>
-      <link>http://localhost:1313/blog/tags/rotation/</link>
+      <link>https://jjl357.github.io/blog/tags/rotation/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/rotation/</guid>
+      <guid>https://jjl357.github.io/blog/tags/rotation/</guid>
       <description></description>
     </item>
     <item>
       <title>SVD</title>
-      <link>http://localhost:1313/blog/tags/svd/</link>
+      <link>https://jjl357.github.io/blog/tags/svd/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/svd/</guid>
+      <guid>https://jjl357.github.io/blog/tags/svd/</guid>
       <description></description>
     </item>
     <item>
       <title>Reasoning Model</title>
-      <link>http://localhost:1313/blog/tags/reasoning-model/</link>
+      <link>https://jjl357.github.io/blog/tags/reasoning-model/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/blog/tags/reasoning-model/</guid>
+      <guid>https://jjl357.github.io/blog/tags/reasoning-model/</guid>
       <description></description>
     </item>
   </channel>
