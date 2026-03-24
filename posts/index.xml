@@ -6,8 +6,24 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Mon, 23 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Tue, 24 Mar 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Empirical Recipes for Efficient and Compact Vision-Language Models</title>
+      <link>https://jjl357.github.io/blog/posts/empirical-recipes-for-efficient-and-compact-vision-language-models/</link>
+      <pubDate>Tue, 24 Mar 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/empirical-recipes-for-efficient-and-compact-vision-language-models/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ARGUSVLM/title.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-abstract&#34;&gt;1. Abstract&lt;/h2&gt;
+&lt;p&gt;在资源受限的环境中部署视觉语言模型 (VLMs) 要求低延迟和高吞吐量。然而，现有的轻量级 (Compact) VLMs 往往无法达到其参数量缩减所应带来的推理加速。为了解释这一现象，作者进行了端到端的效率分析，并系统地剖析了推理过程以识别主要瓶颈。&lt;/p&gt;
+&lt;p&gt;基于这些发现，作者为轻量级 VLMs 量身定制了一系列优化方案 (Recipes)，在保持准确性的同时大幅降低了延迟。这些技术将 InternVL3-2B 的首字生成时间 (Time To First Token, TTFT) 降低了 53%，在 SmolVLM-256M 上降低了 93%。作者的优化方案广泛适用于各种 VLM 架构和主流服务框架。&lt;/p&gt;
+&lt;p&gt;此外，作者研究了如何扩展轻量级 VLM 以支持结构化感知输出，并推出了 &lt;strong&gt;ARGUSVLM&lt;/strong&gt; 模型系列。ARGUSVLM 在多个基准测试中表现强劲，同时保持了紧凑且高效的设计。&lt;/p&gt;
+&lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ARGUSVLM/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;尽管紧凑型模型参数量更小，但它们在端到端效率上的表现往往不如预期。例如，SmolVLM-256M 的参数量远小于 InternVL3-8B，但其 TTFT (344.7 ms) 却比后者 (177.4 ms) 更长。&lt;/p&gt;
+&lt;p&gt;通过系统性分析，作者发现：在轻量级模型中，以往被忽视的 &lt;strong&gt;CPU 端操作&lt;/strong&gt;（如图像预处理、文本分词）往往主导了整体延迟。相比之下，得益于 FlashAttention、CUDA Graphs 和算子融合 (Kernel Fusion) 等技术，GPU 端的计算占比反而较低。&lt;/p&gt;
+&lt;p&gt;本研究通过针对性的 CPU 端优化，将 InternVL3-2B 的 TTFT 从 124.0 ms 降至 57.7 ms，将 SmolVLM-256M 的 TTFT 从 344.7 ms 降至 22.8 ms (如图 1 所示)。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</link>
