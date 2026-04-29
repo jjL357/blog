@@ -6,8 +6,31 @@
     <description>Recent content on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Tue, 24 Mar 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 29 Apr 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning </title>
+      <link>https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/</link>
+      <pubDate>Wed, 29 Apr 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DocPrune/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;CVPR&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-abstract&#34;&gt;1. Abstract&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DocPrune/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。
+然而，文档图像与自然图像存在显著差异：&lt;strong&gt;文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）&lt;/strong&gt;。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。&lt;/p&gt;
+&lt;p&gt;作者观察到，现有的针对自然图像和视频的 Token 减少方法（token-reduction methods，例如 FastV 等），在利用文档独有的“结构稀疏性（structural sparsity）”时显得力不从心。为了解决这一痛点，作者提出了 &lt;strong&gt;DOCPRUNE&lt;/strong&gt;——一个&lt;strong&gt;免训练（training-free）&lt;/strong&gt; 且 &lt;strong&gt;渐进式（progressive）&lt;/strong&gt; 的文档 Token 剪枝框架，专为高效的长文档理解而设计。&lt;/p&gt;
+&lt;p&gt;DOCPRUNE 的核心优势在于：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;它只保留对当前任务至关重要的 Token，同时剔除不必要的 Token（如纯背景或与问题无关的 Token）。&lt;/li&gt;
+&lt;li&gt;它能够根据模型内部的“理解力水平（level of comprehension）”，自动选择在哪一层网络触发 Token 剪枝。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;最终，在 M3DocRAG 基准上的实验表明，DOCPRUNE 在 Vision Encoder（视觉编码器）和 LLM Decoder（大语言模型解码器）中分别将吞吐量（throughput）提升了 &lt;strong&gt;3.0倍&lt;/strong&gt; 和 &lt;strong&gt;3.3倍&lt;/strong&gt;，同时 F1 分数还提升了 &lt;strong&gt;+1.0&lt;/strong&gt;。实现了在&lt;strong&gt;不进行任何额外训练（without any additional training）&lt;/strong&gt; 的前提下，精度与效率的提升。&lt;/p&gt;
+&lt;h2 id=&#34;2-introduction&#34;&gt;2. Introduction&lt;/h2&gt;
+&lt;p&gt;在文档理解中，长文档通常包含数百页，但有用的内容（文本、表格、图表等）却散布在巨大的背景中。Transformer 架构处理单页就会产生数千个视觉 Token，计算成本极其高昂。&lt;/p&gt;
+&lt;p&gt;传统的降低成本的方法是 Token Reduction（如针对自然图像或视频的合并和剪枝），其核心假设是“相邻 patch 通常包含相似的视觉信息”。然而，这一假设在文档中是失效的：&lt;strong&gt;文档排版（如文本行、表格）具有极其严格的空间组织规律，即使是微小的 Token 删减也极易破坏文本连贯性或丢失重要的排版线索（destroy important layout cues）。&lt;/strong&gt; 因此，基于视觉冗余的传统方法在文档上性能下降严重。
+另外，现有的剪枝方法往往通过固定的启发式规则（fixed heuristics）来决定剪枝层，忽略了模型理解力在各层之间的演变（neglecting how comprehension evolves across layers）。这种忽略导致剪枝可能发生得过早或不一致，造成性能不稳定及效率提升有限。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 Empirical Recipes for Efficient and Compact Vision-Language Models</title>
       <link>https://jjl357.github.io/blog/posts/empirical-recipes-for-efficient-and-compact-vision-language-models/</link>
