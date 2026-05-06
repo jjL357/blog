@@ -9,7 +9,7 @@
     <lastBuildDate>Wed, 29 Apr 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning </title>
+      <title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/</link>
       <pubDate>Wed, 29 Apr 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/</guid>
@@ -48,7 +48,7 @@
 &lt;p&gt;本研究通过针对性的 CPU 端优化，将 InternVL3-2B 的 TTFT 从 124.0 ms 降至 57.7 ms，将 SmolVLM-256M 的 TTFT 从 344.7 ms 降至 22.8 ms (如图 1 所示)。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models</title>
+      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</link>
       <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</guid>
@@ -66,7 +66,7 @@
 &lt;p&gt;Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY</title>
+      <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
       <pubDate>Sun, 01 Mar 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
@@ -99,7 +99,7 @@
 &lt;p&gt;本文关键观点：设计一个 &lt;strong&gt;组引导（group-guided）&lt;/strong&gt; 的训练免费方法，使得“重要性”和“多样性”得到协同优化。通过 PSCA 先将 tokens 按语义方向分组，再在组内用 NMS 去冗余，同时用信息感知机制在图像间自动分配 token 预算，从而在极端压缩下仍保留丰富语义。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
+      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs - ICLR 2026</title>
       <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
       <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
@@ -108,7 +108,7 @@
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS</title>
+      <title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</link>
       <pubDate>Mon, 02 Feb 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/</guid>
@@ -133,7 +133,7 @@
 &lt;p&gt;因此，&lt;strong&gt;patch size 与分辨率、信息密度之间的失配&lt;/strong&gt;，是 AnyRes 性能不稳定的主要架构性原因。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Matryoshka Multimodal Models</title>
+      <title>📝 Matryoshka Multimodal Models - ICLR&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</link>
       <pubDate>Fri, 30 Jan 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/</guid>
@@ -147,7 +147,7 @@
 &lt;p&gt;While token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 &lt;strong&gt;Matryoshka Multimodal Models (M³)&lt;/strong&gt;。该模型学习将视觉内容表示为&lt;strong&gt;嵌套的视觉 Token 集合&lt;/strong&gt;（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models</title>
+      <title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</link>
       <pubDate>Thu, 22 Jan 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/</guid>
@@ -259,12 +259,13 @@
 &lt;p&gt;&lt;strong&gt;提出 VLCache 框架&lt;/strong&gt;：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
+      <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
       <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/lern-to-write/STC&#34;&gt;https://github.com/lern-to-write/STC&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference: CVPR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对&lt;strong&gt;流式视频理解 (Streaming Video Understanding, SVU)&lt;/strong&gt; 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。&lt;/p&gt;
@@ -307,7 +308,7 @@
 &lt;p&gt;&lt;strong&gt;总结作者的贡献如下：&lt;/strong&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning</title>
+      <title>📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</link>
       <pubDate>Sun, 21 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/</guid>
@@ -326,12 +327,12 @@
 &lt;p&gt;在本文中，作者提出了 VisionThink，这是一种新的高效 VLM 范式，它利用了模型的推理能力 。与之前处理完整图像然后丢弃冗余标记的方法不同，VisionThink 直接输入压缩后的视觉标记，并允许模型在需要时请求原始高分辨率图像 。这使得在大多数现实场景中能够实现更高效的推理，同时在 OCR 相关任务上保持性能 。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 SpecBranch: Speculative Decoding via Hybrid Drafting and Rollback-Aware Branch Parallelism</title>
+      <title>📝 SpecBranch: Speculative Decoding via Hybrid Drafting and Rollback-Aware Branch Parallelism - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specbranch---speculativedecoding-via-hybrid-drafting-and-rollback-aware-branch-parallelism/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/SpecBranch/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 Submitted&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;&lt;strong&gt;核心痛点：投机解码（Speculative Decoding, SD）中的串行瓶颈与回滚代价&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;受到现代处理器分支预测技术的启发 ，作者允许 Draft Model（草稿模型）在 Target Model（目标模型）进行验证的同时，主动生成推测性的分支。这种并行 SD 范式创建了一个两阶段流水线，使得 Draft Model 的 token 生成与 Target Model 的验证在时间上重叠，从而有效地填补了传统 SD 中固有的流水线气泡（Pipeline Bubbles）。&lt;/p&gt;
@@ -343,7 +344,7 @@
 &lt;p&gt;&lt;strong&gt;Pre-verify Rollback（预验证回滚）：&lt;/strong&gt; PEARL 忽视了并行加速的一个关键条件：验证期间生成的 token 必须被 &lt;strong&gt;“全部接受（All-Accepted）”&lt;/strong&gt; 。否则，PEARL 会退化为串行执行并失去并行能力。它仅验证第一个 token，而系统对序列中间发生的拒绝（例如 Fig. 1(b) 中  被拒绝）一无所知，直到并行验证结束才发现，导致大量浪费 。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter</title>
+      <title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</link>
       <pubDate>Sat, 20 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/</guid>
@@ -380,7 +381,7 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
 &lt;p&gt;为了解决上述挑战，论文提出了 &lt;strong&gt;TLT&lt;/strong&gt;，这是一个具有自适应投机解码的高效推理RL训练系统。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Empower Vision Applications with LoRA LMM</title>
+      <title>📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
@@ -402,7 +403,7 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
 作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
+      <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding - INFOCOM&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
@@ -440,7 +441,7 @@ Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽�
 &lt;p&gt;为解决上述限制，作者提出了 &lt;strong&gt;Venus&lt;/strong&gt;，一种新颖的&lt;strong&gt;设备端记忆和检索系统 (on-device memory-and-retrieval system)&lt;/strong&gt;，专为高效在线边缘视频理解而设计。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Elastic On-Device LLM Service</title>
+      <title>📝 Elastic On-Device LLM Service - MobiCom &#39;25</title>
       <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
@@ -503,7 +504,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;请求间优化 (Inter-request Optimization):&lt;/strong&gt; 为了保持高吞吐量和低延迟，RServe 进一步对不同请求进行批处理执行，并利用 &lt;strong&gt;可调度 Token (Schedulable Tokens)&lt;/strong&gt; 来平衡各个微批次（Micro-batches）之间的计算负载，构建请求间流水线。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving </title>
+      <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
@@ -551,7 +552,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;LMM主流架构：&lt;/strong&gt; 主流LMM架构在LLM后端处理图像标记和文本标记的方式上存在差异：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding</title>
+      <title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/</guid>
@@ -573,8 +574,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;论文提出 &lt;strong&gt;Substitute Speculative Decoding (SubSpec)&lt;/strong&gt;：一种&lt;strong&gt;无训练（training-free）&lt;/strong&gt;、plug-and-play 的方法，通过在 GPU 上构造一个高度对齐的 draft 模型（使用低位宽 substitute 层 + 复用目标模型在 GPU 上的层与 KV-Cache）来大幅提升 $\tau$，从而在 offloading 场景下显著加速（例如在 8GB VRAM 下 Qwen2.5 7B 达到 ~25 token/s，超过 10× 加速）。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
-</title>
+      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices - INFOCOM&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
       <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
@@ -615,7 +615,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/Running/2025Humen/figure2.jpg&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction</title>
+      <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction - NeuIPS&#39;25 Oral</title>
       <link>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</link>
       <pubDate>Fri, 21 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</guid>
@@ -653,7 +653,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure6.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications</title>
+      <title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight</title>
       <link>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</link>
       <pubDate>Tue, 18 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</guid>
@@ -701,12 +701,12 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 TINY BUT MIGHTY: A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES</title>
+      <title>📝 TINY BUT MIGHTY: A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</link>
       <pubDate>Mon, 17 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/tiny-but-mighty---a-software-hardware-co-design-approach-for-efficient-multimodal-in-ference-on-battery-powered-small-devices/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/NANOMIND/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26 submitted&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;在设备端运行大语言模型（On-device LLMs）通过将数据保留在本地，显著增强了安全性，降低了数据泄露风险，同时支持实时智能和用户隐私保护。然而，其实际部署仍受到紧凑系统严苛的功耗与计算预算限制。随着对高级模型需求的增长——尤其是在离线或弱连接场景下——亟需在资源效率与隐私之间取得平衡的解决方案。当前这些模型已被广泛部署于智能手机、桌面设备与机器人，以支持自然语言交互、实时任务执行以及更强的用户隐私保障。&lt;/p&gt;
 &lt;p&gt;然而，现有方法几乎完全聚焦于&lt;strong&gt;软件或算法层面的优化&lt;/strong&gt;——主要是低比特量化（low-bit quantization）——却缺乏对碎片化多样的移动 GPU 与新兴 NPU 的支持，也无法很好地跨不同硬件平台适配。大多数先前工作仅尝试解决该问题的一两个方面，尚无端到端的完整解决方案。尤其重要的是，它们常常忽略了&lt;strong&gt;软硬件联合设计&lt;/strong&gt;（joint design of software and hardware）。其结果是，设备无法充分利用可用资源，且功耗问题很少被系统性地考虑。&lt;/p&gt;
@@ -717,7 +717,7 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 &lt;p&gt;&lt;strong&gt;推理系统&lt;/strong&gt;：在系统级优化方面，近期工作已开始利用现代 SoC 中的异构加速器。例如，&lt;code&gt;llm.npu&lt;/code&gt; (Xu et al., 2025) 在提示词、张量和块级别重构 NPU 上的执行流程，将异常值和浮点（FP）操作卸载到 CPU/GPU，并通过子图重排来提高利用率——解决了移动 NPU 仅支持静态输入形状的限制。&lt;code&gt;PowerInfer-2&lt;/code&gt; (Xue et al., 2024) 提出了一种 NPU-CPU 协同框架，根据神经元激活密度卸载 LLM 推理，使手机能运行超出其内存容量的模型。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
+      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation - ICML&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
@@ -747,7 +747,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;阶段内部流程：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
+      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism - NeurIPS&#39;25 Oral</title>
       <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
       <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
@@ -782,7 +782,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 由于视觉 token 的数量通常远大于文本 token，这两种架构都在推理中引入了大量的额外开销，包括更长的上下文、更高的显存使用率和更慢的推理速度。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference</title>
+      <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</guid>
@@ -825,7 +825,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;&lt;strong&gt;算法伪码:&lt;/strong&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More</title>
+      <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More - EMNLP&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
@@ -846,7 +846,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;&lt;strong&gt;(II) 与高效注意力算子（FlashAttention）不兼容&lt;/strong&gt;：许多 importance-based 方法需要访问 attention scores，但高效实现（FlashAttention / FlashAttention-2）在内部并不暴露中间 attention map，这就迫使要么禁用高效实现（带来速度和内存损失），要么放弃这些方法。论文强调在保持 FlashAttention 的同时设计 pruning 方法的重要性。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders </title>
+      <title>📝 MoVE-KD: Knowledge Distillation for VLMs with Mixture of Visual Encoders -CVPR 2025 </title>
       <link>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</link>
       <pubDate>Mon, 10 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/move-kd---knowledge-distillation-for-vlms-with-mixture-of-visual-encoders---cvpr25/</guid>
@@ -891,7 +891,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 &lt;p&gt;&lt;strong&gt;在 LLaVA / LLaVA-NeXT 等主流 VLM 上取得 SOTA&lt;/strong&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization</title>
+      <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>
       <pubDate>Sun, 09 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</guid>
@@ -941,7 +941,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 &lt;p&gt;&lt;strong&gt;生成式推理与 KV 缓存（Generative Inference &amp;amp; KV Caching）&lt;/strong&gt;：预填（prefill）和解码（decoding）阶段的概念与常用 chunked prefill 思路（将长输入切为若干 chunk 逐步构建 KV cache）被回顾，用以说明激活内存与 KV cache 在不同阶段的不同开销特征。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation</title>
+      <title>📝 Efficient Multi-modal Large Language Models via Progressive Consistency Distillation - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</link>
       <pubDate>Fri, 07 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/efficient-multi-modal-large-language-models-via-progressive-consistency-distillation---neurips25/</guid>
@@ -971,7 +971,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 典型工作包括：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS</title>
+      <title>📝 SPINQUANT: LLM QUANTIZATION WITH LEARNED ROTATIONS - ICLR&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</link>
       <pubDate>Thu, 06 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/spinquant---llm-quantization-with-learned-rotations---iclr25/</guid>
@@ -992,7 +992,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 &lt;p&gt;Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding  </title>
+      <title>📝 ViSpec: Accelerating Vision-Language Models with Vision-Aware Speculative Decoding - NeurIPS&#39;25 </title>
       <link>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</link>
       <pubDate>Wed, 05 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/vispec---accelerating-vision-language-models-with-vision-aware-speculative-decoding---neurips25/</guid>
@@ -1023,7 +1023,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 为解决这一问题，ViSpec 提出了 &lt;strong&gt;Vision-Aware Speculative Decoding&lt;/strong&gt; 框架，核心贡献如下：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs </title>
+      <title>📝 SpecEdge: Scalable Edge-Assisted Serving Framework for Interactive LLMs - NeurIPS&#39;25 Spotlight</title>
       <link>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</link>
       <pubDate>Mon, 03 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specedge---scalable-edge-assisted-serving-framework-for-interactive-llms-neurips25-spotlight/</guid>
@@ -1044,7 +1044,7 @@ MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压
 The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;/strong&gt;, even exceeding the &lt;strong&gt;312 TFLOPS&lt;/strong&gt; of data-center-class A100, while costing &lt;strong&gt;14.43× less&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference</title>
+      <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
       <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
@@ -1069,7 +1069,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;p&gt;稀疏注意力方法与 KV cache驱逐在根本上不同：前者保留所有cache，但在计算时只选择性地使用关键子集，因此&lt;strong&gt;不减少内存占用&lt;/strong&gt;。而 KV cache驱逐直接移除非关键条目，从而减小内存占用。这两种技术是正orthogonal的，未来可以结合使用。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
+      <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING - ICLR&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
       <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
@@ -1087,7 +1087,7 @@ The GeForce RTX 4090 delivers up to &lt;strong&gt;330.3 TFLOPS (FP16 tensor)&lt;
 &lt;p&gt;回顾了对多头注意力中 head 功能的研究（Voita et al., Olsson et al., Wu et al., Zheng et al. 等），并指出不同 head 在词法、结构、复制（induction）、检索等方面扮演不同角色。这些观察为按 head 分配 KV cache 提供理论基础。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
+      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
@@ -1128,7 +1128,7 @@ W \approx U_r \Sigma_r V_r^T
 $$&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning</title>
+      <title>📝 SPECVLM: Enhancing Speculative Decoding of Video LLMs via Verifier-Guided Token Pruning - EMNLP&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</link>
       <pubDate>Wed, 29 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/specvlm---enhancingspeculative-decoding-of-video-llms-via-verifier-guided-token-pruning---emnlp25/</guid>
@@ -1149,7 +1149,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;p&gt;在 autoregressive 生成过程中，每步生成的 KV cache 都必须与模型参数一起加载与存储于 GPU 显存，导致显著的 memory-bound 现象。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders</title>
+      <title>📝 AdaSPEC: Selective Knowledge Distillation for Efficient Speculative Decoders - NeurIPS&#39;25 Spotlight</title>
       <link>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</link>
       <pubDate>Mon, 27 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/adaspec---selective-knowledge-distillation-for-efficient-speculative-decoders---neurips25-spotlight/</guid>
@@ -1168,7 +1168,7 @@ LLaVA-OneVision (Li et al., 2024a) 将每一帧处理为 196 个视觉 token。�
 &lt;p&gt;因此，即使 KD 能使分布接近，也不一定提升 SD 的实际加速效果。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+      <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
@@ -1185,7 +1185,7 @@ However, they often produce excessively long outputs, leading to prohibitively l
 This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs - *NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
@@ -1210,13 +1210,18 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
+      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
       <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/title.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Conference:ICLR&#39;26&lt;/p&gt;
+&lt;/li&gt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-motivation动机--背景&#34;&gt;💡 Motivation（动机 / 背景）&lt;/h2&gt;

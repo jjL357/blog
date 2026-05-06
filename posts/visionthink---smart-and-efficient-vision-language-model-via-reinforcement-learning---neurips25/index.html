@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning | JJ&#39;s Blog</title>
+<title>📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Reinforcement Learning, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25
@@ -119,7 +119,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning">
+  <meta property="og:title" content="📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS&#39;25">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/dvlab-research/VisionThink
@@ -137,7 +137,7 @@ Github: https://github.com/dvlab-research/VisionThink
     <meta property="article:tag" content="Reinforcement Learning">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning">
+<meta name="twitter:title" content="📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS&#39;25">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/dvlab-research/VisionThink
@@ -167,7 +167,7 @@ Github: https://github.com/dvlab-research/VisionThink
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning",
+      "name": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS'25",
       "item": "https://jjl357.github.io/blog/posts/visionthink---smart-and-efficient-vision-language-model-via-reinforcement-learning---neurips25/"
     }
   ]
@@ -177,8 +177,8 @@ Github: https://github.com/dvlab-research/VisionThink
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning",
-  "name": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning",
+  "headline": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS'25",
+  "name": "📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS\u002725",
   "description": "\nConference: NeurIPS'25\nGithub: https://github.com/dvlab-research/VisionThink\n1. Motivation 最近，视觉语言模型（VLMs） 通过将视觉标记（visual tokens）投影并适配到大语言模型（LLM）空间中，在通用视觉问答（General VQA）和各种现实场景中取得了显著成就。然而，随着 VLM 性能的不断提升，视觉标记的消耗呈指数级增长。例如，一张使用智能手机拍摄的 $2048 \\times 1024$ 照片在 LLaVA 1.5 中需要 576 个视觉标记，而现在在 Qwen2.5-VL 中则需要 2,678 个。因此，避免过度使用视觉标记已成为当务之急。\n目前已经有大量关于视觉标记压缩的研究被提出。大多数方法使用预定义的阈值来修剪或合并固定数量的视觉标记。然而，不同问题和图像的冗余程度各不相同，这引发了一个自然的问题：作者真的应该在所有场景中应用统一的标记压缩比吗？为了回答这个问题，作者简单地通过降低图像分辨率来减少视觉标记的数量，并评估了 Qwen2.5-VL 在多个基准测试上的性能。如 Fig. 1 左侧所示，作者发现对于大多数现实场景（如 MME 和 RealWorldQA），即使将图像分辨率降低四倍（显著减少 75% 的视觉标记），对模型性能的影响也微乎其微。然而，如 Fig. 1 右侧所示，对于 ChartQA 和 OCRBench 等需要细节理解和 OCR 相关能力的基准测试，减少视觉标记会导致性能大幅下降。\n基于这些观察，作者发现大多数现实世界的问题并不需要带有长视觉标记的高分辨率图像，而一小部分 OCR 相关任务对这类细节输入的要求非常高 。因此，如果作者能够动态区分哪些样本需要高分辨率处理，哪些不需要，那么效率优化将具有巨大的潜力 。\n在本文中，作者提出了 VisionThink，这是一种利用模型推理能力的新型高效 VLM 范式 。与之前处理全图后丢弃冗余标记的方法不同，VisionThink 直接输入压缩后的视觉标记，并允许模型在需要时请求原始高分辨率图像 。这使得在大多数现实场景中能够进行更高效的推理，同时保留在 OCR 相关任务上的性能 。\n2. Contribution 在本文中，作者提出了 VisionThink，这是一种新的高效 VLM 范式，它利用了模型的推理能力 。与之前处理完整图像然后丢弃冗余标记的方法不同，VisionThink 直接输入压缩后的视觉标记，并允许模型在需要时请求原始高分辨率图像 。这使得在大多数现实场景中能够实现更高效的推理，同时在 OCR 相关任务上保持性能 。\n",
   "keywords": [
     "MLLM", "Reinforcement Learning", "Paper Note"
@@ -246,7 +246,7 @@ Github: https://github.com/dvlab-research/VisionThink
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning
+      📝 VisionThink: Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPS&#39;25
     </h1>
     <div class="post-meta"><span title='2025-12-21 00:00:00 +0000 UTC'>December 21, 2025</span>
 

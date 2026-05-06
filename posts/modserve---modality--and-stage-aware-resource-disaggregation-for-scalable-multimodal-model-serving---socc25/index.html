@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving  | JJ&#39;s Blog</title>
+<title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, System, Paper Note">
 <meta name="description" content="
 Conference: SoCC&#39;25
@@ -148,7 +148,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving ">
+  <meta property="og:title" content="📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25">
   <meta property="og:description" content=" Conference: SoCC&#39;25
 1. 动机（Motivation） 大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：
 图像预处理： 将原始图像转换为张量表示。 图像编码： 将这些张量转换为图像标记（tokens）。 语言模型后端： 结合文本提示和图像标记生成文本输出。 当前，这些阶段通常以单体系统[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。
@@ -171,7 +171,7 @@ Insight 1： 不同的LMM推理阶段（如预处理、编码、预填充、解�
     <meta property="article:tag" content="System">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving ">
+<meta name="twitter:title" content="📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25">
 <meta name="twitter:description" content="
 Conference: SoCC&#39;25
 1. 动机（Motivation）
@@ -230,7 +230,7 @@ LMM主流架构： 主流LMM架构在LLM后端处理图像标记和文本标记�
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving ",
+      "name": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC'25",
       "item": "https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/"
     }
   ]
@@ -240,8 +240,8 @@ LMM主流架构： 主流LMM架构在LLM后端处理图像标记和文本标记�
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving ",
-  "name": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving ",
+  "headline": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC'25",
+  "name": "📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC\u002725",
   "description": " Conference: SoCC'25\n1. 动机（Motivation） 大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：\n图像预处理： 将原始图像转换为张量表示。 图像编码： 将这些张量转换为图像标记（tokens）。 语言模型后端： 结合文本提示和图像标记生成文本输出。 当前，这些阶段通常以单体系统[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。\n这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足首令牌时间（TTFT）的服务水平目标（SLOs）。清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞，进而降低系统响应能力并导致资源过度配置。\n2. 贡献（Contribution） 作者的工作： 本文首次对两种主流LMM架构——交叉注意力（CroAttn）和仅解码器（DecOnly）——进行了全面的系统分析。分析对象包括六个代表性的开源LMMs以及来自Azure数据中心的真实生产LMM推理轨迹。作者深入剖析了它们的多阶段推理流程、性能与资源之间的权衡，以及生产工作负载模式（包括可变的请求率、多样化的多模态输入和突发流量）。为促进研究，作者发布了来自生产集群的首个开源多模态轨迹，以供社区研究真实世界的部署模式。\n关键洞察（Insights）： 作者的分析确定了三个优化LMM推理的关键洞察：\nInsight 1： 不同的LMM推理阶段（如预处理、编码、预填充、解码）表现出不同的性能特征，并且对资源和模型配置（如批处理、模型分片）具有不同的敏感性，因此需要解耦执行。 Insight 2： 图像编码是影响TTFT的主要瓶颈，因此需要高效的编码器并行化来减少延迟和队头（HoL）阻塞。 Insight 3： 生产多模态流量展现出独特的突发模式，主要由每个请求的图像数量增加所驱动，这强调了需要模态感知路由策略来管理突发流量并减轻尾部延迟峰值。 ModServe架构： 基于上述洞察，作者提出了ModServe，一种新型的模块化架构，专为可扩展和资源高效的LMM服务而设计，旨在直接解决分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行：\n图像实例： 处理图像预处理和编码。 文本实例： 管理LLM的预填充和解码（见）。 请求流： 纯文本请求绕过图像实例直接由文本实例服务；图像-文本请求则先通过图像实例将图像转换为标记，再转发给文本实例进行文本生成。 ModServe的优化能力： 这种模块化架构实现了阶段特定的优化：\n独立资源管理： ModServe独立地使用阶段感知自动扩展、模型分片和批处理来管理图像和文本实例。通过单独扩展各个阶段，它最大程度地减少了资源过度配置。例如，在生产流量中观察到的图像驱动突发期间，图像实例可以独立扩展，从而比单体推理系统更具资源效率。 并行化编码： 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。 模态感知路由： 为管理图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，图像-文本请求中的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。 性能表现： 作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过在运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群上进行广泛评估，验证了ModServe的有效性。与最先进的基线相比，ModServe在静态资源分配下实现了3.3至5.5倍更高的吞吐量，同时在满足P99 TTFT SLOs的前提下，将LMM服务成本降低了25%至41.3%。\n互补性： 虽然现有的PD分解技术[46, 65]有助于优化LLM推理（通过分离预填充和解码），但它们对于处理多模态工作负载来说是不够的。生产环境中异构且突发的多模态流量性质，使得在以文本为中心背景下研究的PD分解难以扩展；模态特定的优化（如并行化编码、模态感知路由和阶段自动扩展）对于在保持资源效率的同时满足SLOs至关重要。作者在第5节中证明，ModServe可以与LLM后端的两种配置（共置LLM后端/混合PD批处理，以及文本节点的PD分解）结合，且提出的模态感知技术在两种配置下都能改善服务延迟。\n适用范围： 作者重点研究了图像-文本到文本和视频-文本到文本（视频被视为图像帧序列处理[31]）任务，但其洞察可推广到其他多模态场景，例如音频-文本到文本任务[23]，因为它们与研究所用的模型具有相似的模型架构和推理阶段。\n3. 基础知识（Preliminary） LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：\n图像预处理： 将原始图像转换为统一大小的图块。 图像编码： 编码器提取视觉特征并生成一系列图像标记。 文本生成： LLM后端处理图像和文本标记以生成输出文本标记。 LMM主流架构： 主流LMM架构在LLM后端处理图像标记和文本标记的方式上存在差异：\n",
   "keywords": [
     "MLLM", "System", "Paper Note"
@@ -309,7 +309,7 @@ LMM主流架构： 主流LMM架构在LLM后端处理图像标记和文本标记�
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving 
+      📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25
     </h1>
     <div class="post-meta"><span title='2025-11-27 00:00:00 +0000 UTC'>November 27, 2025</span>
 

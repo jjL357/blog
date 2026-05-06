@@ -25,7 +25,7 @@
 &lt;p&gt;本研究通过针对性的 CPU 端优化，将 InternVL3-2B 的 TTFT 从 124.0 ms 降至 57.7 ms，将 SmolVLM-256M 的 TTFT 从 344.7 ms 降至 22.8 ms (如图 1 所示)。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Empower Vision Applications with LoRA LMM</title>
+      <title>📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
@@ -47,7 +47,7 @@
 作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding</title>
+      <title>📝 Venus: An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding - INFOCOM&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</link>
       <pubDate>Fri, 12 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/venus---an-efficient-edge-memory-and-retrieval-system-for-vlm-based-online-video-understanding---infocom26/</guid>
@@ -85,7 +85,7 @@
 &lt;p&gt;为解决上述限制，作者提出了 &lt;strong&gt;Venus&lt;/strong&gt;，一种新颖的&lt;strong&gt;设备端记忆和检索系统 (on-device memory-and-retrieval system)&lt;/strong&gt;，专为高效在线边缘视频理解而设计。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Elastic On-Device LLM Service</title>
+      <title>📝 Elastic On-Device LLM Service - MobiCom &#39;25</title>
       <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
@@ -148,7 +148,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;请求间优化 (Inter-request Optimization):&lt;/strong&gt; 为了保持高吞吐量和低延迟，RServe 进一步对不同请求进行批处理执行，并利用 &lt;strong&gt;可调度 Token (Schedulable Tokens)&lt;/strong&gt; 来平衡各个微批次（Micro-batches）之间的计算负载，构建请求间流水线。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving </title>
+      <title>📝 ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</link>
       <pubDate>Thu, 27 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/modserve---modality--and-stage-aware-resource-disaggregation-for-scalable-multimodal-model-serving---socc25/</guid>
@@ -196,8 +196,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;LMM主流架构：&lt;/strong&gt; 主流LMM架构在LLM后端处理图像标记和文本标记的方式上存在差异：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
-</title>
+      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices - INFOCOM&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
       <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
@@ -259,7 +258,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
+      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation - ICML&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
@@ -289,7 +288,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;阶段内部流程：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
+      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism - NeurIPS&#39;25 Oral</title>
       <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
       <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>

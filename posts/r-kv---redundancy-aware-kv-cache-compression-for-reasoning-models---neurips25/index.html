@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models | JJ&#39;s Blog</title>
+<title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="KV Cache, Reasoning Model, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25
@@ -117,7 +117,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models">
+  <meta property="og:title" content="📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/Zefan-Cai/R-KV
@@ -133,7 +133,7 @@ For instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to so
     <meta property="article:tag" content="Reasoning Model">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models">
+<meta name="twitter:title" content="📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/Zefan-Cai/R-KV
@@ -161,7 +161,7 @@ This long CoT (chain-of-thought) generation necessitates the development of KV c
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+      "name": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS'25",
       "item": "https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/"
     }
   ]
@@ -171,8 +171,8 @@ This long CoT (chain-of-thought) generation necessitates the development of KV c
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
-  "name": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models",
+  "headline": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS'25",
+  "name": "📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS\u002725",
   "description": "\nConference: NeurIPS'25\nGithub: https://github.com/Zefan-Cai/R-KV\nMy Thoughts R-KV 针对previous works在efficient reasoning中由于只依靠attention scores而造成过多地保留了redundant tokens(重复而且对推理没有信息增益的token),R-KV的重点我觉得是增加了Redundancy Estimation via Semantic Similarity来解决这个问题,就Evaluation的结果来说，R-KV的效果是非常好的，即提升了Throughput还maintain了performance，甚至在budget充足的情况下还可以做到提点。\n1. Motivation Reasoning models have demonstrated impressive performance in self-reflection and chain-of-thought reasoning. However, they often produce excessively long outputs, leading to prohibitively large key-value (KV) caches during inference.\nFor instance, a DeepSeek-R1-Distill-Llama-8B model may generate 32K tokens to solve a complex math problem, consuming 15.5GB of memory to load model weights and 4.1GB to store the KV cache. This long CoT (chain-of-thought) generation necessitates the development of KV cache compression.\n",
   "keywords": [
     "KV Cache", "Reasoning Model", "Paper Note"
@@ -240,7 +240,7 @@ This long CoT (chain-of-thought) generation necessitates the development of KV c
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models
+      📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25
     </h1>
     <div class="post-meta"><span title='2025-10-25 00:00:00 +0000 UTC'>October 25, 2025</span>
 

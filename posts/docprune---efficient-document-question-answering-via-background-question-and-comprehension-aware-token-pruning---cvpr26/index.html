@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning  | JJ&#39;s Blog</title>
+<title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Visual Token Pruning, OCR, Paper Note">
 <meta name="description" content="
 Conference: CVPR&#39;26
@@ -123,7 +123,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning ">
+  <meta property="og:title" content="📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26">
   <meta property="og:description" content="
 Conference: CVPR&#39;26
 1. Abstract 近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。 然而，文档图像与自然图像存在显著差异：文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。
@@ -142,7 +142,7 @@ DOCPRUNE 的核心优势在于：
     <meta property="article:tag" content="OCR">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning ">
+<meta name="twitter:title" content="📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26">
 <meta name="twitter:description" content="
 Conference: CVPR&#39;26
 1. Abstract
@@ -176,7 +176,7 @@ DOCPRUNE 的核心优势在于：
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning ",
+      "name": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR'26",
       "item": "https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/"
     }
   ]
@@ -186,8 +186,8 @@ DOCPRUNE 的核心优势在于：
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning ",
-  "name": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning ",
+  "headline": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR'26",
+  "name": "📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR\u002726",
   "description": "\nConference: CVPR'26\n1. Abstract 近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。 然而，文档图像与自然图像存在显著差异：文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。\n作者观察到，现有的针对自然图像和视频的 Token 减少方法（token-reduction methods，例如 FastV 等），在利用文档独有的“结构稀疏性（structural sparsity）”时显得力不从心。为了解决这一痛点，作者提出了 DOCPRUNE——一个免训练（training-free） 且 渐进式（progressive） 的文档 Token 剪枝框架，专为高效的长文档理解而设计。\nDOCPRUNE 的核心优势在于：\n它只保留对当前任务至关重要的 Token，同时剔除不必要的 Token（如纯背景或与问题无关的 Token）。 它能够根据模型内部的“理解力水平（level of comprehension）”，自动选择在哪一层网络触发 Token 剪枝。 最终，在 M3DocRAG 基准上的实验表明，DOCPRUNE 在 Vision Encoder（视觉编码器）和 LLM Decoder（大语言模型解码器）中分别将吞吐量（throughput）提升了 3.0倍 和 3.3倍，同时 F1 分数还提升了 +1.0。实现了在不进行任何额外训练（without any additional training） 的前提下，精度与效率的提升。\n2. Introduction 在文档理解中，长文档通常包含数百页，但有用的内容（文本、表格、图表等）却散布在巨大的背景中。Transformer 架构处理单页就会产生数千个视觉 Token，计算成本极其高昂。\n传统的降低成本的方法是 Token Reduction（如针对自然图像或视频的合并和剪枝），其核心假设是“相邻 patch 通常包含相似的视觉信息”。然而，这一假设在文档中是失效的：文档排版（如文本行、表格）具有极其严格的空间组织规律，即使是微小的 Token 删减也极易破坏文本连贯性或丢失重要的排版线索（destroy important layout cues）。 因此，基于视觉冗余的传统方法在文档上性能下降严重。 另外，现有的剪枝方法往往通过固定的启发式规则（fixed heuristics）来决定剪枝层，忽略了模型理解力在各层之间的演变（neglecting how comprehension evolves across layers）。这种忽略导致剪枝可能发生得过早或不一致，造成性能不稳定及效率提升有限。\n",
   "keywords": [
     "MLLM", "Visual Token Pruning", "OCR", "Paper Note"
@@ -255,7 +255,7 @@ DOCPRUNE 的核心优势在于：
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning 
+      📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26
     </h1>
     <div class="post-meta"><span title='2026-04-29 00:00:00 +0000 UTC'>April 29, 2026</span>
 

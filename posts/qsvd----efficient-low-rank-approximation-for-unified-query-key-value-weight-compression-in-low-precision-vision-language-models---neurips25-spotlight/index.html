@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models | JJ&#39;s Blog</title>
+<title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight | JJ&#39;s Blog</title>
 <meta name="keywords" content="KV Cache, Quantization, MLLM, SVD, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25 Spotlight
@@ -141,7 +141,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models">
+  <meta property="og:title" content="📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25 Spotlight
 Github: https://github.com/SAI-Lab-NYU/QSVD
@@ -162,7 +162,7 @@ $$ W = U \Sigma V^T $$
     <meta property="article:tag" content="SVD">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models">
+<meta name="twitter:title" content="📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25 Spotlight
 Github: https://github.com/SAI-Lab-NYU/QSVD
@@ -214,7 +214,7 @@ $$">
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
+      "name": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS'25 Spotlight",
       "item": "https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/"
     }
   ]
@@ -224,8 +224,8 @@ $$">
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
-  "name": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models",
+  "headline": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS'25 Spotlight",
+  "name": "📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS\u002725 Spotlight",
   "description": "\nConference: NeurIPS'25 Spotlight\nGithub: https://github.com/SAI-Lab-NYU/QSVD\n1. Motivation Vision–Language Models (VLMs) 如 LLaVA、BLIP2 等在图像描述、视觉问答 (VQA) 等任务中表现卓越，但这些模型需要极大的计算与存储开销，尤其在推理时：\nKV Cache 占用高：注意力机制中需存储 Key、Value，每层缓存大小随序列长度线性增长。 Q/K/V 投影重复计算：三组权重矩阵独立计算，造成算力浪费。 模型量化困难：激活分布存在极端 outliers，难以稳定进行低比特量化。 QSVD 的目标是统一地对 Q/K/V 权重矩阵进行低秩近似并结合后训练量化 (PTQ)，实现以下三点：\n减少参数量、计算量、缓存占用； 保持模型性能； 支持低精度硬件部署。 2. Related Work 2.1 SVD in Large Models Singular Value Decomposition (SVD) 是经典的矩阵分解方法。 对于矩阵 ( W \\in \\mathbb{R}^{m \\times n} )，可分解为：\n$$ W = U \\Sigma V^T $$\n其中：\n(U, V) 为正交矩阵； (\\Sigma) 为奇异值对角矩阵； 保留前 (r) 个奇异值可得到 rank-(r) 近似： $$ W \\approx U_r \\Sigma_r V_r^T $$\n",
   "keywords": [
     "KV Cache", "Quantization", "MLLM", "SVD", "Paper Note"
@@ -293,7 +293,7 @@ $$">
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models
+      📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight
     </h1>
     <div class="post-meta"><span title='2025-10-30 00:00:00 +0000 UTC'>October 30, 2025</span>
 

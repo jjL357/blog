@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS | JJ&#39;s Blog</title>
+<title>📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Adaptive Patch Size, Paper Note">
 <meta name="description" content="Conference: ICLR&#39;26
 
@@ -125,7 +125,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS">
+  <meta property="og:title" content="📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26">
   <meta property="og:description" content="Conference: ICLR&#39;26
 1. Abstract 现实世界中的视觉信号在分辨率上天然具有高度的多样性，因此，让多模态大语言模型（Multimodal Large Language Models, MLLMs）具备原生分辨率（native-resolution）感知能力是一个自然且必要的目标。原则上，对于一般且直观的多模态理解任务，低分辨率图像往往已经足够；但对于包含大量细节的信息密集型图像（如文档、表格、图表等），则必须保留高分辨率输入，否则简单的缩放操作会不可避免地导致关键信息丢失。
 近期的研究通过 sequence packing 技术，使模型能够处理任意分辨率和任意宽高比的图像。然而，尽管这些方法在形式上支持 Any-Resolution（AnyRes）输入，模型在低分辨率和高分辨率下的性能仍然明显下降，同时高分辨率输入还会带来显著的计算开销。
@@ -145,7 +145,7 @@ code.has-jax {
     <meta property="article:tag" content="Adaptive Patch Size">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS">
+<meta name="twitter:title" content="📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26">
 <meta name="twitter:description" content="Conference: ICLR&#39;26
 
 1. Abstract
@@ -181,7 +181,7 @@ code.has-jax {
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS",
+      "name": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR'26",
       "item": "https://jjl357.github.io/blog/posts/one-patch-doesnt-fit-all----adaptive-patching-for-native-resolution-multimodal-large-language-models---iclr26/"
     }
   ]
@@ -191,8 +191,8 @@ code.has-jax {
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS",
-  "name": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS",
+  "headline": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR'26",
+  "name": "📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR\u002726",
   "description": "Conference: ICLR'26\n1. Abstract 现实世界中的视觉信号在分辨率上天然具有高度的多样性，因此，让多模态大语言模型（Multimodal Large Language Models, MLLMs）具备原生分辨率（native-resolution）感知能力是一个自然且必要的目标。原则上，对于一般且直观的多模态理解任务，低分辨率图像往往已经足够；但对于包含大量细节的信息密集型图像（如文档、表格、图表等），则必须保留高分辨率输入，否则简单的缩放操作会不可避免地导致关键信息丢失。\n近期的研究通过 sequence packing 技术，使模型能够处理任意分辨率和任意宽高比的图像。然而，尽管这些方法在形式上支持 Any-Resolution（AnyRes）输入，模型在低分辨率和高分辨率下的性能仍然明显下降，同时高分辨率输入还会带来显著的计算开销。\n本文提出一个核心观点：“单一固定 patch size”是导致上述问题的根本原因。当图像分辨率或信息密度发生变化时，固定 patch size 在建模上天然是次优的。\n为此，论文提出 Adaptive Patching（AdaPatch）：一种无需额外训练、可直接插入到现有固定 patch MLLMs 中的策略。AdaPatch 根据图像的原生分辨率和信息密度动态调整 patch size，从而在不同类型、不同分辨率的图像上取得更稳定、更优的性能。实验表明，该方法在不增加训练成本的前提下，显著提升了 AnyRes 场景下的准确率和稳定性；此外，论文还提出了一种训练版方法，进一步增强模型对动态 patch size 的适应能力。\n2. Introduction 早期的多模态大模型（如 LLaVA、InternVL 系列）通常依赖固定分辨率的视觉编码器：要么将输入图像统一 resize 到某个标准尺寸，要么先切分成多个 tile 再分别处理。这类预处理不可避免地会改变原始视觉内容，对于需要保留细粒度细节或整体结构的任务（例如图表、示意图）尤其不利。\n受 NaViT 启发，近期工作开始直接保留图像的原生分辨率，并将图像划分为固定大小的 non-overlapping patches，使 token 数量随分辨率线性增长。随后通过 sequence packing 将多张图像的 token 序列拼接为一个长序列，并通过 block-diagonal attention mask 保证不同图像之间不互相注意。Qwen2.5-VL、Ovis2.5、Kimi-VL 等 SOTA 模型均采用了这一范式，并宣称支持任意分辨率输入。\n然而，本文通过系统性实验指出：当前 AnyRes 设计并未真正实现“原生分辨率鲁棒性”。在跨越大范围像素预算的测试中，模型性能在不同分辨率区间显著波动，且在极低或极高分辨率下普遍退化。\n论文进一步分析发现，问题的根源在于：\n在低分辨率或高信息密度图像中，大 patch 会过于粗糙，无法捕获细节； 在高分辨率或低信息密度图像中，小 patch 过于局部，导致全局上下文建模能力不足。 因此，patch size 与分辨率、信息密度之间的失配，是 AnyRes 性能不稳定的主要架构性原因。\n",
   "keywords": [
     "MLLM", "Adaptive Patch Size", "Paper Note"
@@ -260,7 +260,7 @@ code.has-jax {
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS
+      📝 ONE PATCH DOESN’T FIT ALL: ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26
     </h1>
     <div class="post-meta"><span title='2026-02-02 00:00:00 +0000 UTC'>February 2, 2026</span>
 

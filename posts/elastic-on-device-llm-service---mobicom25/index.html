@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Elastic On-Device LLM Service | JJ&#39;s Blog</title>
+<title>📝 Elastic On-Device LLM Service - MobiCom &#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="System, Pruning, Serving, Paper Note">
 <meta name="description" content="
 Conference: MobiCom &lsquo;25
@@ -131,7 +131,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Elastic On-Device LLM Service">
+  <meta property="og:title" content="📝 Elastic On-Device LLM Service - MobiCom &#39;25">
   <meta property="og:description" content="
 Conference: MobiCom ‘25
 Github: https://github.com/yinwangsong/ElastiLM
@@ -151,7 +151,7 @@ TTFT 与 Prompt 长度和模型大小均成正比：$TTFT \propto PromptLength \
     <meta property="article:tag" content="Serving">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Elastic On-Device LLM Service">
+<meta name="twitter:title" content="📝 Elastic On-Device LLM Service - MobiCom &#39;25">
 <meta name="twitter:description" content="
 Conference: MobiCom &lsquo;25
 Github: https://github.com/yinwangsong/ElastiLM
@@ -193,7 +193,7 @@ TPOT 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \propto 
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Elastic On-Device LLM Service",
+      "name": "📝 Elastic On-Device LLM Service - MobiCom '25",
       "item": "https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/"
     }
   ]
@@ -203,8 +203,8 @@ TPOT 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \propto 
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Elastic On-Device LLM Service",
-  "name": "📝 Elastic On-Device LLM Service",
+  "headline": "📝 Elastic On-Device LLM Service - MobiCom '25",
+  "name": "📝 Elastic On-Device LLM Service - MobiCom \u002725",
   "description": "\nConference: MobiCom \u0026lsquo;25\nGithub: https://github.com/yinwangsong/ElastiLM\n1. Motivation 端侧 LLM 需要弹性（Elasticity）。LLM 虽然能够处理广泛的语言任务，但其巨大的参数量使得在设备上为每个任务部署独立的模型既不“必要”也不“实际”。因此，端侧 LLM 通常作为系统服务（LLM-as-a-Service）被多个任务和 APP 共享。然而，单一的静态 LLM 无法满足不同任务对服务水平目标（Service-Level Objectives, SLOs）的多样化需求。\n因此，端侧 LLM 必须具备弹性。由于 LLM 推理包含两个截然不同的阶段，这种弹性的需求变得更加复杂：\nPrefill（预填充阶段）：处理 Prompt 的速度，由 Time-To-First-Token (TTFT) 衡量。 Decode（解码阶段）：生成 Token 的速度，由 Time-Per-Output-Token (TPOT) 衡量。 不同的应用对这两个指标有截然不同的要求（如上表所示）：\nChatbot：需要低 TTFT 和低 TPOT 以匹配人类阅读速度。 UI 自动化 Agent：需要低 TTFT 来快速响应首个动作，但对 TPOT 要求较低（因为生成过程可以与 UI 操作重叠）。 后台屏幕录制器：对 TTFT/TPOT 的容忍度都很高。 如果无法满足 SLO，会导致用户体验严重下降或 Agent 交互失败。理想情况下，请求发送给弹性 LLM 时会附带 Prompt 和预期的 SLO，LLM 需要在不违反 SLO 的前提下提供最高的文本生成质量。\n作者的先导实验表明（如图2）：\nTTFT 与 Prompt 长度和模型大小均成正比：$TTFT \\propto PromptLength \\times ModelSize$。 TPOT 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \\propto ModelSize$。 这意味着作者需要同时从 模型维度（Model Dimension） 和 Prompt 维度（Prompt Dimension） 进行弹性化。\n",
   "keywords": [
     "System", "Pruning", "Serving", "Paper Note"
@@ -272,7 +272,7 @@ TPOT 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \propto 
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Elastic On-Device LLM Service
+      📝 Elastic On-Device LLM Service - MobiCom &#39;25
     </h1>
     <div class="post-meta"><span title='2025-12-08 00:00:00 +0000 UTC'>December 8, 2025</span>
 

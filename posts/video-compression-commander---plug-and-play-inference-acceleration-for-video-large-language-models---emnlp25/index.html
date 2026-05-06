@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models | JJ&#39;s Blog</title>
+<title>📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Vision Token Pruning, Paper Note">
 <meta name="description" content="
 Conference: EMNLP&#39;25
@@ -127,7 +127,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models">
+  <meta property="og:title" content="📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25">
   <meta property="og:description" content="
 Conference: EMNLP&#39;25
 Github: https://github.com/xuyang-liu16/VidCom2
@@ -148,7 +148,7 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
     <meta property="article:tag" content="Vision Token Pruning">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models">
+<meta name="twitter:title" content="📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25">
 <meta name="twitter:description" content="
 Conference: EMNLP&#39;25
 Github: https://github.com/xuyang-liu16/VidCom2
@@ -186,7 +186,7 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models",
+      "name": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP'25",
       "item": "https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/"
     }
   ]
@@ -196,8 +196,8 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models",
-  "name": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models",
+  "headline": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP'25",
+  "name": "📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP\u002725",
   "description": "\nConference: EMNLP'25\nGithub: https://github.com/xuyang-liu16/VidCom2\n1. Introduction 视频大语言模型（VideoLLMs）在视频理解任务（如视频问答、视频推理、时序理解等）上表现出色，但其推理效率受到视觉 token 数量过多的严重制约。具体而言，当前主流 VideoLLM 通常将视频拆解为多帧图像，每一帧再由 ViT 等视觉编码器转化为大量 patch-level tokens，这些视觉 tokens 会与文本 tokens 一同送入 LLM 进行跨模态建模。\n由于 Transformer 自注意力的复杂度为 $O(N^2)$，当视频帧数 $T$ 和每帧 token 数 $M$ 较大时，总 token 数 $N = T \\times M$ 会迅速膨胀，导致推理延迟和显存消耗急剧上升。这一问题在长视频理解和高分辨率视频场景中尤为突出。\n作者系统性地分析了现有 VideoLLM token compression 方法，发现其普遍存在两个关键问题：\n忽视帧间差异性（Frame-level Distinctiveness） 多数方法对所有帧采用统一的压缩比例，默认每一帧“信息密度相同”，从而容易在关键帧上丢失重要视觉线索。\n工程实现受限（Implementation Constraints） 一些方法依赖特定模型结构（如 ViT 的 [CLS] token）或显式 attention 权重，导致难以兼容现代视觉编码器（如 SigLIP）或高效注意力算子（如 FlashAttention）。\n为此，作者总结出 三条 VideoLLM token compression 的设计原则，并提出一种**即插即用（plug-and-play）**的推理加速框架 Video Compression Commander（VidCom2）。\nVidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（uniqueness）”，并据此动态调整不同帧的压缩强度，从而在保证信息保真的前提下最大化冗余削减。\n大量实验表明，VidCom2 在多种 VideoLLM 架构和 benchmark 上均取得了更优的性能-效率权衡。\n",
   "keywords": [
     "MLLM", "Vision Token Pruning", "Paper Note"
@@ -265,7 +265,7 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models
+      📝 Video Compression Commander: Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25
     </h1>
     <div class="post-meta"><span title='2026-01-22 00:00:00 +0000 UTC'>January 22, 2026</span>
 

@@ -57,7 +57,7 @@
 &lt;p&gt;&lt;strong&gt;提出 VLCache 框架&lt;/strong&gt;：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction</title>
+      <title>📝 KVzip: Query-Agnostic KV Cache Compression with Context Reconstruction - NeuIPS&#39;25 Oral</title>
       <link>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</link>
       <pubDate>Fri, 21 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/kvzipquery-agnostic-kv-cache-compression-with-context-reconstruction/</guid>
@@ -95,7 +95,7 @@
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVzip/figure6.png&#34;&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference</title>
+      <title>📝 ChunkKV: Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/chunkkv---semantic-preserving-kv-cache-compression-for-efficient-long-context-llm-inference---neurips25/</guid>
@@ -156,7 +156,7 @@
 &lt;p&gt;&lt;strong&gt;生成式推理与 KV 缓存（Generative Inference &amp;amp; KV Caching）&lt;/strong&gt;：预填（prefill）和解码（decoding）阶段的概念与常用 chunked prefill 思路（将长输入切为若干 chunk 逐步构建 KV cache）被回顾，用以说明激活内存与 KV cache 在不同阶段的不同开销特征。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference</title>
+      <title>📝 Ada-KV: Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</link>
       <pubDate>Sat, 01 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/ada-kv---optimizing-kv-cache-eviction-by-adaptive-budget-allocation-for-efficient-llm-inference---neurips25/</guid>
@@ -181,7 +181,7 @@
 &lt;p&gt;稀疏注意力方法与 KV cache驱逐在根本上不同：前者保留所有cache，但在计算时只选择性地使用关键子集，因此&lt;strong&gt;不减少内存占用&lt;/strong&gt;。而 KV cache驱逐直接移除非关键条目，从而减小内存占用。这两种技术是正orthogonal的，未来可以结合使用。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING</title>
+      <title>📝 NOT ALL HEADS MATTER: A HEAD-LEVEL KV CACHE COMPRESSION METHOD WITH INTEGRATED RETRIEVAL AND REASONING - ICLR&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</link>
       <pubDate>Fri, 31 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/not-all-heads-matter---a-head-level-kv-cache-compression-method-with-integrated-retrieval-and-reasoning---iclr25/</guid>
@@ -199,7 +199,7 @@
 &lt;p&gt;回顾了对多头注意力中 head 功能的研究（Voita et al., Olsson et al., Wu et al., Zheng et al. 等），并指出不同 head 在词法、结构、复制（induction）、检索等方面扮演不同角色。这些观察为按 head 分配 KV cache 提供理论基础。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models</title>
+      <title>📝 QSVD: Efficient Low-rank Approximation for Unified Query-Key-Value Weight Compression in Low-Precision Vision-Language Models - NeurIPS&#39;25 Spotlight</title>
       <link>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</link>
       <pubDate>Thu, 30 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/qsvd----efficient-low-rank-approximation-for-unified-query-key-value-weight-compression-in-low-precision-vision-language-models---neurips25-spotlight/</guid>
@@ -240,7 +240,7 @@ W \approx U_r \Sigma_r V_r^T
 $$&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models</title>
+      <title>📝 R-KV: Redundancy-aware KV Cache Compression for Reasoning Models - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</link>
       <pubDate>Sat, 25 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/r-kv---redundancy-aware-kv-cache-compression-for-reasoning-models---neurips25/</guid>
@@ -257,7 +257,7 @@ However, they often produce excessively long outputs, leading to prohibitively l
 This long CoT (chain-of-thought) generation necessitates the development of &lt;strong&gt;KV cache compression&lt;/strong&gt;.&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs - *NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
@@ -282,13 +282,18 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
 &lt;p&gt;现有的视觉 token 剪枝方法主要分为两类：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
+      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
       <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/C2C/title.png&#34;&gt;&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;github：&lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Conference:ICLR&#39;26&lt;/p&gt;
+&lt;/li&gt;
 &lt;/ul&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;-motivation动机--背景&#34;&gt;💡 Motivation（动机 / 背景）&lt;/h2&gt;

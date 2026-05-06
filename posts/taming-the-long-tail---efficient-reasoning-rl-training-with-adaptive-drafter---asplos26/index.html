@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter | JJ&#39;s Blog</title>
+<title>📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS&#39;26 | JJ&#39;s Blog</title>
 <meta name="keywords" content="Speculative Decoding, Paper Note">
 <meta name="description" content="
 Conference: ASPLOS&#39;26
@@ -137,7 +137,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter">
+  <meta property="og:title" content="📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS&#39;26">
   <meta property="og:description" content="
 Conference: ASPLOS&#39;26
 Github: https://github.com/mit-han-lab/fastrl
@@ -159,7 +159,7 @@ C1. 演进的目标模型 (Evolving Target Model): RL训练期间目标模型权
     <meta property="article:tag" content="Speculative Decoding">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter">
+<meta name="twitter:title" content="📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS&#39;26">
 <meta name="twitter:description" content="
 Conference: ASPLOS&#39;26
 Github: https://github.com/mit-han-lab/fastrl
@@ -207,7 +207,7 @@ C3. 波动的批大小 (Fluctuating Batch Sizes): 现有SD通常针对小批次�
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter",
+      "name": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS'26",
       "item": "https://jjl357.github.io/blog/posts/taming-the-long-tail---efficient-reasoning-rl-training-with-adaptive-drafter---asplos26/"
     }
   ]
@@ -217,8 +217,8 @@ C3. 波动的批大小 (Fluctuating Batch Sizes): 现有SD通常针对小批次�
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter",
-  "name": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter",
+  "headline": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS'26",
+  "name": "📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS\u002726",
   "description": "\nConference: ASPLOS'26\nGithub: https://github.com/mit-han-lab/fastrl\n1. Motivation 强化学习（RL）已成为赋予大语言模型（LLMs）强大推理能力（如OpenAI-o1, DeepSeek-R1）的标准方法。然而，这种RL方法面临独特的效率挑战。通过分析自收集的轨迹和来自字节跳动（ByteDance）的生产环境轨迹，作者确定了推理RL过程中的关键特征：\n(Figure 1展示了推理RL中的长尾生成问题和工作负载不平衡)\n(1) 极不平衡的Rollout（采样）与训练时间 (Unbalanced Rollout and Training Time):\n在RL过程中，最耗时的阶段是Rollout（模型生成大量候选回答）。这一阶段占据了总步长时间的绝大部分（约 85%），成为主要的瓶颈。 (2) 持续的长尾分布 (Persistent Long-Tail Distribution):\nRollout响应长度呈现长尾分布是导致效率低下的主要原因。虽然大多数生成的序列相对较短，但一小部分序列会达到极长的长度（例如达到最大上下文限制）。这种长尾模式并非偶发，而是贯穿整个长期训练过程的持续模式。在大多数RL步骤中，少数响应达到最大配置长度，而绝大多数则短得多，导致显着的资源未充分利用（即GPU在等待最长序列完成时处于闲置状态）。 (3)巨大的时间和资源需求 (Substantial Time and Resource Demands): ByteDance的生产轨迹显示，使用128个GPU训练一个32B模型，仅完成385步就需要11天。单步训练平均耗时约40分钟，极度消耗资源。\n为什么选择投机解码 (Why Speculative Decoding - SD)?\n作者认为投机解码（SD）是非常适合解决此问题的方法。SD利用轻量级草稿模型（Draft Model）快速生成token序列，然后由目标模型并行验证。SD适合RL训练主要基于两个优点：\n数学上的无损性 (Mathematically Lossless): 输出分布与目标模型的原始分布完全一致。这对RL至关重要，因为近似方法可能会改变策略优化轨迹。 对长尾效率高 (Efficient for Long-Tail): SD通过将过程从**内存受限（Memory-Bound）转变为计算受限（Compute-Bound）**来提高吞吐量。这对于RL Rollout的长尾阶段特别有效，因为此时有效批大小（Batch Size）通常很小，标准解码无法充分利用GPU计算能力。 在RL中应用SD的挑战 (Challenges in Reasoning RL):\n现有的SD技术主要针对静态推理场景设计，应用于动态推理RL训练面临三大挑战：\nC1. 演进的目标模型 (Evolving Target Model): RL训练期间目标模型权重不断更新。固定的草稿模型会迅速变得“过时”（Stale），导致投机接受率下降，严重削弱SD效果。 C2. 草稿模型训练成本 (Draft Model Training Costs): 高效的SD通常依赖专门的草稿模型（如EAGLE等），这需要额外的训练来与目标模型对齐，引入了额外的开销和复杂性。 C3. 波动的批大小 (Fluctuating Batch Sizes): 现有SD通常针对小批次优化。然而，RL Rollout的特征是有效批大小动态剧烈波动（开始时很大，随着短响应完成迅速减小）。如果不进行管理，在大批次下性能可能会下降甚至发生显存溢出（OOM）。 2. Contribution 为了解决上述挑战，论文提出了 TLT，这是一个具有自适应投机解码的高效推理RL训练系统。\n",
   "keywords": [
     "Speculative Decoding", "Paper Note"
@@ -286,7 +286,7 @@ C3. 波动的批大小 (Fluctuating Batch Sizes): 现有SD通常针对小批次�
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter
+      📝 Taming the Long-Tail: Efficient Reasoning RL Training with Adaptive Drafter - ASPLOS&#39;26
     </h1>
     <div class="post-meta"><span title='2025-12-20 00:00:00 +0000 UTC'>December 20, 2025</span>
 

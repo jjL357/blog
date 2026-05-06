@@ -9,7 +9,7 @@
     <lastBuildDate>Mon, 23 Mar 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/token-pruning/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models</title>
+      <title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</link>
       <pubDate>Mon, 23 Mar 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/</guid>
@@ -27,7 +27,7 @@
 &lt;p&gt;Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY</title>
+      <title>📝 PRUNE REDUNDANCY, PRESERVE ESSENCE: VISION TOKEN COMPRESSION IN VLMS VIA SYNERGISTIC IMPORTANCE–DIVERSITY - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</link>
       <pubDate>Sun, 01 Mar 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/prune-redundancy-preserve-essence---vision-token-compression-in-vlms-via-syner-gistic-importance-diversity---iclr26/</guid>
@@ -60,7 +60,7 @@
 &lt;p&gt;本文关键观点：设计一个 &lt;strong&gt;组引导（group-guided）&lt;/strong&gt; 的训练免费方法，使得“重要性”和“多样性”得到协同优化。通过 PSCA 先将 tokens 按语义方向分组，再在组内用 NMS 去冗余，同时用信息感知机制在图像间自动分配 token 预算，从而在极端压缩下仍保留丰富语义。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs</title>
+      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs - ICLR 2026</title>
       <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
       <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>
@@ -69,12 +69,13 @@
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ironieser/MMTok&#34;&gt;https://github.com/Ironieser/MMTok&lt;/a&gt;&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression</title>
+      <title>📝 Accelerating Streaming Video Large Language Models via Hierarchical Token Compression - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</link>
       <pubDate>Sat, 27 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/accelerating-streaming-video-large-language-models-via--hierarchical-token-compression/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/STC/title.png&#34;&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/lern-to-write/STC&#34;&gt;https://github.com/lern-to-write/STC&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference: CVPR&#39;26&lt;/strong&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
 &lt;p&gt;最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对&lt;strong&gt;流式视频理解 (Streaming Video Understanding, SVU)&lt;/strong&gt; 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。&lt;/p&gt;
@@ -98,7 +99,7 @@
 &lt;p&gt;&lt;strong&gt;流式场景的实证分析&lt;/strong&gt;：分析了现有压缩方法在 SVU 中的局限性，强调了因果压缩的必要性，即在不依赖未来指令的情况下降低 ViT 成本 。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More</title>
+      <title>📝 Stop Looking for “Important Tokens” in Multimodal Language Models: Duplication Matters More - EMNLP&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</link>
       <pubDate>Wed, 12 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/stop-looking-for-important-tokens-in-multimodal-language-models---duplication-matters-more---emnlp25/</guid>
@@ -119,7 +120,7 @@
 &lt;p&gt;&lt;strong&gt;(II) 与高效注意力算子（FlashAttention）不兼容&lt;/strong&gt;：许多 importance-based 方法需要访问 attention scores，但高效实现（FlashAttention / FlashAttention-2）在内部并不暴露中间 attention map，这就迫使要么禁用高效实现（带来速度和内存损失），要么放弃这些方法。论文强调在保持 FlashAttention 的同时设计 pruning 方法的重要性。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs</title>
+      <title>📝 Beyond Attention or Similarity: Maximizing Conditional Diversity for Token Pruning in MLLMs - *NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</link>
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>

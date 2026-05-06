@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications | JJ&#39;s Blog</title>
+<title>📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight | JJ&#39;s Blog</title>
 <meta name="keywords" content="Speculative Decoding, Agent, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25 Spotlight
@@ -119,7 +119,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications">
+  <meta property="og:title" content="📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25 Spotlight
 Github: https://github.com/snowflakedb/ArcticInference
@@ -136,7 +136,7 @@ My Thoughts 这篇 paper 针对 AI 应用中大量推理请求呈现 高度重�
     <meta property="article:tag" content="Agent">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications">
+<meta name="twitter:title" content="📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25 Spotlight
 Github: https://github.com/snowflakedb/ArcticInference
@@ -166,7 +166,7 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications",
+      "name": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS'25 Spotlight",
       "item": "https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/"
     }
   ]
@@ -176,8 +176,8 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications",
-  "name": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications",
+  "headline": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS'25 Spotlight",
+  "name": "📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS\u002725 Spotlight",
   "description": "\nConference: NeurIPS'25 Spotlight\nGithub: https://github.com/snowflakedb/ArcticInference\nMy Thoughts 这篇 paper 针对 AI 应用中大量推理请求呈现 高度重复、模式化且可预测 的特性，提出了一个我觉得非常优秀的推测解码方法。起初我以为它的思路类似于 prefix cache，但实际阅读后发现：SuffixDecoding 基于 suffix tree 的方法对于 speculative decoding 的约束要小得多。 Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding 只需满足 speculative decoding 的验证条件即可，大大提升了复用空间和适用范围。\n我原本担心 suffix tree 在实际部署中会因 规模过大 或 查询速度过慢 而成为瓶颈，但论文中的实验数据基本消除了这些顾虑。根据文中的测量，suffix tree 的内存效率非常高：即使缓存 572M tokens（约 20K 请求），也只占用 6.15GB CPU 内存，平均下来每个 token 仅需 10.75 bytes。在一台常见的 144GB CPU 内存的 A100 系统上，SuffixDecoding 甚至能够缓存 31 天连续生成的数据 而无需 eviction。\n更重要的是，即便在如此大规模的 suffix tree 下，其性能依然稳定：\n更新耗时约 4μs/ token 查询耗时约 12μs/ token 构建速度同样令人放心，构建 10 万条示例输出 的 suffix tree 仅需 ~62 秒，且这是整个系统启动时的一次性成本，后续更新增量极小。\n",
   "keywords": [
     "Speculative Decoding", "Agent", "Paper Note"
@@ -245,7 +245,7 @@ Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding �
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications
+      📝 SuffixDecoding: Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight
     </h1>
     <div class="post-meta"><span title='2025-11-18 00:00:00 +0000 UTC'>November 18, 2025</span>
 

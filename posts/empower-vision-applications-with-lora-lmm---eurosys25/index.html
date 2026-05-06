@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Empower Vision Applications with LoRA LMM | JJ&#39;s Blog</title>
+<title>📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, System, Lora, Serving, Paper Note">
 <meta name="description" content="
 Conference: Eurosys&#39;25
@@ -122,7 +122,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Empower Vision Applications with LoRA LMM">
+  <meta property="og:title" content="📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25">
   <meta property="og:description" content="
 Conference: Eurosys&#39;25
 1. Motivation 尽管 LMMs (Large Multimodal Models) 在通用视觉任务上表现出色，但在应用于需要领域特定知识 (Domain-specific knowledge) 的实际场景时，其表现往往不如人意，类似于早期 LLM 的幻觉问题。
@@ -140,7 +140,7 @@ Unmerged Inference (不合并推理)：为了支持多 Adapter 并行，现有�
     <meta property="article:tag" content="Serving">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Empower Vision Applications with LoRA LMM">
+<meta name="twitter:title" content="📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25">
 <meta name="twitter:description" content="
 Conference: Eurosys&#39;25
 1. Motivation
@@ -173,7 +173,7 @@ Research Question: 我们能否利用 LoRA LMM 来丰富视觉应用，同时满
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Empower Vision Applications with LoRA LMM",
+      "name": "📝 Empower Vision Applications with LoRA LMM - Eurosys'25",
       "item": "https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/"
     }
   ]
@@ -183,8 +183,8 @@ Research Question: 我们能否利用 LoRA LMM 来丰富视觉应用，同时满
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Empower Vision Applications with LoRA LMM",
-  "name": "📝 Empower Vision Applications with LoRA LMM",
+  "headline": "📝 Empower Vision Applications with LoRA LMM - Eurosys'25",
+  "name": "📝 Empower Vision Applications with LoRA LMM - Eurosys\u002725",
   "description": "\nConference: Eurosys'25\n1. Motivation 尽管 LMMs (Large Multimodal Models) 在通用视觉任务上表现出色，但在应用于需要领域特定知识 (Domain-specific knowledge) 的实际场景时，其表现往往不如人意，类似于早期 LLM 的幻觉问题。\n虽然 RAG (Retrieval-Augmented Generation) 是 LLM 中常用的补充知识的方法，但对于时间敏感的视觉应用 (Time-sensitive vision applications) 来说并不适用：\nRAG 的检索过程和附加的长上下文请求会导致超过 10 倍的响应延迟。 相比之下，LoRA (Low-Rank Adaptation) 提供了一种更有前景的方案。它通过在运行时将微调后的 Adapter 合并到 LMM 中，能够高效地生成高质量且一致的领域特定响应，且没有额外的推理开销。 然而，现有的 LoRA 服务系统（如 Punica, S-LoRA, dLoRA）主要针对纯文本 LLM 优化，无法满足视觉应用的高效性和多样化需求：\nUnmerged Inference (不合并推理)：为了支持多 Adapter 并行，现有系统通常采用不合并推理模式。虽然这解决了并发问题，但额外引入的计算开销导致了极高的延迟。 Vision Workloads (视觉负载)：视觉任务通常包含大量的视觉 Token 处理，对计算资源的消耗与纯文本不同，现有系统的 Batching 策略效率低下。 Research Question: 我们能否利用 LoRA LMM 来丰富视觉应用，同时满足其严格的性能要求？ 作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。\n",
   "keywords": [
     "MLLM", "System", "Lora", "Serving", "Paper Note"
@@ -252,7 +252,7 @@ Research Question: 我们能否利用 LoRA LMM 来丰富视觉应用，同时满
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Empower Vision Applications with LoRA LMM
+      📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25
     </h1>
     <div class="post-meta"><span title='2025-12-15 00:00:00 +0000 UTC'>December 15, 2025</span>
 

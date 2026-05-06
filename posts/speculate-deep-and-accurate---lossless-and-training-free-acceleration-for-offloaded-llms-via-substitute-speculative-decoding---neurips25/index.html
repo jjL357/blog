@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding | JJ&#39;s Blog</title>
+<title>📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="Speculative Decoding, Offloading, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25
@@ -122,7 +122,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding">
+  <meta property="og:title" content="📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/NYCU-EDgeAi/subspec
@@ -138,7 +138,7 @@ Github: https://github.com/NYCU-EDgeAi/subspec
     <meta property="article:tag" content="Offloading">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding">
+<meta name="twitter:title" content="📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25
 Github: https://github.com/NYCU-EDgeAi/subspec
@@ -171,7 +171,7 @@ Github: https://github.com/NYCU-EDgeAi/subspec
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding",
+      "name": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS'25",
       "item": "https://jjl357.github.io/blog/posts/speculate-deep-and-accurate---lossless-and-training-free-acceleration-for-offloaded-llms-via-substitute-speculative-decoding---neurips25/"
     }
   ]
@@ -181,8 +181,8 @@ Github: https://github.com/NYCU-EDgeAi/subspec
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding",
-  "name": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding",
+  "headline": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS'25",
+  "name": "📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS\u002725",
   "description": "\nConference: NeurIPS'25\nGithub: https://github.com/NYCU-EDgeAi/subspec\n1. Motivation 大型语言模型（LLMs）模型体积巨大，超出常见消费级 GPU 的显存限制，导致两类常用处理方式：\n模型压缩（Quantization 等）：例如 INT8/INT4 等低精度表示，能显著压缩内存占用，但属于有损，可能影响输出质量。引用若干相关工作（GPTQ、AWQ、HQQ 等）。 参数分流 / Offloading：把不活跃层参数放到 CPU 主内存，需要时再传回 GPU，保证模型输出“无损”。但在 PCIe 带宽受限时，频繁的参数传输会大幅拉低吞吐与响应速度，导致单卡交互式生成速度可能只有每秒 1–2 token。 为缓解 offloading 的数据传输瓶颈，Speculative Decoding (SD) 提出使用“草稿模型”（draft model）先快速生成多个候选 token，然后由目标模型在单次前向中并行验证这些候选，从而减少昂贵的目标模型前向次数。但现有方法存在两大限制：\n依赖与目标模型“同族”的预训练小模型（若无同族小模型，需做额外训练/蒸馏）。 训练过的草稿模型对定制 / fine-tuned 目标模型对齐不足，导致平均可接受 token 长度（average acceptance length，记作 $\\tau$）较小，实际加速受限（常 \u0026lt; 7）。 论文提出 Substitute Speculative Decoding (SubSpec)：一种无训练（training-free）、plug-and-play 的方法，通过在 GPU 上构造一个高度对齐的 draft 模型（使用低位宽 substitute 层 + 复用目标模型在 GPU 上的层与 KV-Cache）来大幅提升 $\\tau$，从而在 offloading 场景下显著加速（例如在 8GB VRAM 下 Qwen2.5 7B 达到 ~25 token/s，超过 10× 加速）。\n",
   "keywords": [
     "Speculative Decoding", "Offloading", "Paper Note"
@@ -250,7 +250,7 @@ Github: https://github.com/NYCU-EDgeAi/subspec
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding
+      📝 Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25
     </h1>
     <div class="post-meta"><span title='2025-11-27 00:00:00 +0000 UTC'>November 27, 2025</span>
 

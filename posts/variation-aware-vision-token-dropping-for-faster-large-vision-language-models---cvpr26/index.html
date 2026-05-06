@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models | JJ&#39;s Blog</title>
+<title>📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26 | JJ&#39;s Blog</title>
 <meta name="keywords" content="MLLM, Token Pruning, Paper Note">
 <meta name="description" content="
 Conference: CVPR&#39;26
@@ -118,7 +118,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models">
+  <meta property="og:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26">
   <meta property="og:description" content="
 Conference: CVPR&#39;26
 Github: https://github.com/xuyang-liu16/V2Drop
@@ -133,7 +133,7 @@ Abstract Large vision-language models（LVLMs）在多模态理解任务上表�
     <meta property="article:tag" content="Token Pruning">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models">
+<meta name="twitter:title" content="📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26">
 <meta name="twitter:description" content="
 Conference: CVPR&#39;26
 Github: https://github.com/xuyang-liu16/V2Drop
@@ -162,7 +162,7 @@ Large vision-language models（LVLMs）在视觉理解与推理任务上表现�
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
+      "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR'26",
       "item": "https://jjl357.github.io/blog/posts/variation-aware-vision-token-dropping-for-faster-large-vision-language-models---cvpr26/"
     }
   ]
@@ -172,8 +172,8 @@ Large vision-language models（LVLMs）在视觉理解与推理任务上表现�
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
-  "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models",
+  "headline": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR'26",
+  "name": "📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR\u002726",
   "description": "\nConference: CVPR'26\nGithub: https://github.com/xuyang-liu16/V2Drop\nAbstract Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：positional bias 和 incompatibility with efficient operators，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了首个从动态 token variation 视角出发的方法，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 Variation-aware Vision Token Dropping（V2Drop），在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 94.0% 和 98.6%，同时将 LLM generation latency 分别降低了 31.5% 和 74.2%。\n1. Introduction Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。\n",
   "keywords": [
     "MLLM", "Token Pruning", "Paper Note"
@@ -241,7 +241,7 @@ Large vision-language models（LVLMs）在视觉理解与推理任务上表现�
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models
+      📝 Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26
     </h1>
     <div class="post-meta"><span title='2026-03-23 00:00:00 +0000 UTC'>March 23, 2026</span>
 

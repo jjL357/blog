@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization | JJ&#39;s Blog</title>
+<title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25 | JJ&#39;s Blog</title>
 <meta name="keywords" content="Quantization, Efficient Calibration, Rotation, Paper Note">
 <meta name="description" content="
 Conference: NeurIPS&#39;25
@@ -132,7 +132,7 @@ code.has-jax {
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization">
+  <meta property="og:title" content="📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25">
   <meta property="og:description" content="
 Conference: NeurIPS&#39;25
 My Thoughts 当时在复现 SpinQuant 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都一些时间，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式。
@@ -153,7 +153,7 @@ My Thoughts 当时在复现 SpinQuant 的时候，确实感受到了 training �
     <meta property="article:tag" content="Rotation">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization">
+<meta name="twitter:title" content="📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25">
 <meta name="twitter:description" content="
 Conference: NeurIPS&#39;25
 
@@ -196,7 +196,7 @@ My Thoughts
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization",
+      "name": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS'25",
       "item": "https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/"
     }
   ]
@@ -206,8 +206,8 @@ My Thoughts
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization",
-  "name": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization",
+  "headline": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS'25",
+  "name": "📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS\u002725",
   "description": "\nConference: NeurIPS'25\nMy Thoughts 当时在复现 SpinQuant 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都一些时间，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式。\n结果果然别人的手速很快，NeurIPS’25 上就出现了这个 DartQuant 工作，它不仅加速了旋转矩阵的优化过程，还能缓解 calibration 阶段的 task-specific overfitting 问题和通过QR分解解决必须正交的问题，非常巧妙。\n1. Motivation 近年来，大型语言模型（LLMs）在多种 NLP 任务上表现卓越，如文本生成、翻译、问答系统等。然而，其推理阶段的计算与内存开销极高，限制了在边缘设备或资源受限场景下的部署。\n在各种模型压缩方法中（剪枝、蒸馏、参数共享、量化等），后训练量化（Post-Training Quantization, PTQ） 因为不需要重新训练、可直接作用于现成模型，而在实际部署中最具实用价值。\n不过，激活分布中存在的极端值（outliers）严重影响了低比特量化效果。为了解决这一问题，研究者提出了 旋转变换（rotation transformation） 来改变激活分布，使其更适合量化。旋转矩阵具有以下优势：\n保持范数不变； 可逆； 能在推理阶段与权重线性层融合，不增加推理时延。 例如，QuaRot 和 SpinQuant 分别使用随机或可训练旋转矩阵来削弱 outlier 的影响。然而，SpinQuant 的 end-to-end 旋转训练开销巨大（显存、时间都极高），同时容易在小规模 calibration set 上 过拟合。 这正是 DartQuant 要解决的痛点：如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。\n2. Challenge 现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：\n计算与显存开销过大： 对 70B 模型进行旋转矩阵优化需要上百 GiB 显存与数十 GPU 小时，完全不符合 PTQ 快速部署的目标。\n",
   "keywords": [
     "Quantization", "Efficient Calibration", "Rotation", "Paper Note"
@@ -275,7 +275,7 @@ My Thoughts
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization
+      📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25
     </h1>
     <div class="post-meta"><span title='2025-11-09 00:00:00 +0000 UTC'>November 9, 2025</span>
 

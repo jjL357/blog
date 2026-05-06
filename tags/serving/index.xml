@@ -9,7 +9,7 @@
     <lastBuildDate>Mon, 15 Dec 2025 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/serving/index.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>📝 Empower Vision Applications with LoRA LMM</title>
+      <title>📝 Empower Vision Applications with LoRA LMM - Eurosys&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</link>
       <pubDate>Mon, 15 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/empower-vision-applications-with-lora-lmm---eurosys25/</guid>
@@ -31,7 +31,7 @@
 作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Elastic On-Device LLM Service</title>
+      <title>📝 Elastic On-Device LLM Service - MobiCom &#39;25</title>
       <link>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</link>
       <pubDate>Mon, 08 Dec 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elastic-on-device-llm-service---mobicom25/</guid>
@@ -94,8 +94,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;strong&gt;请求间优化 (Inter-request Optimization):&lt;/strong&gt; 为了保持高吞吐量和低延迟，RServe 进一步对不同请求进行批处理执行，并利用 &lt;strong&gt;可调度 Token (Schedulable Tokens)&lt;/strong&gt; 来平衡各个微批次（Micro-batches）之间的计算负载，构建请求间流水线。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices
-</title>
+      <title>📝 Jupiter: Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices - INFOCOM&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</link>
       <pubDate>Wed, 26 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/jupiter---fast-and-resource-efficient-collaborative-inference-of-generative-llms-on-edge-devices---infocom25/</guid>
@@ -128,7 +127,7 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;在 &lt;strong&gt;decoding&lt;/strong&gt; 阶段，引入并整合 &lt;strong&gt;speculative decoding&lt;/strong&gt;（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 &lt;strong&gt;outline-based pipeline parallel decoding&lt;/strong&gt; —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation</title>
+      <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation - ICML&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</link>
       <pubDate>Sat, 15 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/efficiently-serving-large-multimodal-models-using-epd-disaggregation---icml25/</guid>
@@ -158,7 +157,7 @@ $$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$&lt;/li&gt;
 &lt;p&gt;阶段内部流程：&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism</title>
+      <title>📝 ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism - NeurIPS&#39;25 Oral</title>
       <link>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</link>
       <pubDate>Thu, 13 Nov 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/elasticmm---efficient-multimodal-llms-serving-with-elastic-multimodal-parallelism---neurips25-oral/</guid>
