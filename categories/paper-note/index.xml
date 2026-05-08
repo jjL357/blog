@@ -6,8 +6,35 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Wed, 29 Apr 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 08 May 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26</title>
+      <link>https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/</link>
+      <pubDate>Fri, 08 May 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DFlash/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference：ICML 2026&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-abstract-摘要&#34;&gt;1. Abstract (摘要)&lt;/h2&gt;
+&lt;p&gt;自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖&lt;strong&gt;自回归起草（Autoregressive Drafting）&lt;/strong&gt;，这种串行起草过程限制了实际的加速上限。&lt;/p&gt;
+&lt;p&gt;虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 &lt;strong&gt;DFlash&lt;/strong&gt; 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\times$。&lt;/p&gt;
+&lt;h2 id=&#34;2-introduction-引言&#34;&gt;2. Introduction (引言)&lt;/h2&gt;
+&lt;p&gt;长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;自回归草稿模型的局限性：&lt;/strong&gt; 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\sim 3\times$。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;扩散草稿模型的困境：&lt;/strong&gt; 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;strong&gt;DFlash 的核心洞见：&lt;/strong&gt; “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DFlash/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;3-related-work-相关工作&#34;&gt;3. Related Work (相关工作)&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;投机解码：&lt;/strong&gt; 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;扩散语言模型（dLLMs）：&lt;/strong&gt; 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;基于扩散的投机解码：&lt;/strong&gt; TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;4-preliminary-理论基础与动机&#34;&gt;4. Preliminary (理论基础与动机)&lt;/h2&gt;
+&lt;p&gt;本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 DOCPRUNE: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/</link>
@@ -99,7 +126,7 @@
 &lt;p&gt;本文关键观点：设计一个 &lt;strong&gt;组引导（group-guided）&lt;/strong&gt; 的训练免费方法，使得“重要性”和“多样性”得到协同优化。通过 PSCA 先将 tokens 按语义方向分组，再在组内用 NMS 去冗余，同时用信息感知机制在图像间自动分配 token 预算，从而在极端压缩下仍保留丰富语义。&lt;/p&gt;</description>
     </item>
     <item>
-      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs - ICLR 2026</title>
+      <title>📝 MMTok: Multimodal Coverage Maximization for Efficient Inference of VLMs - ICLR&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</link>
       <pubDate>Sat, 28 Feb 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/mmtok---multimodal-coverage-maximization-for-efficient-inference-of-vlms/</guid>

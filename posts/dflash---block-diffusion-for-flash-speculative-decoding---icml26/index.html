@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26 | JJ&#39;s Blog</title>
+<meta name="keywords" content="Diffusion LLM, Speculative Decoding, Paper Note">
+<meta name="description" content="
+Conference：ICML 2026
+1. Abstract (摘要)
+自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖自回归起草（Autoregressive Drafting），这种串行起草过程限制了实际的加速上限。
+虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 DFlash 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\times$。
+2. Introduction (引言)
+长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：
+
+自回归草稿模型的局限性： 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\sim 3\times$。
+扩散草稿模型的困境： 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。
+
+DFlash 的核心洞见： “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。
+
+3. Related Work (相关工作)
+
+投机解码： 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。
+扩散语言模型（dLLMs）： 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。
+基于扩散的投机解码： TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。
+
+4. Preliminary (理论基础与动机)
+本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26">
+  <meta property="og:description" content="
+Conference：ICML 2026
+1. Abstract (摘要) 自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖自回归起草（Autoregressive Drafting），这种串行起草过程限制了实际的加速上限。
+虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 DFlash 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\times$。
+2. Introduction (引言) 长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：
+自回归草稿模型的局限性： 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\sim 3\times$。 扩散草稿模型的困境： 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。 DFlash 的核心洞见： “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。
+3. Related Work (相关工作) 投机解码： 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。 扩散语言模型（dLLMs）： 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。 基于扩散的投机解码： TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。 4. Preliminary (理论基础与动机) 本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-05-08T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-05-08T00:00:00+00:00">
+    <meta property="article:tag" content="Diffusion LLM">
+    <meta property="article:tag" content="Speculative Decoding">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26">
+<meta name="twitter:description" content="
+Conference：ICML 2026
+1. Abstract (摘要)
+自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖自回归起草（Autoregressive Drafting），这种串行起草过程限制了实际的加速上限。
+虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 DFlash 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\times$。
+2. Introduction (引言)
+长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：
+
+自回归草稿模型的局限性： 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\sim 3\times$。
+扩散草稿模型的困境： 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。
+
+DFlash 的核心洞见： “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。
+
+3. Related Work (相关工作)
+
+投机解码： 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。
+扩散语言模型（dLLMs）： 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。
+基于扩散的投机解码： TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。
+
+4. Preliminary (理论基础与动机)
+本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML'26",
+      "item": "https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML'26",
+  "name": "📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML\u002726",
+  "description": "\nConference：ICML 2026\n1. Abstract (摘要) 自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖自回归起草（Autoregressive Drafting），这种串行起草过程限制了实际的加速上限。\n虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 DFlash 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\\times$。\n2. Introduction (引言) 长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：\n自回归草稿模型的局限性： 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\\sim 3\\times$。 扩散草稿模型的困境： 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。 DFlash 的核心洞见： “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。\n3. Related Work (相关工作) 投机解码： 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。 扩散语言模型（dLLMs）： 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。 基于扩散的投机解码： TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。 4. Preliminary (理论基础与动机) 本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。\n",
+  "keywords": [
+    "Diffusion LLM", "Speculative Decoding", "Paper Note"
+  ],
+  "articleBody": "\nConference：ICML 2026\n1. Abstract (摘要) 自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖自回归起草（Autoregressive Drafting），这种串行起草过程限制了实际的加速上限。\n虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 DFlash 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\\times$。\n2. Introduction (引言) 长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：\n自回归草稿模型的局限性： 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\\sim 3\\times$。 扩散草稿模型的困境： 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。 DFlash 的核心洞见： “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。\n3. Related Work (相关工作) 投机解码： 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。 扩散语言模型（dLLMs）： 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。 基于扩散的投机解码： TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。 4. Preliminary (理论基础与动机) 本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。\n4.1 投机解码加速比公式 在每个解码周期中，草稿模型预测 $\\gamma$ 个 tokens，由目标模型并行验证。平均每个 token 的延迟 $L$ 为： $$ L = \\frac{T_{\\text{draft}} + T_{\\text{verify}}}{\\tau} $$ 其中 $T_{\\text{draft}}$ 为起草延迟，$T_{\\text{verify}}$ 为验证开销，$\\tau \\in [1, \\gamma + 1]$ 为期望接受的 token 数量。加速比可表示为提升 $\\tau$ 或降低 $T_{\\text{draft}}$。\n4.2 自回归 vs. 扩散起草 自回归起草： 延迟呈线性增长 $T_{\\text{draft}} = \\gamma \\cdot t_{\\text{step}}$。为了控制时间，模型只能设计得非常浅（如单层 Transformer），导致容量受限，进一步阻碍了接受长度 $\\tau$ 的提升。 扩散起草： 所有 $\\gamma$ 个 token 在单次前向传播中并行生成，延迟为 $T_{\\text{draft}} = t_{\\text{parallel}}$。现代 GPU 对并行矩阵计算的高效支持，使得 $t_{\\text{parallel}} \\ll \\gamma \\cdot t_{\\text{step}}$。 (Figure 3 说明：相比于 1 层 EAGLE-3 的起草延迟随 token 数量线性攀升，DFlash（即使是 3层或5层模型）在生成 16 个 token 时延迟极低且基本保持平稳，这就为使用更深、更强的草稿模型提供了设计空间。)\n5. Method (推理阶段核心设计) 此部分详细介绍了 DFlash 的系统架构设计，重点解释了如何利用目标模型特征实现高接受率。\n(Figure 2: DFlash 推理设计架构。展示了特征提取、KV注入和并行块解码的全过程。)\n1. 提取目标上下文特征 (Context features from the target model) 纯靠小扩散模型很难凭空预测高质量的 token 序列。在目标模型执行 Prefill 生成第一个 token 的过程中，DFlash 会从目标模型中均匀采样若干隐藏层（如从第 2 层到倒数第 3 层之间均匀抽取 5 层）的特征（Hidden representations）。随后，通过一个轻量级投影层将这些跨层特征融合为一个紧凑的目标上下文特征（Target Context Feature）。\n2. 核心创新：通过 KV 注入实现接受长度缩放 (Conditioning via KV injection enables acceptance scaling)\n对比 EAGLE-3： 现有方法通常将目标特征与草稿模型的 token embedding 融合后作为输入。这种设计的缺陷是：随着草稿模型深度的增加，输入层的特征信息会被逐层稀释，导致“更深的模型无法带来更高的接受率”。 DFlash 的解决方案： 将融合后的目标上下文特征视为持久的上下文信息，直接注入到草稿模型每一层（Every draft model layer）的 Key 和 Value 投影中。这些特征被保存在草稿模型的 KV Cache 中跨迭代复用。这种设计确保了草稿模型在任何深度的注意力计算都能得到一致的条件指导，使得接受长度可以随草稿模型的层数有效提升。 3. 块级并行扩散起草 (Parallel diffusion drafting) 草稿模型采用块级（Block-level）扩散过程。在一次前向传播中，Block 内所有被 Mask 的位置会被同时解码为具体的 token。这种并行生成方式不仅降低了延迟，还显著提高了 GPU 的硬件利用率。\n6. Training (训练阶段详细设计) 为了让扩散模型对齐投机解码的推理行为，DFlash 对标准块扩散的训练方法进行了几项关键调整。\n(Figure 4: DFlash 训练注意力机制。展示了锚点随机采样与跨块掩码的注意力隔离策略。)\n1. KV 特征注入 训练流程与推理保持一致，将完整序列通过冻结的目标模型提取隐藏特征，并注入到草稿模型的 KV 投影中。\n2. 专为投机解码设计的：掩码块随机采样 (Random sampling of masked blocks)\n标准的块扩散通常是对序列均匀分块并随机遮掩。 DFlash 的改进： 在投机解码推理时，草稿模型总是基于目标模型生成的最后一个真实可见的 token（即 bonus token）进行条件生成。因此在训练时，DFlash 在响应序列中随机采样锚点（Anchor tokens）。每个锚点作为 Block 的第一个位置（保持真实可见），而随后的 $block_size - 1$ 个位置被设为 Mask。随机化锚点位置让模型能覆盖更多样化的目标上下文特征，提升了数据利用率。 3. 高效长上下文训练 (Efficient long-context training) 为控制长序列的训练成本，DFlash 在训练中固定每条序列的掩码块数量，并在每个 epoch 重新随机采样锚点位置。结合 Flex Attention 机制，不同 Block 之间的注意力被隔离，允许在单次前向与反向传播中高效并行处理多个草稿块。\n4. 提升收敛速度的：位置衰减损失权重 (Loss weighting for faster convergence) 在投机解码中，草稿块早期的错误会导致后续所有预测失效，因此早期位置的预测准确率更为重要。DFlash 在训练交叉熵损失时引入了指数衰减权重公式： $$ w_k = \\exp\\left( - \\frac{k - 1}{\\gamma} \\right) $$ 其中 $k$ 为块内的相对位置，$\\gamma$ 为控制衰减率的超参数。该权重机制优先惩罚早期位置的预测错误，加快了模型收敛并提高了最终的平均接受长度。\n5. 共享嵌入层和输出头 (Shared embedding and LM head) 草稿模型与目标模型共享 Token Embedding 层和 LM Head，并在训练中保持冻结。这大幅减少了可训练参数量，并促使草稿模型的表征空间与目标模型严格对齐。\n7. Experiments (实验评估) 实验在 NVIDIA H200 GPU 上进行，对比基线为标准的自回归解码（Baseline）和 SOTA 方法 EAGLE-3。\n7.1 指令模型评估 (Instruct Models) 配置： Qwen3 4B/8B，关闭思维模式。DFlash (Block Size 16) 对比 EAGLE-3 (Tree Size 16 和 60)。 结果： 在贪婪解码（Temp = 0）下，DFlash 在 4B 和 8B 模型上分别取得了 4.91$\\times$ 和 4.86$\\times$ 的平均加速比。相比同等起草预算的 EAGLE-3 (16)（约 $1.8\\sim2.0\\times$ 加速），DFlash 的加速效果高出 2.4 倍以上。即使 EAGLE-3 将树规模扩大到 60 以追求更高的接受率，DFlash 依然在更低的验证开销下实现了更高的整体加速比。 7.2 推理模型评估 (Reasoning Models) 场景： 针对开启思维模式（Thinking Mode）、输出极长的推理模型，加速需求更为迫切。 结果： DFlash 在保持高接受长度的前提下，贪婪解码取得了约 4.5$\\times$ 的加速比，非贪婪采样（Temp=1）下取得了约 3.9$\\times$ 的加速比。有效缓解了推理模型生成时间过长的问题。 7.3 SGLang 框架工业部署测试 (Performance on SGLang) 场景： 使用基于 FlashAttention-4 的 SGLang 框架进行吞吐量测试（Token/s），考察真实并发（Concurrency 1 到 32）下的降本能力。 结果： 在并发度为 1 时，Qwen3-8B 达到了最高 5.1$\\times$ 的吞吐量提升。在并发度达到 32、系统处于计算密集状态时，依然能提供约 2.8$\\times$ 的加速。证明了 DFlash 在高负载 Serving 场景下的实用性。 7.4 消融实验详析 (Ablation Study) 本小节通过控制变量验证了架构参数与设计选择的影响。\n1. 训练数据控制 (Training Data) 基于 LLaMA-3.1-8B-Instruct，使用与 EAGLE-3 完全相同的开源训练集（UltraChat 和 ShareGPT）训练 DFlash。在严格对齐数据的情况下，DFlash 依然在所有并发度及基准测试中稳定优于 EAGLE-3 的各个版本。\n2. 草稿模型层数 (Number of Draft Layers) 测试 3 层、5 层、8 层架构。更深的模型（8层）表现出更高的表达能力，达到了最长的接受长度 $\\tau$。但由于 8 层的起草延迟略高，综合权衡下，5 层（5-L）模型实现了起草成本与草稿质量之间的最佳平衡，获得了最高的端到端加速比。\n3. 目标特征提取层数 (Number of Target Hidden Features) 对比从目标模型提取 3 个或 5 个隐藏层特征。结果显示，提取 5 个特征（5-H）能提供更丰富的语义和时序信息，从而得到更高的接受长度和加速比。其代价仅为离线训练时占用相对较多的特征缓存空间。\n4. 训练与推理时的块大小泛化 (Training-Inference Time Block Size)\n测试模型在不同块大小（Block Size 8 和 16）之间的泛化能力。 结论： 存在单向的泛化不对称性。在 Block Size 16 下训练的模型，在推理时使用 Block Size 8 依然能保持高接受率；但在 Block Size 8 下训练的模型，无法有效泛化到推理时的 Block Size 16。这一特性为未来在实际服务中实现**动态块大小调度（Dynamic block-size scheduling）**提供了理论依据。 8. Conclusion (结论) DFlash 提出了一种基于块扩散模型的投机解码框架，重新定义了扩散模型在加速自回归推理中的角色。通过将扩散模型限定在“起草阶段”，DFlash 充分发挥了其极高的并行优势，同时利用目标模型丰富的上下文特征保证了草稿的准确性。DFlash 提供了一种无损且高扩展性的加速范式，为提高大模型部署效率开辟了新的技术路径。\n9. Appendix (附录细节补充) 为保证内容的完整性，附录中涉及的模型参数设置与额外消融实验同样不可忽视。\nA.1 训练实现细节 (Training Implementation) 优化器与超参数： 采用 AdamW 优化器，训练 6 个 epochs，学习率设为 $6 \\times 10^{-4}$，梯度裁剪阈值 1.0，使用占比 0.04 的 cosine warmup 调度。 数据构造： 训练序列最大长度为 3072（Qwen3-Coder 为 4096）；每条序列随机采样 512 个锚点位置。 衰减因子 $\\gamma$： 针对指数损失权重衰减，Block Size 16 时 $\\gamma=7$；Block Size 10 时 $\\gamma=5$；Block Size 8 时 $\\gamma=4$。 支持在线计算特征与离线预缓存特征两种训练模式，离线模式可降低训练计算开销。 ",
+  "wordCount" : "546",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-05-08T00:00:00Z",
+  "dateModified": "2026-05-08T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26
+    </h1>
+    <div class="post-meta"><span title='2026-05-08 00:00:00 +0000 UTC'>May 8, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/title.png"></p>
+<p><strong>Conference：ICML 2026</strong></p>
+<h2 id="1-abstract-摘要">1. Abstract (摘要)<a hidden class="anchor" aria-hidden="true" href="#1-abstract-摘要">#</a></h2>
+<p>自回归大语言模型（LLMs）性能强大，但其固有的顺序解码机制导致推理延迟较高且 GPU 利用率不佳。投机解码（Speculative Decoding）通过“小模型打草稿、大模型并行验证”的方式缓解了这一瓶颈。然而，现有方法（如 EAGLE-3）的草稿模型依然依赖<strong>自回归起草（Autoregressive Drafting）</strong>，这种串行起草过程限制了实际的加速上限。</p>
+<p>虽然扩散语言模型（Diffusion LLMs）支持并行生成，但目前开源的扩散模型在生成质量上通常不及自回归模型。为此，本文提出了 <strong>DFlash</strong> 框架，首次采用轻量级的**块扩散模型（Block Diffusion Model）**进行并行起草。通过单次前向传播生成多个草稿 token，并利用从目标模型中提取的上下文特征作为条件注入，DFlash 实现了高质量、高接受率的草稿生成。实验表明，DFlash 在多款模型和任务上实现了超过 $6\times$ 的无损加速，比目前最先进的 EAGLE-3 投机解码方法速度高出 $2.5\times$。</p>
+<h2 id="2-introduction-引言">2. Introduction (引言)<a hidden class="anchor" aria-hidden="true" href="#2-introduction-引言">#</a></h2>
+<p>长思维链（CoT）推理模型的出现使得序列生成的延迟问题愈发严重。当前的投机解码方案面临一个核心矛盾：</p>
+<ol>
+<li><strong>自回归草稿模型的局限性：</strong> 串行起草效率低，容易产生错误累积，将理论加速上限限制在 $2\sim 3\times$。</li>
+<li><strong>扩散草稿模型的困境：</strong> 虽然支持并行和双向上下文建模，但为了保证质量往往需要多次去噪步骤，导致原始推理速度极慢。已有方法（如 DiffuSpec, SpecDiff-2）使用了高达 7B 参数的扩散模型打草稿，高昂的起草延迟抵消了投机的加速收益；而使用极小自回归模型（如 PARD）又会导致草稿质量差。</li>
+</ol>
+<p><strong>DFlash 的核心洞见：</strong> “目标模型最了解未来（The target knows best）”。目标大模型的隐藏特征中隐含了关于未来多个 token 的丰富信息。DFlash 将轻量级扩散模型作为“适配器（Adapter）”，利用大模型深层上下文特征作为条件（Conditioning），预测未来的 token 块。这种方法结合了自回归模型的高验证质量与扩散模型的高并行速度。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/figure1.png"></p>
+<h2 id="3-related-work-相关工作">3. Related Work (相关工作)<a hidden class="anchor" aria-hidden="true" href="#3-related-work-相关工作">#</a></h2>
+<ul>
+<li><strong>投机解码：</strong> 从早期的标准投机解码，到无外部草稿模型的 Medusa，再到利用特征级上下文的 EAGLE 系列。尽管接受率不断提升，但起草过程的串行本质没有改变。</li>
+<li><strong>扩散语言模型（dLLMs）：</strong> 如 LLaDA 将参数扩展到了百亿级别，但全并行扩散模型面临固定长度生成和缺乏 KV Cache 支持的问题。</li>
+<li><strong>基于扩散的投机解码：</strong> TiDAR 尝试联合训练扩散和自回归目标，但生成质量无法做到无损；Samragh 等人尝试训练 LoRA 适配器，但架构探索有限。大型扩散模型作为草稿器则面临计算开销过大的问题。</li>
+</ul>
+<h2 id="4-preliminary-理论基础与动机">4. Preliminary (理论基础与动机)<a hidden class="anchor" aria-hidden="true" href="#4-preliminary-理论基础与动机">#</a></h2>
+<p>本节从理论公式出发，详细分析了自回归起草与扩散起草的效率权衡。</p>
+<h3 id="41-投机解码加速比公式">4.1 投机解码加速比公式<a hidden class="anchor" aria-hidden="true" href="#41-投机解码加速比公式">#</a></h3>
+<p>在每个解码周期中，草稿模型预测 $\gamma$ 个 tokens，由目标模型并行验证。平均每个 token 的延迟 $L$ 为：
+$$
+L = \frac{T_{\text{draft}} + T_{\text{verify}}}{\tau}
+$$
+其中 $T_{\text{draft}}$ 为起草延迟，$T_{\text{verify}}$ 为验证开销，$\tau \in [1, \gamma + 1]$ 为期望接受的 token 数量。加速比可表示为提升 $\tau$ 或降低 $T_{\text{draft}}$。</p>
+<h3 id="42-自回归-vs-扩散起草">4.2 自回归 vs. 扩散起草<a hidden class="anchor" aria-hidden="true" href="#42-自回归-vs-扩散起草">#</a></h3>
+<ul>
+<li><strong>自回归起草：</strong> 延迟呈线性增长 $T_{\text{draft}} = \gamma \cdot t_{\text{step}}$。为了控制时间，模型只能设计得非常浅（如单层 Transformer），导致容量受限，进一步阻碍了接受长度 $\tau$ 的提升。</li>
+<li><strong>扩散起草：</strong> 所有 $\gamma$ 个 token 在单次前向传播中并行生成，延迟为 $T_{\text{draft}} = t_{\text{parallel}}$。现代 GPU 对并行矩阵计算的高效支持，使得 $t_{\text{parallel}} \ll \gamma \cdot t_{\text{step}}$。</li>
+</ul>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/figure3.png">
+<em>(Figure 3 说明：相比于 1 层 EAGLE-3 的起草延迟随 token 数量线性攀升，DFlash（即使是 3层或5层模型）在生成 16 个 token 时延迟极低且基本保持平稳，这就为使用更深、更强的草稿模型提供了设计空间。)</em></p>
+<h2 id="5-method-推理阶段核心设计">5. Method (推理阶段核心设计)<a hidden class="anchor" aria-hidden="true" href="#5-method-推理阶段核心设计">#</a></h2>
+<p>此部分详细介绍了 DFlash 的系统架构设计，重点解释了如何利用目标模型特征实现高接受率。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/figure2.png">
+<em>(Figure 2: DFlash 推理设计架构。展示了特征提取、KV注入和并行块解码的全过程。)</em></p>
+<p><strong>1. 提取目标上下文特征 (Context features from the target model)</strong>
+纯靠小扩散模型很难凭空预测高质量的 token 序列。在目标模型执行 Prefill 生成第一个 token 的过程中，DFlash 会从目标模型中均匀采样若干隐藏层（如从第 2 层到倒数第 3 层之间均匀抽取 5 层）的特征（Hidden representations）。随后，通过一个轻量级投影层将这些跨层特征融合为一个紧凑的<strong>目标上下文特征（Target Context Feature）</strong>。</p>
+<p><strong>2. 核心创新：通过 KV 注入实现接受长度缩放 (Conditioning via KV injection enables acceptance scaling)</strong></p>
+<ul>
+<li><strong>对比 EAGLE-3：</strong> 现有方法通常将目标特征与草稿模型的 token embedding 融合后作为输入。这种设计的缺陷是：随着草稿模型深度的增加，输入层的特征信息会被逐层稀释，导致“更深的模型无法带来更高的接受率”。</li>
+<li><strong>DFlash 的解决方案：</strong> 将融合后的目标上下文特征视为持久的上下文信息，<strong>直接注入到草稿模型每一层（Every draft model layer）的 Key 和 Value 投影中</strong>。这些特征被保存在草稿模型的 KV Cache 中跨迭代复用。这种设计确保了草稿模型在任何深度的注意力计算都能得到一致的条件指导，使得接受长度可以随草稿模型的层数有效提升。</li>
+</ul>
+<p><strong>3. 块级并行扩散起草 (Parallel diffusion drafting)</strong>
+草稿模型采用块级（Block-level）扩散过程。在一次前向传播中，Block 内所有被 Mask 的位置会被同时解码为具体的 token。这种并行生成方式不仅降低了延迟，还显著提高了 GPU 的硬件利用率。</p>
+<h2 id="6-training-训练阶段详细设计">6. Training (训练阶段详细设计)<a hidden class="anchor" aria-hidden="true" href="#6-training-训练阶段详细设计">#</a></h2>
+<p>为了让扩散模型对齐投机解码的推理行为，DFlash 对标准块扩散的训练方法进行了几项关键调整。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/figure4.png">
+<em>(Figure 4: DFlash 训练注意力机制。展示了锚点随机采样与跨块掩码的注意力隔离策略。)</em></p>
+<p><strong>1. KV 特征注入</strong>
+训练流程与推理保持一致，将完整序列通过冻结的目标模型提取隐藏特征，并注入到草稿模型的 KV 投影中。</p>
+<p><strong>2. 专为投机解码设计的：掩码块随机采样 (Random sampling of masked blocks)</strong></p>
+<ul>
+<li>标准的块扩散通常是对序列均匀分块并随机遮掩。</li>
+<li><strong>DFlash 的改进：</strong> 在投机解码推理时，草稿模型总是基于目标模型生成的最后一个真实可见的 token（即 bonus token）进行条件生成。因此在训练时，DFlash 在响应序列中<strong>随机采样锚点（Anchor tokens）</strong>。每个锚点作为 Block 的第一个位置（保持真实可见），而随后的 $block_size - 1$ 个位置被设为 Mask。随机化锚点位置让模型能覆盖更多样化的目标上下文特征，提升了数据利用率。</li>
+</ul>
+<p><strong>3. 高效长上下文训练 (Efficient long-context training)</strong>
+为控制长序列的训练成本，DFlash 在训练中固定每条序列的掩码块数量，并在每个 epoch 重新随机采样锚点位置。结合 Flex Attention 机制，不同 Block 之间的注意力被隔离，允许在单次前向与反向传播中高效并行处理多个草稿块。</p>
+<p><strong>4. 提升收敛速度的：位置衰减损失权重 (Loss weighting for faster convergence)</strong>
+在投机解码中，草稿块早期的错误会导致后续所有预测失效，因此<strong>早期位置的预测准确率更为重要</strong>。DFlash 在训练交叉熵损失时引入了指数衰减权重公式：
+$$
+w_k = \exp\left( - \frac{k - 1}{\gamma} \right)
+$$
+其中 $k$ 为块内的相对位置，$\gamma$ 为控制衰减率的超参数。该权重机制优先惩罚早期位置的预测错误，加快了模型收敛并提高了最终的平均接受长度。</p>
+<p><strong>5. 共享嵌入层和输出头 (Shared embedding and LM head)</strong>
+草稿模型与目标模型共享 Token Embedding 层和 LM Head，并在训练中保持冻结。这大幅减少了可训练参数量，并促使草稿模型的表征空间与目标模型严格对齐。</p>
+<h2 id="7-experiments-实验评估">7. Experiments (实验评估)<a hidden class="anchor" aria-hidden="true" href="#7-experiments-实验评估">#</a></h2>
+<p>实验在 NVIDIA H200 GPU 上进行，对比基线为标准的自回归解码（Baseline）和 SOTA 方法 EAGLE-3。</p>
+<h3 id="71-指令模型评估-instruct-models">7.1 指令模型评估 (Instruct Models)<a hidden class="anchor" aria-hidden="true" href="#71-指令模型评估-instruct-models">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table1.png"></p>
+<ul>
+<li><strong>配置：</strong> Qwen3 4B/8B，关闭思维模式。DFlash (Block Size 16) 对比 EAGLE-3 (Tree Size 16 和 60)。</li>
+<li><strong>结果：</strong> 在贪婪解码（Temp = 0）下，DFlash 在 4B 和 8B 模型上分别取得了 <strong>4.91$\times$</strong> 和 <strong>4.86$\times$</strong> 的平均加速比。相比同等起草预算的 EAGLE-3 (16)（约 $1.8\sim2.0\times$ 加速），DFlash 的加速效果高出 <strong>2.4 倍以上</strong>。即使 EAGLE-3 将树规模扩大到 60 以追求更高的接受率，DFlash 依然在更低的验证开销下实现了更高的整体加速比。</li>
+</ul>
+<h3 id="72-推理模型评估-reasoning-models">7.2 推理模型评估 (Reasoning Models)<a hidden class="anchor" aria-hidden="true" href="#72-推理模型评估-reasoning-models">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table2.png"></p>
+<ul>
+<li><strong>场景：</strong> 针对开启思维模式（Thinking Mode）、输出极长的推理模型，加速需求更为迫切。</li>
+<li><strong>结果：</strong> DFlash 在保持高接受长度的前提下，贪婪解码取得了约 <strong>4.5$\times$</strong> 的加速比，非贪婪采样（Temp=1）下取得了约 <strong>3.9$\times$</strong> 的加速比。有效缓解了推理模型生成时间过长的问题。</li>
+</ul>
+<h3 id="73-sglang-框架工业部署测试-performance-on-sglang">7.3 SGLang 框架工业部署测试 (Performance on SGLang)<a hidden class="anchor" aria-hidden="true" href="#73-sglang-框架工业部署测试-performance-on-sglang">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table3.png"></p>
+<ul>
+<li><strong>场景：</strong> 使用基于 FlashAttention-4 的 SGLang 框架进行吞吐量测试（Token/s），考察真实并发（Concurrency 1 到 32）下的降本能力。</li>
+<li><strong>结果：</strong> 在并发度为 1 时，Qwen3-8B 达到了最高 <strong>5.1$\times$</strong> 的吞吐量提升。在并发度达到 32、系统处于计算密集状态时，依然能提供约 <strong>2.8$\times$</strong> 的加速。证明了 DFlash 在高负载 Serving 场景下的实用性。</li>
+</ul>
+<h3 id="74-消融实验详析-ablation-study">7.4 消融实验详析 (Ablation Study)<a hidden class="anchor" aria-hidden="true" href="#74-消融实验详析-ablation-study">#</a></h3>
+<p>本小节通过控制变量验证了架构参数与设计选择的影响。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table4.png">
+<strong>1. 训练数据控制 (Training Data)</strong>
+基于 LLaMA-3.1-8B-Instruct，使用与 EAGLE-3 完全相同的开源训练集（UltraChat 和 ShareGPT）训练 DFlash。在严格对齐数据的情况下，DFlash 依然在所有并发度及基准测试中稳定优于 EAGLE-3 的各个版本。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table5.png">
+<strong>2. 草稿模型层数 (Number of Draft Layers)</strong>
+测试 3 层、5 层、8 层架构。更深的模型（8层）表现出更高的表达能力，达到了最长的接受长度 $\tau$。但由于 8 层的起草延迟略高，综合权衡下，<strong>5 层（5-L）模型实现了起草成本与草稿质量之间的最佳平衡</strong>，获得了最高的端到端加速比。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table6.png">
+<strong>3. 目标特征提取层数 (Number of Target Hidden Features)</strong>
+对比从目标模型提取 3 个或 5 个隐藏层特征。结果显示，<strong>提取 5 个特征（5-H）能提供更丰富的语义和时序信息，从而得到更高的接受长度和加速比</strong>。其代价仅为离线训练时占用相对较多的特征缓存空间。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DFlash/table7.png">
+<strong>4. 训练与推理时的块大小泛化 (Training-Inference Time Block Size)</strong></p>
+<ul>
+<li>测试模型在不同块大小（Block Size 8 和 16）之间的泛化能力。</li>
+<li><strong>结论：</strong> 存在单向的泛化不对称性。在 Block Size 16 下训练的模型，在推理时使用 Block Size 8 依然能保持高接受率；但在 Block Size 8 下训练的模型，无法有效泛化到推理时的 Block Size 16。这一特性为未来在实际服务中实现**动态块大小调度（Dynamic block-size scheduling）**提供了理论依据。</li>
+</ul>
+<h2 id="8-conclusion-结论">8. Conclusion (结论)<a hidden class="anchor" aria-hidden="true" href="#8-conclusion-结论">#</a></h2>
+<p>DFlash 提出了一种基于块扩散模型的投机解码框架，重新定义了扩散模型在加速自回归推理中的角色。通过将扩散模型限定在“起草阶段”，DFlash 充分发挥了其极高的并行优势，同时利用目标模型丰富的上下文特征保证了草稿的准确性。DFlash 提供了一种无损且高扩展性的加速范式，为提高大模型部署效率开辟了新的技术路径。</p>
+<hr>
+<h2 id="9-appendix-附录细节补充">9. Appendix (附录细节补充)<a hidden class="anchor" aria-hidden="true" href="#9-appendix-附录细节补充">#</a></h2>
+<p>为保证内容的完整性，附录中涉及的模型参数设置与额外消融实验同样不可忽视。</p>
+<h3 id="a1-训练实现细节-training-implementation">A.1 训练实现细节 (Training Implementation)<a hidden class="anchor" aria-hidden="true" href="#a1-训练实现细节-training-implementation">#</a></h3>
+<ul>
+<li><strong>优化器与超参数：</strong> 采用 AdamW 优化器，训练 6 个 epochs，学习率设为 $6 \times 10^{-4}$，梯度裁剪阈值 1.0，使用占比 0.04 的 cosine warmup 调度。</li>
+<li><strong>数据构造：</strong> 训练序列最大长度为 3072（Qwen3-Coder 为 4096）；每条序列随机采样 512 个锚点位置。</li>
+<li><strong>衰减因子 $\gamma$：</strong> 针对指数损失权重衰减，Block Size 16 时 $\gamma=7$；Block Size 10 时 $\gamma=5$；Block Size 8 时 $\gamma=4$。</li>
+<li>支持在线计算特征与离线预缓存特征两种训练模式，离线模式可降低训练计算开销。</li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/diffusion-llm/">Diffusion LLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/speculative-decoding/">Speculative Decoding</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
