@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR&#39;26 | JJ&#39;s Blog</title>
+<meta name="keywords" content="MLLM, Visual Token Pruning, Paper Note">
+<meta name="description" content="
+Conference: ICLR 2026
+1. Abstract (摘要)
+【核心内容与总结】
+
+研究背景： 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。
+核心发现：
+
+视觉编码器端： 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。
+大语言模型端（LLM）： 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。
+
+
+本文贡献： 提出了一种双阶段（Two-stage）Token 剪枝框架 LearnPruner。
+
+第一阶段： 在视觉编码器之后，通过一个可学习的剪枝模块 (Learnable Pruning Module, LPM) 剔除视觉冗余 Token。
+第二阶段： 在 LLM 的中间层，保留与任务（Query）相关的 Token。
+
+
+实验效果： LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \times $ 的推理加速，展示了良好的精度-效率权衡。
+
+
+2. Introduction (引言)
+
+【背景引入与动机分析】
+
+重新审视注意力机制（结合 Figure 1）：
+
+如图 1 所示，Vision Encoder 使用的 [CLS] token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。
+在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。
+
+
+现有剪枝方法的局限性：
+
+(1) 在视觉编码器中，[CLS] token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。
+(2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。
+
+
+LearnPruner 解决方案：
+
+提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 [CLS] 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。
+
+
+
+
+3. Method (方法设计)
+本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR&#39;26">
+  <meta property="og:description" content="
+Conference: ICLR 2026
+1. Abstract (摘要) 【核心内容与总结】
+研究背景： 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。 核心发现： 视觉编码器端： 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。 大语言模型端（LLM）： 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。 本文贡献： 提出了一种双阶段（Two-stage）Token 剪枝框架 LearnPruner。 第一阶段： 在视觉编码器之后，通过一个可学习的剪枝模块 (Learnable Pruning Module, LPM) 剔除视觉冗余 Token。 第二阶段： 在 LLM 的中间层，保留与任务（Query）相关的 Token。 实验效果： LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \times $ 的推理加速，展示了良好的精度-效率权衡。 2. Introduction (引言) 【背景引入与动机分析】
+重新审视注意力机制（结合 Figure 1）： 如图 1 所示，Vision Encoder 使用的 [CLS] token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。 在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。 现有剪枝方法的局限性： (1) 在视觉编码器中，[CLS] token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。 (2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。 LearnPruner 解决方案： 提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 [CLS] 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。 3. Method (方法设计) 本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-05-09T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-05-09T00:00:00+00:00">
+    <meta property="article:tag" content="MLLM">
+    <meta property="article:tag" content="Visual Token Pruning">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR&#39;26">
+<meta name="twitter:description" content="
+Conference: ICLR 2026
+1. Abstract (摘要)
+【核心内容与总结】
+
+研究背景： 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。
+核心发现：
+
+视觉编码器端： 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。
+大语言模型端（LLM）： 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。
+
+
+本文贡献： 提出了一种双阶段（Two-stage）Token 剪枝框架 LearnPruner。
+
+第一阶段： 在视觉编码器之后，通过一个可学习的剪枝模块 (Learnable Pruning Module, LPM) 剔除视觉冗余 Token。
+第二阶段： 在 LLM 的中间层，保留与任务（Query）相关的 Token。
+
+
+实验效果： LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \times $ 的推理加速，展示了良好的精度-效率权衡。
+
+
+2. Introduction (引言)
+
+【背景引入与动机分析】
+
+重新审视注意力机制（结合 Figure 1）：
+
+如图 1 所示，Vision Encoder 使用的 [CLS] token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。
+在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。
+
+
+现有剪枝方法的局限性：
+
+(1) 在视觉编码器中，[CLS] token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。
+(2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。
+
+
+LearnPruner 解决方案：
+
+提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 [CLS] 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。
+
+
+
+
+3. Method (方法设计)
+本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR'26",
+      "item": "https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR'26",
+  "name": "📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR\u002726",
+  "description": "\nConference: ICLR 2026\n1. Abstract (摘要) 【核心内容与总结】\n研究背景： 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。 核心发现： 视觉编码器端： 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。 大语言模型端（LLM）： 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。 本文贡献： 提出了一种双阶段（Two-stage）Token 剪枝框架 LearnPruner。 第一阶段： 在视觉编码器之后，通过一个可学习的剪枝模块 (Learnable Pruning Module, LPM) 剔除视觉冗余 Token。 第二阶段： 在 LLM 的中间层，保留与任务（Query）相关的 Token。 实验效果： LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \\times $ 的推理加速，展示了良好的精度-效率权衡。 2. Introduction (引言) 【背景引入与动机分析】\n重新审视注意力机制（结合 Figure 1）： 如图 1 所示，Vision Encoder 使用的 [CLS] token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。 在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。 现有剪枝方法的局限性： (1) 在视觉编码器中，[CLS] token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。 (2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。 LearnPruner 解决方案： 提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 [CLS] 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。 3. Method (方法设计) 本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。\n",
+  "keywords": [
+    "MLLM", "Visual Token Pruning", "Paper Note"
+  ],
+  "articleBody": "\nConference: ICLR 2026\n1. Abstract (摘要) 【核心内容与总结】\n研究背景： 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。 核心发现： 视觉编码器端： 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。 大语言模型端（LLM）： 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。 本文贡献： 提出了一种双阶段（Two-stage）Token 剪枝框架 LearnPruner。 第一阶段： 在视觉编码器之后，通过一个可学习的剪枝模块 (Learnable Pruning Module, LPM) 剔除视觉冗余 Token。 第二阶段： 在 LLM 的中间层，保留与任务（Query）相关的 Token。 实验效果： LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \\times $ 的推理加速，展示了良好的精度-效率权衡。 2. Introduction (引言) 【背景引入与动机分析】\n重新审视注意力机制（结合 Figure 1）： 如图 1 所示，Vision Encoder 使用的 [CLS] token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。 在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。 现有剪枝方法的局限性： (1) 在视觉编码器中，[CLS] token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。 (2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。 LearnPruner 解决方案： 提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 [CLS] 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。 3. Method (方法设计) 本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。\n3.1 STUDY OF ATTENTION IN VLMS (VLM 注意力机制分析) 1. Vision Encoder 中的 [CLS] 注意力分析：\n问题提出： 视觉编码器通常使用 [CLS] token 聚合全局信息，现有工作自然地将其注意力分数作为 Patch token 的重要性估计。但 [CLS] token 是否充分关注了显著的前景区域？ 实验设计： 使用 LangSAM 等视觉 grounding 工具提取图像的“前景掩码 (Foreground Mask)”。在 LLaVA-1.5-7B 上对比了三种策略：基于 [CLS] 的全局选择（[CLS]_{all}）、受限于前景的 [CLS] 选择（[CLS]_{fg}），以及在前景中的随机选择（Random_{fg}）。 分析结论（参考 Figure 2a）： 限制在信息丰富区域的 [CLS]_{fg} 始终优于全局选择 [CLS]_{all}。值得注意的是，前景中的随机选择（Random_{fg}）也能达到与 [CLS]_{all} 相当的性能。这表明 [CLS] token 未能有效聚焦于显著的前景区域，其注意力得分与 Token 的真实重要性对齐较差。 2. LLM 中的注意力分析：\n(Figure 3: 不同网络层中特定文本 Token 到图像的注意力热力图)\n注意力偏移现象（参考 Figure 2b）： 将 LLM 接收到的注意力分解为视觉注意力和文本注意力。虽然两者都表现出注意力偏移（索引越大的 Token 得分越高），但文本注意力的上升趋势远比视觉注意力平缓。这是因为视觉注意力受位置编码衰减和因果掩码的影响更大，而文本注意力的模式在不同实例间差异较大，且受偏置影响较小。 不同剪枝指标的对比（参考 Figure 2c）： 对比了纯视觉注意力、纯文本注意力、双模态平均以及最后一个指令 Token 注意力的剪枝效果。结果显示，文本注意力 (Text Attn) 和最后一个 Token 注意力始终优于其他标准；引入视觉注意力反而会导致性能显著下降。 层级选择分析（参考 Figure 2c 与 Figure 3）： 注意力的可靠性从浅层到中间层逐渐增加，在中间层（如第 8 层以后）表现稳定，但在更深层则显著下降。如图 3 所示，在浅层和深层，无信息区域往往吸收了文本 Token 的大部分注意力；而在中间层，文本 Token 能够准确聚焦于与其语义相关的图像区域。因此，LLM 的中间层是执行剪枝的最佳位置。 3.2 LEARNPRUNER (LearnPruner 算法详解) (Figure 4: LearnPruner 框架概览。包括视觉冗余移除和文本无关内容移除两个主要阶段)\n基于上述分析，LearnPruner 采用了一种渐进式剪枝策略：在视觉编码器后使用可学习标准进行剪枝，并在 LLM 内部进行文本引导的剪枝。\n阶段一：去除视觉冗余 (Remove Visual Redundancy) 目的： 图像本身存在视觉冗余，此阶段旨在视觉编码器输出后立即用更紧凑的 Token 表示图像信息。考虑到 [CLS] 注意力无法准确定位显著区域，该阶段引入了一个可学习剪枝模块 (LPM, Learnable Pruning Module)。\nLPM 模块设计与训练 (End-to-end Optimization):\n网络结构： 将视觉编码器输出的 Token 特征 $ X_v^{(0)} $ 输入到一个轻量级的多层感知机 (MLP) 中，进行二分类以决定每个 Token 是保留还是修剪。 直通估计器 (STE)： 由于离散的二值决策是不可导的，模型采用 Straight-Through Estimator (STE) 技巧以支持端到端反向传播： $$ M_{soft} = \\text{Softmax}(\\text{MLP}(X_v^{(0)})) $$ $$ M_{hard} = \\text{argmax}(M_{soft}) $$ 前向与反向传播： 前向传播时，利用二值掩码 $ M_{hard} $ 切断被剪枝 Token 与保留 Token 之间的注意力交互（通过修改 Attention 的 Softmax 掩码实现）；反向传播时，使用软掩码 $ M_{soft} $ 提供梯度。 推理阶段： 在推理时，直接使用 $ M_{soft} $ 作为每个 Token 的重要性得分进行排序。 多样性 Token 选择 (Diversity-based Token Selection):\n动机： LPM 倾向于关注语义丰富的前景区域，可能会忽略在某些 VQA 任务中同样重要的背景信息。 算法逻辑： 为了补充全面的视觉上下文，引入了基于多样性的选择。在 LPM 选出一组高信息量 Token 后，对于剩余的每一个 Token，计算其与已选集合中所有 Token 的余弦相似度 (Cosine Similarity) 并找出最大相似度值。然后，迭代地将具有最小的最大相似度值的 Token 加入保留集合（即选择与当前集合差异最大的 Token）。此过程持续进行，直到满足设定的第一阶段 Token 预算 $ R_1 $。 阶段二：去除文本无关内容 (Remove Text-Irrelevant Content) 目的： 虽然第一阶段保留了有价值的视觉信息，但并非所有视觉内容对特定的查询（Query）都是必要的。该阶段在 LLM 内部进一步移除与文本无关的 Token。\n设计原则： 依据前文分析，文本注意力不易受注意力偏移影响，且对相关区域响应强烈。因此，直接利用文本注意力来指导 Token 剪枝。 计算公式： 文本相关性得分为所有文本 Query Token 对某一视觉 Token 注意力的平均值。对于第 $ k $ 层的注意力计算： $$ \\tilde{A}^{(k)} = \\frac{1}{N_q} \\sum_{i=1}^{N_q} A^{(k)}(X_{q,i}^{(k)}, X_v^{(k)}) $$ 其中 $ X_{q}^{(k)} $ 和 $ X_{v}^{(k)} $ 分别表示第 $ k $ 层的 Query Token 和 Vision Token。$ N_q $ 是 Query Token 的数量。 剪枝执行： 根据计算出的平均注意力得分 $ \\tilde{A}^{(k)} $，仅保留得分最高的 Top-k 个视觉 Token（预算为 $ R_2 $），它们将继续参与 LLM 较深层的跨模态交互，其余 Token 则被丢弃。 4. Experiments (实验评估) 本节在广泛使用的 VLM 基准上评估 LearnPruner 的性能，并进行了详尽的计算效率和消融分析。\n4.1 实验设置 训练设置： 使用 10% 的 LLaVA-665K 数据集训练 LPM，期间冻结基础 VLM 的权重以保持原始性能。 推理设置： 第一阶段保留 $ R_1 $ 个 Token，其中 $ \\lambda = 10% $ 的预算分配给多样性 Token。第二阶段在 LLM 的第 $ k = 12 $ 层进行，保留 $ R_2 $ 个 Token。为了与基线方法公平比较，实验中固定了不同阶段的保留比例（$ R_1:R_2 = 3 $）。 4.2 主要结果 (Main Results) (Table 1: LLaVA-v1.5-7B 上的性能对比)\n(Table 2: 高分辨率模型 LLaVA-NeXT-7B 上的性能对比)\n在 LLaVA-v1.5-7B 上的结果 (Table 1): 在 GQA, POPE, MME, TextVQA 等 8 个图像理解基准上评估。 当视觉 Token 从 576 压缩到平均 128 个（保留 22.2%）时，LearnPruner 的平均准确率仅下降 1.5%，表现与需要额外训练 Decoder 层的 TwigVLM 相当，但本方法更轻量。 在极端的压缩预算下（保留 64 或 32 个 Token），LearnPruner 维持了原始性能的 96.9% 和 94.8%，显著优于 FastV、SparseVLM 等现有方法，说明该方法能更有效地识别并保留最关键的视觉信息。 在 LLaVA-NeXT-7B 上的结果 (Table 2): LLaVA-NeXT 将图像分割为多个子图，Token 序列长达 2880 个。在去除 88.9% 的 Token（仅保留 320 个）的情况下，LearnPruner 仍能保持 97.5% 的原始性能。 (Table 3: Video-LLaVA-7B 上的视频理解性能对比)\n(Table 4: Qwen2.5-VL-7B 上的性能对比)\n在 Video-LLaVA-7B 上的泛化能力 (Table 3): 在 TGIF-QA, MSVD-QA 等视频基准上，LearnPruner 取得比 FastV 更高的准确率，证明了该方法在视频处理场景中的有效性。 在 Qwen2.5-VL-7B 上的表现 (Table 4): 为了验证在不同架构上的通用性，在 Qwen 架构上进行测试。去除 88.9% 的视觉 Token 后，FastV 性能骤降至 71.4%，而 LearnPruner 仍保持 94.1% 的相对准确率。 4.3 效率分析 (Efficiency Analysis) (Table 5: 计算效率对比，包含 TFLOPs、Prefill Time、总时间和 KV Cache 内存使用)\n计算开销评估： 在 NVIDIA A100-80GB 上进行评估。 在 LLaVA-v1.5-7B 中，将 Token 从 576 减少到 32 时，Prefill 时间和总推理时间分别实现了 $ 5.4 \\times $ 和 $ 2.3 \\times $ 的加速，同时 KV Cache 显存占用减少了 $ 6.8 \\times $。 对于长序列的 LLaVA-NeXT-7B，将 Token 从 2880 减少到 160 时，效率提升更为显著，Prefill 和总时间分别加速了 $ 6.0 \\times $ 和 $ 3.2 \\times $。由于 LPM 的轻量化设计，其带来的额外计算和内存开销可忽略不计。 4.4 消融实验 (Ablation Studies) (Table 6: 不同重要性标准的有效性消融)\n重要性标准的有效性： 在第一阶段（去除视觉冗余），使用可学习模块（LPM）比使用 [CLS] 注意力性能提升了 1.7%。 尝试在 LLM 中也插入 LPM（结合特征和注意力分布进行打分），结果显示没有进一步的性能提升（96.9% vs 96.9%）。这表明中间层的文本注意力信号已经足够可靠，直接利用注意力结果即可，无需训练多个 LPM。 (Table 7a: 剪枝位置 k 的消融; Table 7b: 第一、二阶段保留比例 $R_1:R_2$ 的消融)\n剪枝位置与保留比例： 剪枝层 $ k $ (Table 7a): 将第二阶段剪枝从第 8 层移至 12 层时性能逐渐稳定，证实了浅层注意力分布不可靠的结论。最终选择 $ k=12 $。 比例 $ R_1:R_2 $ (Table 7b): 测试表明 $ R_1:R_2 = 3 $ 取得最佳效果，说明浅层需要保留较多 Token 以维持视觉完整性，而中深层仅需少量与文本高度相关的 Token 即可完成推理。 (Figure 5: 多样性 Token 比例 $\\lambda$ 及训练数据规模的消融)\n多样性 Token 比例 $ \\lambda $ (Figure 5a)： $ \\lambda $ 控制多样性 Token 的比例。过低会导致背景信息丢失，过高则会占用前景目标的预算。实验确定 $ \\lambda = 0.1 $ 为最佳平衡点。 数据效率 (Figure 5b)： 使用 5% 到 100% 的 LLaVA-665K 数据集训练 LPM。结果显示，仅使用 5% 的数据，模型即可保持一致且优异的性能，证明了 LPM 设计的稳健性和数据效率。 4.5 可视化结果 (Qualitative Results) (Figure 6: 剪枝结果可视化。黄色斑块表示被保留的 Token，平均保留 32 个)\n(Figure 7: 剪枝结果可视化及失败案例分析)\n对比分析： 与 VisionZip（基于 [CLS]，未能聚焦前景甚至选择了无效 Padding）和 FastV（偏向保留图像下半部分，对 Query 不敏感）相比，LearnPruner 能在第一阶段准确识别语义丰富的区域及背景上下文，并在第二阶段通过文本引导精确保留与问题最相关的 Token。 失败案例探讨 (Figure 7 底部)： 在极其复杂的视觉场景中（如寻找黑白色的食物、辨别右侧是否有消防栓），由于 Token 预算的严格限制，第一阶段可能未能充分保留关键的微小视觉特征；或者即使保留了相关 Token，基础 VLM 固有的推理能力限制也会导致预测错误。 5. Conclusion (结论) 本文对视觉编码器和 LLM 中的注意力机制进行了深入分析。基于上述观察，提出了一种两阶段剪枝框架 LearnPruner。该框架首先通过视觉编码器后部的可学习剪枝模块消除冗余的视觉 Token，随后在 LLM 的中间层利用文本引导进一步丢弃与指令无关的 Token。广泛的实验结果表明，LearnPruner 优于先前的 SOTA 剪枝方法，实现了更好的精度-效率权衡（Accuracy-efficiency trade-off）。\n",
+  "wordCount" : "774",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-05-09T00:00:00Z",
+  "dateModified": "2026-05-09T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR&#39;26
+    </h1>
+    <div class="post-meta"><span title='2026-05-09 00:00:00 +0000 UTC'>May 9, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/title.png"></p>
+<p><strong>Conference: ICLR 2026</strong></p>
+<h2 id="1-abstract-摘要">1. Abstract (摘要)<a hidden class="anchor" aria-hidden="true" href="#1-abstract-摘要">#</a></h2>
+<p><strong>【核心内容与总结】</strong></p>
+<ul>
+<li><strong>研究背景：</strong> 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。</li>
+<li><strong>核心发现：</strong>
+<ol>
+<li><strong>视觉编码器端：</strong> 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。</li>
+<li><strong>大语言模型端（LLM）：</strong> 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，<strong>文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差</strong>，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。</li>
+</ol>
+</li>
+<li><strong>本文贡献：</strong> 提出了一种<strong>双阶段（Two-stage）Token 剪枝框架 LearnPruner</strong>。
+<ul>
+<li><strong>第一阶段：</strong> 在视觉编码器之后，通过一个<strong>可学习的剪枝模块 (Learnable Pruning Module, LPM)</strong> 剔除视觉冗余 Token。</li>
+<li><strong>第二阶段：</strong> 在 LLM 的中间层，保留与任务（Query）相关的 Token。</li>
+</ul>
+</li>
+<li><strong>实验效果：</strong> LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \times $ 的推理加速，展示了良好的精度-效率权衡。</li>
+</ul>
+<hr>
+<h2 id="2-introduction-引言">2. Introduction (引言)<a hidden class="anchor" aria-hidden="true" href="#2-introduction-引言">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure1.png"></p>
+<p><strong>【背景引入与动机分析】</strong></p>
+<ul>
+<li><strong>重新审视注意力机制（结合 Figure 1）：</strong>
+<ul>
+<li>如图 1 所示，Vision Encoder 使用的 <code>[CLS]</code> token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。</li>
+<li>在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。</li>
+</ul>
+</li>
+<li><strong>现有剪枝方法的局限性：</strong>
+<ul>
+<li>(1) 在视觉编码器中，<code>[CLS]</code> token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。</li>
+<li>(2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。</li>
+</ul>
+</li>
+<li><strong>LearnPruner 解决方案：</strong>
+<ul>
+<li>提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 <code>[CLS]</code> 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="3-method-方法设计">3. Method (方法设计)<a hidden class="anchor" aria-hidden="true" href="#3-method-方法设计">#</a></h2>
+<p>本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。</p>
+<h3 id="31-study-of-attention-in-vlms-vlm-注意力机制分析">3.1 STUDY OF ATTENTION IN VLMS (VLM 注意力机制分析)<a hidden class="anchor" aria-hidden="true" href="#31-study-of-attention-in-vlms-vlm-注意力机制分析">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure2.png"></p>
+<p><strong>1. Vision Encoder 中的 <code>[CLS]</code> 注意力分析：</strong></p>
+<ul>
+<li><strong>问题提出：</strong> 视觉编码器通常使用 <code>[CLS]</code> token 聚合全局信息，现有工作自然地将其注意力分数作为 Patch token 的重要性估计。但 <code>[CLS]</code> token 是否充分关注了显著的前景区域？</li>
+<li><strong>实验设计：</strong> 使用 LangSAM 等视觉 grounding 工具提取图像的“前景掩码 (Foreground Mask)”。在 LLaVA-1.5-7B 上对比了三种策略：基于 <code>[CLS]</code> 的全局选择（<code>[CLS]_{all}</code>）、受限于前景的 <code>[CLS]</code> 选择（<code>[CLS]_{fg}</code>），以及在前景中的随机选择（<code>Random_{fg}</code>）。</li>
+<li><strong>分析结论（参考 Figure 2a）：</strong> 限制在信息丰富区域的 <code>[CLS]_{fg}</code> 始终优于全局选择 <code>[CLS]_{all}</code>。值得注意的是，前景中的随机选择（<code>Random_{fg}</code>）也能达到与 <code>[CLS]_{all}</code> 相当的性能。这表明 <code>[CLS]</code> token 未能有效聚焦于显著的前景区域，其注意力得分与 Token 的真实重要性对齐较差。</li>
+</ul>
+<p><strong>2. LLM 中的注意力分析：</strong></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure3.png">
+<em>(Figure 3: 不同网络层中特定文本 Token 到图像的注意力热力图)</em></p>
+<ul>
+<li><strong>注意力偏移现象（参考 Figure 2b）：</strong> 将 LLM 接收到的注意力分解为视觉注意力和文本注意力。虽然两者都表现出注意力偏移（索引越大的 Token 得分越高），但文本注意力的上升趋势远比视觉注意力平缓。这是因为视觉注意力受位置编码衰减和因果掩码的影响更大，而文本注意力的模式在不同实例间差异较大，且受偏置影响较小。</li>
+<li><strong>不同剪枝指标的对比（参考 Figure 2c）：</strong> 对比了纯视觉注意力、纯文本注意力、双模态平均以及最后一个指令 Token 注意力的剪枝效果。结果显示，<strong>文本注意力 (Text Attn)</strong> 和最后一个 Token 注意力始终优于其他标准；引入视觉注意力反而会导致性能显著下降。</li>
+<li><strong>层级选择分析（参考 Figure 2c 与 Figure 3）：</strong> 注意力的可靠性从浅层到中间层逐渐增加，在中间层（如第 8 层以后）表现稳定，但在更深层则显著下降。如图 3 所示，在浅层和深层，无信息区域往往吸收了文本 Token 的大部分注意力；而在中间层，文本 Token 能够准确聚焦于与其语义相关的图像区域。因此，LLM 的中间层是执行剪枝的最佳位置。</li>
+</ul>
+<hr>
+<h3 id="32-learnpruner-learnpruner-算法详解">3.2 LEARNPRUNER (LearnPruner 算法详解)<a hidden class="anchor" aria-hidden="true" href="#32-learnpruner-learnpruner-算法详解">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure4.png">
+<em>(Figure 4: LearnPruner 框架概览。包括视觉冗余移除和文本无关内容移除两个主要阶段)</em></p>
+<p>基于上述分析，LearnPruner 采用了一种渐进式剪枝策略：在视觉编码器后使用可学习标准进行剪枝，并在 LLM 内部进行文本引导的剪枝。</p>
+<h4 id="阶段一去除视觉冗余-remove-visual-redundancy"><strong>阶段一：去除视觉冗余 (Remove Visual Redundancy)</strong><a hidden class="anchor" aria-hidden="true" href="#阶段一去除视觉冗余-remove-visual-redundancy">#</a></h4>
+<p><strong>目的：</strong> 图像本身存在视觉冗余，此阶段旨在视觉编码器输出后立即用更紧凑的 Token 表示图像信息。考虑到 <code>[CLS]</code> 注意力无法准确定位显著区域，该阶段引入了一个<strong>可学习剪枝模块 (LPM, Learnable Pruning Module)</strong>。</p>
+<ul>
+<li>
+<p><strong>LPM 模块设计与训练 (End-to-end Optimization):</strong></p>
+<ul>
+<li><strong>网络结构：</strong> 将视觉编码器输出的 Token 特征 $ X_v^{(0)} $ 输入到一个轻量级的多层感知机 (MLP) 中，进行二分类以决定每个 Token 是保留还是修剪。</li>
+<li><strong>直通估计器 (STE)：</strong> 由于离散的二值决策是不可导的，模型采用 Straight-Through Estimator (STE) 技巧以支持端到端反向传播：
+$$ M_{soft} = \text{Softmax}(\text{MLP}(X_v^{(0)})) $$
+$$ M_{hard} = \text{argmax}(M_{soft}) $$</li>
+<li><strong>前向与反向传播：</strong> 前向传播时，利用二值掩码 $ M_{hard} $ 切断被剪枝 Token 与保留 Token 之间的注意力交互（通过修改 Attention 的 Softmax 掩码实现）；反向传播时，使用软掩码 $ M_{soft} $ 提供梯度。</li>
+<li><strong>推理阶段：</strong> 在推理时，直接使用 $ M_{soft} $ 作为每个 Token 的重要性得分进行排序。</li>
+</ul>
+</li>
+<li>
+<p><strong>多样性 Token 选择 (Diversity-based Token Selection):</strong></p>
+<ul>
+<li><strong>动机：</strong> LPM 倾向于关注语义丰富的前景区域，可能会忽略在某些 VQA 任务中同样重要的背景信息。</li>
+<li><strong>算法逻辑：</strong> 为了补充全面的视觉上下文，引入了基于多样性的选择。在 LPM 选出一组高信息量 Token 后，对于剩余的每一个 Token，计算其与已选集合中所有 Token 的<strong>余弦相似度 (Cosine Similarity)</strong> 并找出最大相似度值。然后，迭代地将具有<strong>最小的最大相似度值</strong>的 Token 加入保留集合（即选择与当前集合差异最大的 Token）。此过程持续进行，直到满足设定的第一阶段 Token 预算 $ R_1 $。</li>
+</ul>
+</li>
+</ul>
+<h4 id="阶段二去除文本无关内容-remove-text-irrelevant-content"><strong>阶段二：去除文本无关内容 (Remove Text-Irrelevant Content)</strong><a hidden class="anchor" aria-hidden="true" href="#阶段二去除文本无关内容-remove-text-irrelevant-content">#</a></h4>
+<p><strong>目的：</strong> 虽然第一阶段保留了有价值的视觉信息，但并非所有视觉内容对特定的查询（Query）都是必要的。该阶段在 LLM 内部进一步移除与文本无关的 Token。</p>
+<ul>
+<li><strong>设计原则：</strong> 依据前文分析，文本注意力不易受注意力偏移影响，且对相关区域响应强烈。因此，直接利用文本注意力来指导 Token 剪枝。</li>
+<li><strong>计算公式：</strong> 文本相关性得分为所有文本 Query Token 对某一视觉 Token 注意力的平均值。对于第 $ k $ 层的注意力计算：
+$$ \tilde{A}^{(k)} = \frac{1}{N_q} \sum_{i=1}^{N_q} A^{(k)}(X_{q,i}^{(k)}, X_v^{(k)}) $$
+其中 $ X_{q}^{(k)} $ 和 $ X_{v}^{(k)} $ 分别表示第 $ k $ 层的 Query Token 和 Vision Token。$ N_q $ 是 Query Token 的数量。</li>
+<li><strong>剪枝执行：</strong> 根据计算出的平均注意力得分 $ \tilde{A}^{(k)} $，仅保留得分最高的 Top-k 个视觉 Token（预算为 $ R_2 $），它们将继续参与 LLM 较深层的跨模态交互，其余 Token 则被丢弃。</li>
+</ul>
+<hr>
+<h2 id="4-experiments-实验评估">4. Experiments (实验评估)<a hidden class="anchor" aria-hidden="true" href="#4-experiments-实验评估">#</a></h2>
+<p>本节在广泛使用的 VLM 基准上评估 LearnPruner 的性能，并进行了详尽的计算效率和消融分析。</p>
+<h3 id="41-实验设置">4.1 实验设置<a hidden class="anchor" aria-hidden="true" href="#41-实验设置">#</a></h3>
+<ul>
+<li><strong>训练设置：</strong> 使用 10% 的 LLaVA-665K 数据集训练 LPM，期间冻结基础 VLM 的权重以保持原始性能。</li>
+<li><strong>推理设置：</strong> 第一阶段保留 $ R_1 $ 个 Token，其中 $ \lambda = 10% $ 的预算分配给多样性 Token。第二阶段在 LLM 的第 $ k = 12 $ 层进行，保留 $ R_2 $ 个 Token。为了与基线方法公平比较，实验中固定了不同阶段的保留比例（$ R_1:R_2 = 3 $）。</li>
+</ul>
+<h3 id="42-主要结果-main-results">4.2 主要结果 (Main Results)<a hidden class="anchor" aria-hidden="true" href="#42-主要结果-main-results">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table1.png">
+<em>(Table 1: LLaVA-v1.5-7B 上的性能对比)</em></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table2.png">
+<em>(Table 2: 高分辨率模型 LLaVA-NeXT-7B 上的性能对比)</em></p>
+<ul>
+<li><strong>在 LLaVA-v1.5-7B 上的结果 (Table 1):</strong>
+<ul>
+<li>在 GQA, POPE, MME, TextVQA 等 8 个图像理解基准上评估。</li>
+<li>当视觉 Token 从 576 压缩到平均 128 个（保留 22.2%）时，LearnPruner 的平均准确率仅下降 1.5%，表现与需要额外训练 Decoder 层的 TwigVLM 相当，但本方法更轻量。</li>
+<li>在极端的压缩预算下（保留 64 或 32 个 Token），LearnPruner 维持了原始性能的 96.9% 和 94.8%，显著优于 FastV、SparseVLM 等现有方法，说明该方法能更有效地识别并保留最关键的视觉信息。</li>
+</ul>
+</li>
+<li><strong>在 LLaVA-NeXT-7B 上的结果 (Table 2):</strong>
+<ul>
+<li>LLaVA-NeXT 将图像分割为多个子图，Token 序列长达 2880 个。在去除 88.9% 的 Token（仅保留 320 个）的情况下，LearnPruner 仍能保持 97.5% 的原始性能。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table3.png">
+<em>(Table 3: Video-LLaVA-7B 上的视频理解性能对比)</em></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table4.png">
+<em>(Table 4: Qwen2.5-VL-7B 上的性能对比)</em></p>
+<ul>
+<li><strong>在 Video-LLaVA-7B 上的泛化能力 (Table 3):</strong>
+<ul>
+<li>在 TGIF-QA, MSVD-QA 等视频基准上，LearnPruner 取得比 FastV 更高的准确率，证明了该方法在视频处理场景中的有效性。</li>
+</ul>
+</li>
+<li><strong>在 Qwen2.5-VL-7B 上的表现 (Table 4):</strong>
+<ul>
+<li>为了验证在不同架构上的通用性，在 Qwen 架构上进行测试。去除 88.9% 的视觉 Token 后，FastV 性能骤降至 71.4%，而 LearnPruner 仍保持 94.1% 的相对准确率。</li>
+</ul>
+</li>
+</ul>
+<h3 id="43-效率分析-efficiency-analysis">4.3 效率分析 (Efficiency Analysis)<a hidden class="anchor" aria-hidden="true" href="#43-效率分析-efficiency-analysis">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table5.png">
+<em>(Table 5: 计算效率对比，包含 TFLOPs、Prefill Time、总时间和 KV Cache 内存使用)</em></p>
+<ul>
+<li><strong>计算开销评估：</strong> 在 NVIDIA A100-80GB 上进行评估。
+<ul>
+<li>在 LLaVA-v1.5-7B 中，将 Token 从 576 减少到 32 时，Prefill 时间和总推理时间分别实现了 $ 5.4 \times $ 和 $ 2.3 \times $ 的加速，同时 KV Cache 显存占用减少了 $ 6.8 \times $。</li>
+<li>对于长序列的 LLaVA-NeXT-7B，将 Token 从 2880 减少到 160 时，效率提升更为显著，Prefill 和总时间分别加速了 $ 6.0 \times $ 和 $ 3.2 \times $。由于 LPM 的轻量化设计，其带来的额外计算和内存开销可忽略不计。</li>
+</ul>
+</li>
+</ul>
+<h3 id="44-消融实验-ablation-studies">4.4 消融实验 (Ablation Studies)<a hidden class="anchor" aria-hidden="true" href="#44-消融实验-ablation-studies">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table6.png">
+<em>(Table 6: 不同重要性标准的有效性消融)</em></p>
+<ul>
+<li><strong>重要性标准的有效性：</strong>
+<ul>
+<li>在第一阶段（去除视觉冗余），使用可学习模块（LPM）比使用 <code>[CLS]</code> 注意力性能提升了 1.7%。</li>
+<li>尝试在 LLM 中也插入 LPM（结合特征和注意力分布进行打分），结果显示没有进一步的性能提升（96.9% vs 96.9%）。这表明中间层的文本注意力信号已经足够可靠，直接利用注意力结果即可，无需训练多个 LPM。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/table7.png">
+<em>(Table 7a: 剪枝位置 k 的消融; Table 7b: 第一、二阶段保留比例 $R_1:R_2$ 的消融)</em></p>
+<ul>
+<li><strong>剪枝位置与保留比例：</strong>
+<ul>
+<li><strong>剪枝层 $ k $ (Table 7a):</strong> 将第二阶段剪枝从第 8 层移至 12 层时性能逐渐稳定，证实了浅层注意力分布不可靠的结论。最终选择 $ k=12 $。</li>
+<li><strong>比例 $ R_1:R_2 $ (Table 7b):</strong> 测试表明 $ R_1:R_2 = 3 $ 取得最佳效果，说明浅层需要保留较多 Token 以维持视觉完整性，而中深层仅需少量与文本高度相关的 Token 即可完成推理。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure5.png">
+<em>(Figure 5: 多样性 Token 比例 $\lambda$ 及训练数据规模的消融)</em></p>
+<ul>
+<li><strong>多样性 Token 比例 $ \lambda $ (Figure 5a)：</strong> $ \lambda $ 控制多样性 Token 的比例。过低会导致背景信息丢失，过高则会占用前景目标的预算。实验确定 $ \lambda = 0.1 $ 为最佳平衡点。</li>
+<li><strong>数据效率 (Figure 5b)：</strong> 使用 5% 到 100% 的 LLaVA-665K 数据集训练 LPM。结果显示，仅使用 5% 的数据，模型即可保持一致且优异的性能，证明了 LPM 设计的稳健性和数据效率。</li>
+</ul>
+<h3 id="45-可视化结果-qualitative-results">4.5 可视化结果 (Qualitative Results)<a hidden class="anchor" aria-hidden="true" href="#45-可视化结果-qualitative-results">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure6.png">
+<em>(Figure 6: 剪枝结果可视化。黄色斑块表示被保留的 Token，平均保留 32 个)</em></p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LearnPruner/figure7.png">
+<em>(Figure 7: 剪枝结果可视化及失败案例分析)</em></p>
+<ul>
+<li><strong>对比分析：</strong> 与 VisionZip（基于 <code>[CLS]</code>，未能聚焦前景甚至选择了无效 Padding）和 FastV（偏向保留图像下半部分，对 Query 不敏感）相比，LearnPruner 能在第一阶段准确识别语义丰富的区域及背景上下文，并在第二阶段通过文本引导精确保留与问题最相关的 Token。</li>
+<li><strong>失败案例探讨 (Figure 7 底部)：</strong> 在极其复杂的视觉场景中（如寻找黑白色的食物、辨别右侧是否有消防栓），由于 Token 预算的严格限制，第一阶段可能未能充分保留关键的微小视觉特征；或者即使保留了相关 Token，基础 VLM 固有的推理能力限制也会导致预测错误。</li>
+</ul>
+<hr>
+<h2 id="5-conclusion-结论">5. Conclusion (结论)<a hidden class="anchor" aria-hidden="true" href="#5-conclusion-结论">#</a></h2>
+<p>本文对视觉编码器和 LLM 中的注意力机制进行了深入分析。基于上述观察，提出了一种两阶段剪枝框架 LearnPruner。该框架首先通过视觉编码器后部的可学习剪枝模块消除冗余的视觉 Token，随后在 LLM 的中间层利用文本引导进一步丢弃与指令无关的 Token。广泛的实验结果表明，LearnPruner 优于先前的 SOTA 剪枝方法，实现了更好的精度-效率权衡（Accuracy-efficiency trade-off）。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/mllm/">MLLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/visual-token-pruning/">Visual Token Pruning</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

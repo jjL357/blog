@@ -6,8 +6,60 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 08 May 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sat, 09 May 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/categories/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 LEARNPRUNER: RETHINKING ATTENTION-BASED TOKEN PRUNING IN VISION LANGUAGE MODELS  - ICLR&#39;26</title>
+      <link>https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/</link>
+      <pubDate>Sat, 09 May 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/LearnPruner/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference: ICLR 2026&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-abstract-摘要&#34;&gt;1. Abstract (摘要)&lt;/h2&gt;
+&lt;p&gt;&lt;strong&gt;【核心内容与总结】&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;研究背景：&lt;/strong&gt; 视觉语言模型（VLMs）在视觉理解和推理上表现出色，但由于长视觉序列输入（如高分辨率图像或视频），带来了显著的计算负担。现有的“Token剪枝”技术通过删除不重要的视觉 Token 来缓解该问题，但其核心在于“如何决定 Token 的重要性”，现有方法通常直接依赖于视觉编码器（Vision Encoder）或大语言模型（LLM）的注意力分数（Attention Scores）。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;核心发现：&lt;/strong&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;视觉编码器端：&lt;/strong&gt; 存在“注意力下沉（Attention Sink）”现象，导致其难以有效聚焦于包含丰富信息的前景区域。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;大语言模型端（LLM）：&lt;/strong&gt; 尽管先前的研究表明 LLM 存在对 Token 位置的注意力偏差（位置越后分数越高），但本文发现，&lt;strong&gt;文本到视觉（Text-to-Vision）的注意力机制能够抵抗这种偏差&lt;/strong&gt;，并在 LLM 的**中间层（Middle Layers）**提供了有效的剪枝指导。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;本文贡献：&lt;/strong&gt; 提出了一种&lt;strong&gt;双阶段（Two-stage）Token 剪枝框架 LearnPruner&lt;/strong&gt;。
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;第一阶段：&lt;/strong&gt; 在视觉编码器之后，通过一个&lt;strong&gt;可学习的剪枝模块 (Learnable Pruning Module, LPM)&lt;/strong&gt; 剔除视觉冗余 Token。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;第二阶段：&lt;/strong&gt; 在 LLM 的中间层，保留与任务（Query）相关的 Token。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;实验效果：&lt;/strong&gt; LearnPruner 在仅使用原始视觉 Token 数量 $ 5.5% $ 的情况下，保留了约 $ 95% $ 的原始性能，实现了 $ 3.2 \times $ 的推理加速，展示了良好的精度-效率权衡。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;2-introduction-引言&#34;&gt;2. Introduction (引言)&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/LearnPruner/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;【背景引入与动机分析】&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;重新审视注意力机制（结合 Figure 1）：&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;如图 1 所示，Vision Encoder 使用的 &lt;code&gt;[CLS]&lt;/code&gt; token 注意力虽然能部分覆盖前景目标，但通常会将过多注意力分配给信息量较低的背景区域。这与视觉 Transformer 倾向于在均匀背景区域生成高范数离群 Token（Artifacts）的现象一致。&lt;/li&gt;
+&lt;li&gt;在 LLM 端，尽管存在“注意力偏移（Attention Shift，偏向图像下半部分）”现象，但这种偏差主要存在于视觉到视觉（V2V）或全 Token 注意力中。相反，**文本到视觉（Text-to-Vision）**的注意力能够有效地聚焦于与查询（Query）相关的区域。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;现有剪枝方法的局限性：&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;(1) 在视觉编码器中，&lt;code&gt;[CLS]&lt;/code&gt; token 无法充分关注显著前景，导致剪枝结果次优（尤其在 Token 预算有限时）。&lt;/li&gt;
+&lt;li&gt;(2) 在 LLM 中，文本到视觉的注意力具有抵抗注意力偏移的鲁棒性，能提供可靠指导，但如果将剪枝推迟到中间层进行，前期浅层网络仍需处理完整的视觉序列，导致加速收益有限。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;LearnPruner 解决方案：&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;提出双阶段框架顺序移除冗余 Token。首先，采用轻量级可学习模块（取代传统的 &lt;code&gt;[CLS]&lt;/code&gt; 分数）预测 Token 重要性，以消除固有的视觉冗余，并保留少量多样性 Token 提供补充信息。随后，剩余 Token 进入 LLM，在中间层基于文本查询进行第二次剪枝，进一步丢弃与指令无关的 Token。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;3-method-方法设计&#34;&gt;3. Method (方法设计)&lt;/h2&gt;
+&lt;p&gt;本节首先通过分析验证现有注意力机制在剪枝中的局限性，随后详细阐述 LearnPruner 的算法架构。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 DFlash: Block Diffusion for Flash Speculative Decoding - ICML&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/dflash---block-diffusion-for-flash-speculative-decoding---icml26/</link>
