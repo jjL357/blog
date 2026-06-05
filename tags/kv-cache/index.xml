@@ -6,8 +6,26 @@
     <description>Recent content in KV Cache on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Tue, 06 Jan 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 05 Jun 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/kv-cache/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25</title>
+      <link>https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/</link>
+      <pubDate>Fri, 05 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC-ICML&#39;25/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/DerekHJH/epic&#34;&gt;https://github.com/DerekHJH/epic&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;1-abstract-摘要&#34;&gt;1. Abstract (摘要)&lt;/h2&gt;
+&lt;p&gt;大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。
+上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术&lt;strong&gt;要求跨请求的完全前缀匹配 (exact prefix matches)&lt;/strong&gt;，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。&lt;/p&gt;
+&lt;p&gt;为了解决这一问题，&lt;strong&gt;位置无关缓存 (Position-Independent Caching, PIC)&lt;/strong&gt; 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。
+本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 &lt;strong&gt;EPIC&lt;/strong&gt; 服务系统。EPIC 结合了作者全新提出的 &lt;strong&gt;LegoLink 算法&lt;/strong&gt;。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。&lt;/p&gt;
+&lt;p&gt;实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 &lt;strong&gt;8倍&lt;/strong&gt; 的提升，在吞吐量上相较于现有系统获得了 &lt;strong&gt;7倍&lt;/strong&gt; 的增益，同时几乎没有带来任何准确率的损失。&lt;/p&gt;
+&lt;h2 id=&#34;2-introduction-引言&#34;&gt;2. Introduction (引言)&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/EPIC-ICML&#39;25/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有&lt;strong&gt;精确的前缀匹配&lt;/strong&gt;。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 VLCACHE: Computing 2% Vision Tokens and Reusing 98% for Vision–Language Inference</title>
       <link>https://jjl357.github.io/blog/posts/vlcache---computing-2vision-tokens-and-reusing-98-for-visionlanguage-inference/</link>

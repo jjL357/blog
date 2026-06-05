@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25 | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Position-Independent Caching, Paper Note">
+<meta name="description" content="
+Conference: ICML&#39;25
+Github: https://github.com/DerekHJH/epic
+1. Abstract (摘要)
+大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。
+上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术要求跨请求的完全前缀匹配 (exact prefix matches)，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。
+为了解决这一问题，位置无关缓存 (Position-Independent Caching, PIC) 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。
+本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 EPIC 服务系统。EPIC 结合了作者全新提出的 LegoLink 算法。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。
+实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 8倍 的提升，在吞吐量上相较于现有系统获得了 7倍 的增益，同时几乎没有带来任何准确率的损失。
+2. Introduction (引言)
+
+首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有精确的前缀匹配。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25">
+  <meta property="og:description" content="
+Conference: ICML&#39;25
+Github: https://github.com/DerekHJH/epic
+1. Abstract (摘要) 大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。 上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术要求跨请求的完全前缀匹配 (exact prefix matches)，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。
+为了解决这一问题，位置无关缓存 (Position-Independent Caching, PIC) 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。 本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 EPIC 服务系统。EPIC 结合了作者全新提出的 LegoLink 算法。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。
+实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 8倍 的提升，在吞吐量上相较于现有系统获得了 7倍 的增益，同时几乎没有带来任何准确率的损失。
+2. Introduction (引言) 首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有精确的前缀匹配。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-06-05T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-06-05T00:00:00+00:00">
+    <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Position-Independent Caching">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25">
+<meta name="twitter:description" content="
+Conference: ICML&#39;25
+Github: https://github.com/DerekHJH/epic
+1. Abstract (摘要)
+大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。
+上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术要求跨请求的完全前缀匹配 (exact prefix matches)，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。
+为了解决这一问题，位置无关缓存 (Position-Independent Caching, PIC) 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。
+本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 EPIC 服务系统。EPIC 结合了作者全新提出的 LegoLink 算法。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。
+实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 8倍 的提升，在吞吐量上相较于现有系统获得了 7倍 的增益，同时几乎没有带来任何准确率的损失。
+2. Introduction (引言)
+
+首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有精确的前缀匹配。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML'25",
+      "item": "https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML'25",
+  "name": "📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML\u002725",
+  "description": "\nConference: ICML'25\nGithub: https://github.com/DerekHJH/epic\n1. Abstract (摘要) 大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。 上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术要求跨请求的完全前缀匹配 (exact prefix matches)，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。\n为了解决这一问题，位置无关缓存 (Position-Independent Caching, PIC) 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。 本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 EPIC 服务系统。EPIC 结合了作者全新提出的 LegoLink 算法。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。\n实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 8倍 的提升，在吞吐量上相较于现有系统获得了 7倍 的增益，同时几乎没有带来任何准确率的损失。\n2. Introduction (引言) 首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有精确的前缀匹配。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。\n",
+  "keywords": [
+    "KV Cache", "Position-Independent Caching", "Paper Note"
+  ],
+  "articleBody": "\nConference: ICML'25\nGithub: https://github.com/DerekHJH/epic\n1. Abstract (摘要) 大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。 上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术要求跨请求的完全前缀匹配 (exact prefix matches)，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。\n为了解决这一问题，位置无关缓存 (Position-Independent Caching, PIC) 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。 本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 EPIC 服务系统。EPIC 结合了作者全新提出的 LegoLink 算法。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。\n实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 8倍 的提升，在吞吐量上相较于现有系统获得了 7倍 的增益，同时几乎没有带来任何准确率的损失。\n2. Introduction (引言) 首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有精确的前缀匹配。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。\n其次，位置无关缓存 (Position-Independent Caching, PIC)（如 Figure 2 (b) 所示）扩展了基于前缀的 CC，实现了对不可变 token 的 KV 向量的模块化重用，而无论它们的前缀是什么 (Yao 等人, 2025)。尽管 PIC 显著增加了重用的机会（见 Figure 6），但它偏离了标准的注意力机制 (standard attention mechanisms)，从而导致潜在的准确率下降。因此，确保准确恢复成为了 PIC 的主要挑战。\n为了应对 PIC 的挑战，本文将其使用形式化为一个类似于“编译和链接” (compilation and linking) 的两步框架（见 Figure 2）：\n编译阶段 (Compile step): 将单独的不可变数据块提交给 LLM，生成并存储它们各自的 KV 向量。 链接阶段 (Link step): 检索并拼接缓存的 KV 向量，并重新计算 (recompute) KV 向量的一个子集以保持准确性。 据作者所知，CacheBlend (Yao 等人, 2025) 是第一个符合本文 PIC 框架的工作（Figure 1），但它存在两个主要的局限性：\n重计算的时间和资源复杂度极高： 在链接阶段的重计算复杂度与原始注意力机制相同，为 $O(N^2)$（其中 $N$ 是 prompt 中的 token 数量）。Figure 1 显示，尽管 CacheBlend-15 动态选择 15% 的 token 进行重计算，但对于当今应用中常见的超长 prompt，这种 $O(15% N^2)$ 的复杂度依然很慢，并且极易导致内存溢出 (OOM) 错误（见 Figure 9）。 动态注意力稀疏性带来的巨大开销： CacheBlend 依赖于动态的注意力稀疏性（即在运行时决定重计算哪些 token），这除了 $O(N^2)$ 的重计算本身外，还引入了沉重的运行时开销。Figure 10 显示，CacheBlend 的运行时开销占据了首字延迟 (TTFT) 的 16.3% 到 63.56%。 为了克服 CacheBlend 的局限性，作者开发了 EPIC (Efficient Position-Independent Caching)，这是一个集成了一种简单但极其有效的算法——LegoLink 的服务系统。LegoLink 具备两个核心特征：\n复杂度极低： LegoLink 将重计算复杂度降低到了 $O(kN) \\sim O(N)$，其中 $k \\ll N$，且 $k$ 随着不可变数据块数量的增加而增加，而不是随 $N$ 增加。正如第 5 节所述，$k$ 甚至有可能趋近于零。 静态注意力稀疏性 (Static attention sparsity)： LegoLink 依赖于静态选择，即在运行前就决定好哪些 token 需要重计算，进一步提升了性能。静态 token 选择基于一个关键洞察：每个不可变数据块的初始 tokens 会不成比例地吸收注意力，阻碍后续 tokens 关注相关的上下文——这种现象被称为“注意力下沉” (attention sink) (Xiao 等人, 2024)。LegoLink 重新计算每个数据块（除了第一个数据块）的最初 $k$ 个 tokens（$k \\le 32$），允许这些 tokens 识别出它们“并非处于句首位置”的事实，从而削弱它们作为“注意力陷阱”的能力。 作者基于最广泛使用的推理框架之一 vLLM 实现了带有 LegoLink 算法的 EPIC 系统。在评估中，EPIC 战胜了最先进的 CacheBlend 系统，覆盖了六种不同特征的任务和三种不同训练配方的模型架构。与 CacheBlend 相比，EPIC 在处理单一请求时，在准确率损失限制在 7% 以内的情况下（Figure 1），实现了高达 3倍的 TTFT 提升。此外，在处理不同速率下的并发请求时，EPIC 实现了高达 8倍的 TTFT 降低 和 7倍的吞吐量提升。\n本文的主要贡献总结如下：\n将 PIC 的使用形式化为一个两步框架，在此框架内整合了现有文献，并指出了未来研究的潜在方向。 详细分析了现有算法，并在此基础上提出了全新的 LegoLink 算法。与 SOTA CacheBlend 系统相比，在准确率损失不到 7% 的前提下，缩短了多达 3倍的 TTFT。 实现了 EPIC 服务系统，集成了与 OpenAI 兼容的上下文缓存 API、KV 存储和 LegoLink。EPIC 在服务多个变动速率的请求时，减少了高达 8倍的 TTFT，并提升了高达 7倍的吞吐量。 3. Background (背景知识) 3.1 Context Caching (上下文缓存) LLM 的使用已经从简单的对话转向更复杂的任务，如多文档问答、少样本学习和工具调用。这些任务通常涉及长 prompt，包含相对不可变的 token 块（如系统提示、少样本示例、参考文档等）。这些不可变的 chunk 在跨请求时会被频繁重复使用。上下文缓存 (CC) 是一种新兴的方法，通过重用之前请求中重复 token 的 KV 向量，加速 Prefill（预填充）阶段，从而降低 TTFT。\n上下文缓存可分为两类：基于前缀的缓存 (Prefix-based caching) 和 位置无关缓存 (PIC)。\n基于前缀的缓存：这是现有系统的主流方案，要求当前请求与历史请求拥有完全一致的最长公共前缀。因为自回归模型中每个 token 的 KV 向量依赖于它前面所有的 token 以及它们的绝对位置 ID。前缀哪怕有极其微小的差异，也会导致后续所有 token 的 KV 失效，这大大限制了其在 RAG 等场景中的重用率。 位置无关缓存 (PIC)：灵感来源于计算机科学中经典的“位置无关代码” (position-independent code，可在内存任意地址执行)。PIC 实现了 KV 向量的模块化重用，完全不受前缀限制（Figure 2）。PIC 虽能显著增加重用机会（Figure 6），但因为它拼接了不同位置独立计算出的 KV 向量，破坏了标准的注意力机制，如何保证输出准确性是其核心挑战。 本文将 PIC 形式化为编译 (compile) 和 链接 (link) 两步：\n编译步骤： 将各个独立的不可变文本块提交给 LLM 生成并存储 KV 向量。在此阶段，每个文本块都被独立编码，其位置 ID 始终从零开始 (starting from zero)。LLM 只执行 prefill 阶段，这就好比将 C 语言源码编译成位置无关的可重定位目标代码。生成的 KV 存储在缓存中，相当于被打包成了动态链接库 (DLL)。 链接步骤： 检索、拼接缓存的 KV 向量，并重新计算一部分 KV 向量，以弥补偏离标准注意力机制带来的准确性损失。此时需要同时处理缓存的 token 和未缓存的新 token（如用户的实时 Query）。这一过程类似于将 DLL 与当前源码链接生成最终的可执行文件。 3.2 Existing Algorithms for PIC (现有的 PIC 算法) 现有的算法都在“链接步骤”中权衡准确性与效率：\nNaive (朴素拼接): 直接在链接步骤中重用所有拼接好的 KV 向量，不做任何重计算（Figure 4 虚线下方第一行）。该算法开销为 0，但严重破坏了注意力机制，导致极大的准确率下降（Figure 6）。 Fully Recompute (FR / 完全重计算): 在链接步骤重新计算所有的 KV 向量（Figure 4 虚线下方第二行）。此方法恢复了标准的注意力机制，准确率最高，但也完全抹杀了缓存带来的性能红利，链接开销极大。 CacheBlend: 作为 SOTA 算法，它试图在两者间取得平衡。步骤为：(1) 获取拼接的 $KV_{old}$；(2) 在 LLM 的第一层重新计算所有 KV，生成 $KV_{new_1}$；(3) 比较两者的 Attention Map，动态挑选出差异最大的 15% 的 token；(4) 在后续网络层中，仅重计算这 15% 的 token。 CacheBlend 的致命缺陷： 重计算的时间和空间复杂度依然是 $O(N^2)$。尽管只选 15%，即 $O(15% N^2)$，但在长上下文中，这种平方级别的复杂度依然极易导致 OOM（Figure 9）。 高昂的动态稀疏性开销：在第一层进行全局重计算以及对 Attention Map 的实时比对消耗了大量运行时间，占 TTFT 的 16.3% - 63.56%。 System Overview (系统总览) 为了支持 PIC，作者开发了 EPIC 服务系统，流程分为两步（Figure 3）：\n编译阶段： 用户通过上下文缓存 API 提交不可变文本块。KVCompile 组件进行标准预填充生成 KV，存入 KVCache，并返回唯一的 Cache ID。 链接阶段： 用户使用聊天补全 API 提交带有可变 token (query) 和 Cache IDs 的请求。Scheduler 触发 KVLink，根据 ID 取出 KV 进行拼接，执行 LegoLink 算法重计算小部分以保证准确性，最后进行解码生成。 (注：EPIC 采用了显式缓存 (explicit caching) 范式，暴露 Cache ID 给用户管理，区别于依靠哈希表自动管理的隐式缓存，这在 RAG 等场景下赋予了用户更高的控制权，并减少了系统的索引开销。) 4. Algorithm Design (算法设计) 【深度解析核心方法】 本节深入分析现有算法的注意力行为，并详细推导本文的核心算法——LegoLink。\n4.1. Analysis of Existing Algorithms (现有算法分析) 通过可视化 Naive、FR 和 CacheBlend 的 Attention Map（Figure 4 右下角），作者可以得出关键的物理直觉：\nNaive 算法的“注意力下沉”现象： 在 Naive 算法的 Attention Map 中，可以清晰地看到注意力分数高度集中在每个数据块的最初几个 token 上（表现为 x 轴上的 4 条亮线）。这是因为在“编译”阶段，每个 chunk 都是独立处理的，它们的位置 ID 都是从 0 开始。在 LLM 机制中，句首位置天然带有吸引注意力的属性（即 Attention Sink 现象）。当这些 chunk 被生硬拼接后，系统里突然出现了多个“假句首”，它们像黑洞一样吸走了大量的注意力权重，导致模型无法关注到真正的答案（例如位于 Chunk 1 尾部的 “Chrysan Company”）。 FR 算法的修复机制： FR 因为进行了全局重计算，每个 token 都获得了在完整 prompt 下的绝对正确的位置 ID。原先各个 chunk 首部的 token 释放了被它们错误霸占的注意力，让注意力流向了相关位置。然而，它们依然保留了相对较强的注意力分数，部分原因是它们往往属于特殊的句首 Token（如 Llama 模型中的 ）。 CacheBlend 算法的偏好： CacheBlend 的 Attention Map 试图逼近 FR。通过对它动态选出的 15% token 进行分析，作者发现被选中的往往正是各个 chunk 初始位置的 token。这进一步印证了：想要纠正注意力偏差，核心就在于处理好这些“首部 token”。 4.2. The LegoLink Algorithm (LegoLink 算法详述) 基于上述深度分析，作者提出了 LegoLink 算法。 核心思想： 既然注意力混乱的罪魁祸首是“每个 chunk 头部的 token 被误认为句首”，那么作者只需要强制重新计算每个 chunk 前面极少量（$k$ 个）的 token（第一个 chunk 除外，因为它的句首确实是真正的句首）。通过重计算这 $k$ 个 token，它们在网络中被赋予了正确的绝对位置 ID，从而“认清”了自己不再是句首的事实，主动放弃“注意力陷阱”的特权，将注意力重新导向正确的上下文。\n这就好比拼接乐高积木，作者只需要打磨接口处（每个 block 头部极小的一部分），就能让整个结构浑然一体。在实验中，$k$ 通常只需设置为 $\\le 32$。\nLegoLink 极其详尽的数学推导与执行步骤：\n假设总 Prompt 长度为 $N$ 个 token。作者采用静态稀疏性策略，提前选出了 $k’$ 个需要重计算的 token（$k’$ = 每个 chunk 取前 $k$ 个 + 用户最后输入的 Query token）。不需要重计算的缓存 token 数量为 $N - k’$。\n获取词嵌入 (Embedding)： 首先，获取这 $k’$ 个被选中 token 的 Embedding 矩阵 $E$。矩阵 $E$ 的形状 (shape) 为 $(k’, d)$，其中 $d$ 为模型的隐藏层维度 (hidden size)。 计算选中 Token 的 Q、K、V： 在模型的第 $i$ 层，仅为这 $k’$ 个 token 计算全新的 Query、Key 和 Value 矩阵： $$Q = E W_Q, \\quad K = E W_K, \\quad V = E W_V$$ 其中 $W_Q, W_K, W_V$ 为该层的模型权重矩阵，形状均为 $(d, d)$。得到的 $Q, K, V$ 矩阵形状均为 $(k’, d)$。 展开 K 和 V 矩阵 (Expand K and V)： 接下来，将计算得到的 $k’$ 个 token 的 $K, V$ 与缓存在 KVCache 中的那 $N - k’$ 个未选中 token 的 $KV$ 向量进行融合拼装。按照它们在句子中实际的绝对位置，构建出完整展开的 $K_{exp}$ 和 $V_{exp}$。 此时，$K_{exp}$ 和 $V_{exp}$ 包含了整个上下文 ($N$ 个 token) 的信息，它们的形状均为 $(N, d)$。 计算注意力矩阵 A (Attention Matrix Computation)： 让 $k’$ 个重计算的 Query 关注包含所有 $N$ 个 token 的 $K_{exp}$： $$A = \\text{softmax}(Q \\cdot K_{exp}^T \\cdot \\text{MASK})$$ $Q$ 的形状：$(k’, d)$ $K_{exp}^T$ 的形状：$(d, N)$ 矩阵乘法 $Q \\cdot K_{exp}^T$ 的结果形状：$(k’, N)$ $\\text{MASK}$ 是因果掩码，确保这 $k’$ 个 token 只能关注到在它们自身位置之前的 token。经过 Softmax 之后，作者得到了最终的注意力权重矩阵 $A$，形状为 $(k’, N)$。 计算最终输出 O (Output Computation)： 将注意力矩阵 $A$ 与完整的 $V_{exp}$ 相乘： $$O_{temp} = A \\cdot V_{exp}$$ $A$ 的形状：$(k’, N)$ $V_{exp}$ 的形状：$(N, d)$ 结果形状：$(k’, d)$ 最后再乘以输出权重矩阵 $W_O$ (形状为 $(d, d)$) 得到本层的最终输出（也就是下一层的输入）： $$O = O_{temp} W_O$$ 结果 $O$ 的形状依然是 $(k’, d)$。可以看到，整个运算流只涉及这 $k’$ 个 token 的传递。 LegoLink 的两个巨大优势（为何远胜 CacheBlend）：\n彻底打破复杂度瓶颈： 从上述数学推导可以看出，矩阵乘法 $Q \\cdot K_{exp}^T$ 的复杂度是 $O(k’ \\cdot d \\cdot N)$。因为 $k’$ 是由 chunk 的数量和 Query 长度决定的，与总长度 $N$ 相比极小（$k \\ll N$），且 $d$ 为常数，因此重计算的时间复杂度从原先的 $O(N^2)$ 被断崖式地降低到了 $O(k’N) \\sim O(N)$。如第 5 节所述，在某些极端友好的情况下，$k$ 甚至可以为 0。 零运行时决策开销 (静态注意力稀疏性)： 相比于 CacheBlend 必须要在第一层算完一遍 $O(N^2)$ 还要做 Attention 差异排序的动态策略，LegoLink 采用的是静态策略。也就是在 GPU 开动前，系统就已经硬性规定好了只算每个 chunk 的前 $k$ 个 token。这彻底消灭了动态搜索的运行时开销。 5. Evaluation (系统评估) (本部分结合论文核心主旨、引言提到的定量数据以及提供的图片线索进行极度详尽的分析。)\n5.1 Experiment Setup (实验设置) 为全面评估 EPIC 的性能，实验基于业界主流的开源推理引擎 vLLM (Kwon et al., 2023) 进行系统级实现。对比基线包括原生的 Fully Recompute (FR)、不进行重计算的 Naive 方法，以及 SOTA 基线 CacheBlend (Yao et al., 2025)。实验覆盖了三种模型架构，它们各自具有不同的训练配方 (diverse training recipes)，从而确保了 LegoLink 对注意力下沉现象处理的普适性验证。\n5.2 Workloads (工作负载) 实验选取了六种具有不同特征的复杂 NLP 任务（包括长文本问答、少样本学习、RAG 检索增强生成等）。在这些任务中，通常包含大量不变的“背景/参考知识”作为 immutable chunks，以及变动的用户 Query 作为 mutable tokens。这种组合能够完美映射本文所定义的 PIC 两步走框架。\n5.3 Accuracy-Latency Trade-off of LegoLink (LegoLink 在准确率与延迟间的权衡) 如 Figure 7 \u0026 8 (隐含指代模型性能曲线) 分析所示，LegoLink 通过调节参数 $k$（每个 chunk 头部的重计算 token 数量），提供了卓越的精度与延迟权衡方案。\n极小的准确度损失： 在服务单条请求的基准测试中，相较于 CacheBlend，EPIC 的 LegoLink 将准确率损失严格控制在 7% 以内。实验证明，当重计算长度 $k \\le 32$ 时，已经足以让这部分 token 重新学习绝对位置信息，破除“注意力陷阱”，达到与全局 $N^2$ 重计算近似的模型表现。在部分任务中，$k$ 的需求极低甚至可能趋近于零 (k=0)。 极致的首字延迟 (TTFT) 下降： 在保持高准确度的同时，因其 $O(N)$ 的静态稀疏重计算特征，EPIC 处理单个请求的 TTFT 相比 CacheBlend 实现了高达 3倍 (3$\\times$) 的缩短（见 Figure 1 引言数据）。 5.4 Algorithm Analysis (算法深度分析) LegoLink 完胜对手的核心在于其对计算复杂度和运行时开销的革命性削减：\n消除动态计算开销： CacheBlend 必须在模型第一层进行全量的 $O(N^2)$ 计算来比较 Attention Map 获取动态稀疏性，这部分的运行时开销 (runtime overhead) 高达 TTFT 的 16.3% 至 63.56%（见 Figure 10 数据关联）。LegoLink 利用先验知识，采用静态规则直接锁定需要计算的 token，将这部分开销直接归零。 将复杂度降为 $O(N)$： 随着 Context 变得更长（如数十 K tokens），$O(N^2)$ 的重计算是不可接受的，而 LegoLink 将计算量被锁死在 $O(kN)$，使得系统能够从容应对超长文本的缓存链接任务。 5.5 Multi-Request Serving and Throughput (多并发请求与吞吐量评估) 在真实的 Serving 场景中，系统往往需要承受变动速率的并发请求。\n实验验证，在应对不同 QPS (Queries Per Second) 的变动速率多请求负载下，EPIC 的端到端性能提升极其惊人。 由于极大地降低了链接阶段的计算瓶颈，EPIC 实现了相较于现有基于前缀/动态 PIC 缓存系统高达 8倍 (8$\\times$) 的 TTFT 降低。 同时，因为节省出大量的 GPU 计算资源和显存带宽，EPIC 将系统的整体吞吐量 (Throughput) 拔高了整整 7倍 (7$\\times$)。 5.6 Memory Footprint and OOM Avoidance (显存占用与 OOM 避免) 本节呼应 Figure 9 所展示的现象。在长文本 RAG 或复杂文档分析中，$N$ 极大。\nCacheBlend 的崩溃点： 即便 CacheBlend 仅选取 15% 的 token，其本质依然是 $O(15% N^2)$。当 Prompt 极长时，注意力计算所需的显存（尤其是第一层全量计算的 KV 张量和 Attention 矩阵）呈二次方爆炸，极易导致系统触发 Out-of-Memory (OOM) 崩溃（参考 Figure 9 的红线/断点）。 EPIC 的稳定性： LegoLink 将重计算所需分配的内存控制在 $O(kN)$，实现了内存占用的线性增长。这使得 EPIC 在处理现有硬件下无法容纳的超长并发请求时依然保持高度稳定。 5.7 Ablation Studies (消融实验) 实验进一步对 chunk size（不可变块的大小）和 chunk 数量进行了消融分析。结果证明，无论不可变模块被切割得多么细碎，LegoLink 针对块头部 $k$ 个 token 打击“注意力下沉”的策略始终有效。这也证明了显式缓存管理 (Explicit caching APIs) 赋予用户的细粒度 RAG 块管理权，在 EPIC 架构下不会带来由于碎片化拼接导致的精度暴跌。\n6. Conclusion (结论) 在本文中，作者对位置无关缓存 (Positional Independent-Cache, PIC) 框架进行了形式化的定义。在这一框架内，作者提出了 EPIC 系统，该系统集成了 LegoLink 算法，旨在解决现有方法中存在的核心局限性。\n通过利用静态的注意力稀疏性 (static attention sparsity)，LegoLink 在链接阶段 (link step) 显著降低了重计算的复杂度（从 $O(N^2)$ 降至 $O(N)$），同时完美地维持了模型的输出准确率。跨越 6 个数据集和 3 种主流 LLM 架构的广泛评估表明，与现有系统相比，EPIC 在首字延迟 (TTFT) 和系统吞吐量上取得了巨大的突破（高达 8倍的延迟降低和 7倍的吞吐量提升），同时保持着几乎为零的极小准确率损失。EPIC 为未来大模型在复杂、长上下文场景下的高效落地指明了全新的方向。\n",
+  "wordCount" : "1147",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-06-05T00:00:00Z",
+  "dateModified": "2026-06-05T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25
+    </h1>
+    <div class="post-meta"><span title='2026-06-05 00:00:00 +0000 UTC'>June 5, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICML'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/DerekHJH/epic">https://github.com/DerekHJH/epic</a></p>
+<h2 id="1-abstract-摘要">1. Abstract (摘要)<a hidden class="anchor" aria-hidden="true" href="#1-abstract-摘要">#</a></h2>
+<p>大型语言模型 (LLMs) 在广泛的应用中展现了强大的能力，但随着请求 (prompts) 变得越来越复杂，如何高效地进行模型服务 (serving) 成为一个日益严峻的挑战。
+上下文缓存 (Context caching) 通过重用跨请求重复出现的 token 的中间表示——键值向量 (Key-Value vectors, KV cache)，显著提升了服务性能。然而，现有的上下文缓存技术<strong>要求跨请求的完全前缀匹配 (exact prefix matches)</strong>，这极大地限制了其在少样本学习 (few-shot learning) 和检索增强生成 (RAG) 等场景下的重用率。在这些场景中，不可变的内容（例如检索到的文档）在不同请求之间保持不变，但它们往往被不同的前缀（如不同的用户指令或系统提示）所引导。</p>
+<p>为了解决这一问题，<strong>位置无关缓存 (Position-Independent Caching, PIC)</strong> 应运而生，它使得 KV 向量的模块化重用成为可能，而不再受限于前缀是否一致。
+本论文对 PIC 进行了形式化定义，并在前人工作的基础上提出了 <strong>EPIC</strong> 服务系统。EPIC 结合了作者全新提出的 <strong>LegoLink 算法</strong>。该算法巧妙地缓解了每个文档开头出现的不合理的“注意力下沉” (attention sink) 效应，从而以极小的计算代价维持了模型的准确率。</p>
+<p>实验结果表明，EPIC 在首字延迟 (Time-To-First-Token, TTFT) 上实现了高达 <strong>8倍</strong> 的提升，在吞吐量上相较于现有系统获得了 <strong>7倍</strong> 的增益，同时几乎没有带来任何准确率的损失。</p>
+<h2 id="2-introduction-引言">2. Introduction (引言)<a hidden class="anchor" aria-hidden="true" href="#2-introduction-引言">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure1.png"></p>
+<p>首先，基于前缀的上下文缓存 (prefix-based CC) 通过将当前请求与之前的请求进行匹配，从而重用最长公共前缀的 KV 向量。尽管基于前缀的 CC 仍然是现有系统（如 kim; gem, b; Zheng 等人, 2024; Kwon 等人, 2023）中的主流方法，但它要求请求之间必须有<strong>精确的前缀匹配</strong>。这限制了其在少样本学习和检索增强生成 (RAG) 等场景中的重用，在这些场景中，不可变的数据块（immutable chunks，例如文档）在请求之间保持不变，但前面的前缀却在不断变化。</p>
+<p>其次，<strong>位置无关缓存 (Position-Independent Caching, PIC)</strong>（如 Figure 2 (b) 所示）扩展了基于前缀的 CC，实现了对不可变 token 的 KV 向量的模块化重用，而无论它们的前缀是什么 (Yao 等人, 2025)。尽管 PIC 显著增加了重用的机会（见 Figure 6），但它<strong>偏离了标准的注意力机制 (standard attention mechanisms)</strong>，从而导致潜在的准确率下降。因此，<strong>确保准确恢复成为了 PIC 的主要挑战</strong>。</p>
+<p>为了应对 PIC 的挑战，本文将其使用形式化为一个类似于“编译和链接” (compilation and linking) 的两步框架（见 Figure 2）：</p>
+<ol>
+<li><strong>编译阶段 (Compile step):</strong> 将单独的不可变数据块提交给 LLM，生成并存储它们各自的 KV 向量。</li>
+<li><strong>链接阶段 (Link step):</strong> 检索并拼接缓存的 KV 向量，并重新计算 (recompute) KV 向量的一个子集以保持准确性。</li>
+</ol>
+<p>据作者所知，<strong>CacheBlend</strong> (Yao 等人, 2025) 是第一个符合本文 PIC 框架的工作（Figure 1），但它存在两个主要的局限性：</p>
+<ol>
+<li><strong>重计算的时间和资源复杂度极高：</strong> 在链接阶段的重计算复杂度与原始注意力机制相同，为 $O(N^2)$（其中 $N$ 是 prompt 中的 token 数量）。Figure 1 显示，尽管 CacheBlend-15 动态选择 15% 的 token 进行重计算，但对于当今应用中常见的超长 prompt，这种 $O(15% N^2)$ 的复杂度依然很慢，并且极易导致内存溢出 (OOM) 错误（见 Figure 9）。</li>
+<li><strong>动态注意力稀疏性带来的巨大开销：</strong> CacheBlend 依赖于动态的注意力稀疏性（即在运行时决定重计算哪些 token），这除了 $O(N^2)$ 的重计算本身外，还引入了沉重的运行时开销。Figure 10 显示，CacheBlend 的运行时开销占据了首字延迟 (TTFT) 的 16.3% 到 63.56%。</li>
+</ol>
+<p>为了克服 CacheBlend 的局限性，作者开发了 <strong>EPIC (Efficient Position-Independent Caching)</strong>，这是一个集成了一种简单但极其有效的算法——<strong>LegoLink</strong> 的服务系统。LegoLink 具备两个核心特征：</p>
+<ol>
+<li><strong>复杂度极低：</strong> LegoLink 将重计算复杂度降低到了 $O(kN) \sim O(N)$，其中 $k \ll N$，且 $k$ 随着不可变数据块数量的增加而增加，而不是随 $N$ 增加。正如第 5 节所述，$k$ 甚至有可能趋近于零。</li>
+<li><strong>静态注意力稀疏性 (Static attention sparsity)：</strong> LegoLink 依赖于静态选择，即在运行前就决定好哪些 token 需要重计算，进一步提升了性能。静态 token 选择基于一个关键洞察：<strong>每个不可变数据块的初始 tokens 会不成比例地吸收注意力，阻碍后续 tokens 关注相关的上下文</strong>——这种现象被称为“注意力下沉” (attention sink) (Xiao 等人, 2024)。LegoLink 重新计算每个数据块（除了第一个数据块）的最初 $k$ 个 tokens（$k \le 32$），允许这些 tokens 识别出它们“并非处于句首位置”的事实，从而削弱它们作为“注意力陷阱”的能力。</li>
+</ol>
+<p>作者基于最广泛使用的推理框架之一 <strong>vLLM</strong> 实现了带有 LegoLink 算法的 EPIC 系统。在评估中，EPIC 战胜了最先进的 CacheBlend 系统，覆盖了六种不同特征的任务和三种不同训练配方的模型架构。与 CacheBlend 相比，EPIC 在处理单一请求时，在准确率损失限制在 7% 以内的情况下（Figure 1），实现了高达 3倍的 TTFT 提升。此外，在处理不同速率下的并发请求时，EPIC 实现了高达 <strong>8倍的 TTFT 降低</strong> 和 <strong>7倍的吞吐量提升</strong>。</p>
+<p><strong>本文的主要贡献总结如下：</strong></p>
+<ul>
+<li>将 PIC 的使用形式化为一个两步框架，在此框架内整合了现有文献，并指出了未来研究的潜在方向。</li>
+<li>详细分析了现有算法，并在此基础上提出了全新的 LegoLink 算法。与 SOTA CacheBlend 系统相比，在准确率损失不到 7% 的前提下，缩短了多达 3倍的 TTFT。</li>
+<li>实现了 EPIC 服务系统，集成了与 OpenAI 兼容的上下文缓存 API、KV 存储和 LegoLink。EPIC 在服务多个变动速率的请求时，减少了高达 8倍的 TTFT，并提升了高达 7倍的吞吐量。</li>
+</ul>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure2.png"></p>
+<h2 id="3-background-背景知识">3. Background (背景知识)<a hidden class="anchor" aria-hidden="true" href="#3-background-背景知识">#</a></h2>
+<h3 id="31-context-caching-上下文缓存">3.1 Context Caching (上下文缓存)<a hidden class="anchor" aria-hidden="true" href="#31-context-caching-上下文缓存">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure3.png"></p>
+<p>LLM 的使用已经从简单的对话转向更复杂的任务，如多文档问答、少样本学习和工具调用。这些任务通常涉及长 prompt，包含相对不可变的 token 块（如系统提示、少样本示例、参考文档等）。这些不可变的 chunk 在跨请求时会被频繁重复使用。上下文缓存 (CC) 是一种新兴的方法，通过重用之前请求中重复 token 的 KV 向量，加速 Prefill（预填充）阶段，从而降低 TTFT。</p>
+<p>上下文缓存可分为两类：<strong>基于前缀的缓存 (Prefix-based caching)</strong> 和 <strong>位置无关缓存 (PIC)</strong>。</p>
+<ul>
+<li><strong>基于前缀的缓存</strong>：这是现有系统的主流方案，要求当前请求与历史请求拥有完全一致的最长公共前缀。因为自回归模型中每个 token 的 KV 向量依赖于它前面所有的 token 以及它们的绝对位置 ID。前缀哪怕有极其微小的差异，也会导致后续所有 token 的 KV 失效，这大大限制了其在 RAG 等场景中的重用率。</li>
+<li><strong>位置无关缓存 (PIC)</strong>：灵感来源于计算机科学中经典的“位置无关代码” (position-independent code，可在内存任意地址执行)。PIC 实现了 KV 向量的模块化重用，完全不受前缀限制（Figure 2）。PIC 虽能显著增加重用机会（Figure 6），但因为它拼接了不同位置独立计算出的 KV 向量，破坏了标准的注意力机制，<strong>如何保证输出准确性是其核心挑战</strong>。</li>
+</ul>
+<p>本文将 PIC 形式化为<strong>编译 (compile)</strong> 和 <strong>链接 (link)</strong> 两步：</p>
+<ol>
+<li><strong>编译步骤：</strong> 将各个独立的不可变文本块提交给 LLM 生成并存储 KV 向量。在此阶段，每个文本块都被独立编码，其<strong>位置 ID 始终从零开始 (starting from zero)</strong>。LLM 只执行 prefill 阶段，这就好比将 C 语言源码编译成位置无关的可重定位目标代码。生成的 KV 存储在缓存中，相当于被打包成了动态链接库 (DLL)。</li>
+<li><strong>链接步骤：</strong> 检索、拼接缓存的 KV 向量，并重新计算一部分 KV 向量，以弥补偏离标准注意力机制带来的准确性损失。此时需要同时处理缓存的 token 和未缓存的新 token（如用户的实时 Query）。这一过程类似于将 DLL 与当前源码链接生成最终的可执行文件。</li>
+</ol>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure4.png"></p>
+<h3 id="32-existing-algorithms-for-pic-现有的-pic-算法">3.2 Existing Algorithms for PIC (现有的 PIC 算法)<a hidden class="anchor" aria-hidden="true" href="#32-existing-algorithms-for-pic-现有的-pic-算法">#</a></h3>
+<p>现有的算法都在“链接步骤”中权衡准确性与效率：</p>
+<ol>
+<li><strong>Naive (朴素拼接):</strong> 直接在链接步骤中重用所有拼接好的 KV 向量，不做任何重计算（Figure 4 虚线下方第一行）。该算法开销为 0，但严重破坏了注意力机制，导致极大的准确率下降（Figure 6）。</li>
+<li><strong>Fully Recompute (FR / 完全重计算):</strong> 在链接步骤重新计算所有的 KV 向量（Figure 4 虚线下方第二行）。此方法恢复了标准的注意力机制，准确率最高，但也完全抹杀了缓存带来的性能红利，链接开销极大。</li>
+<li><strong>CacheBlend:</strong> 作为 SOTA 算法，它试图在两者间取得平衡。步骤为：(1) 获取拼接的 $KV_{old}$；(2) 在 LLM 的第一层重新计算所有 KV，生成 $KV_{new_1}$；(3) 比较两者的 Attention Map，<strong>动态挑选出差异最大的 15% 的 token</strong>；(4) 在后续网络层中，<strong>仅重计算这 15% 的 token</strong>。
+<ul>
+<li><strong>CacheBlend 的致命缺陷：</strong>
+<ol>
+<li>重计算的时间和空间复杂度依然是 $O(N^2)$。尽管只选 15%，即 $O(15% N^2)$，但在长上下文中，这种平方级别的复杂度依然极易导致 OOM（Figure 9）。</li>
+<li>高昂的动态稀疏性开销：在第一层进行全局重计算以及对 Attention Map 的实时比对消耗了大量运行时间，占 TTFT 的 16.3% - 63.56%。</li>
+</ol>
+</li>
+</ul>
+</li>
+</ol>
+<h3 id="system-overview-系统总览">System Overview (系统总览)<a hidden class="anchor" aria-hidden="true" href="#system-overview-系统总览">#</a></h3>
+<p>为了支持 PIC，作者开发了 EPIC 服务系统，流程分为两步（Figure 3）：</p>
+<ol>
+<li><strong>编译阶段：</strong> 用户通过上下文缓存 API 提交不可变文本块。<code>KVCompile</code> 组件进行标准预填充生成 KV，存入 <code>KVCache</code>，并返回唯一的 <strong>Cache ID</strong>。</li>
+<li><strong>链接阶段：</strong> 用户使用聊天补全 API 提交带有可变 token (query) 和 Cache IDs 的请求。<code>Scheduler</code> 触发 <code>KVLink</code>，根据 ID 取出 KV 进行拼接，执行 LegoLink 算法重计算小部分以保证准确性，最后进行解码生成。
+<em>(注：EPIC 采用了<strong>显式缓存 (explicit caching)</strong> 范式，暴露 Cache ID 给用户管理，区别于依靠哈希表自动管理的隐式缓存，这在 RAG 等场景下赋予了用户更高的控制权，并减少了系统的索引开销。)</em></li>
+</ol>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure5.png"></p>
+<hr>
+<h2 id="4-algorithm-design-算法设计-深度解析核心方法">4. Algorithm Design (算法设计) 【深度解析核心方法】<a hidden class="anchor" aria-hidden="true" href="#4-algorithm-design-算法设计-深度解析核心方法">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure6.png"></p>
+<p>本节深入分析现有算法的注意力行为，并详细推导本文的核心算法——<strong>LegoLink</strong>。</p>
+<h3 id="41-analysis-of-existing-algorithms-现有算法分析">4.1. Analysis of Existing Algorithms (现有算法分析)<a hidden class="anchor" aria-hidden="true" href="#41-analysis-of-existing-algorithms-现有算法分析">#</a></h3>
+<p>通过可视化 Naive、FR 和 CacheBlend 的 Attention Map（Figure 4 右下角），作者可以得出关键的物理直觉：</p>
+<ol>
+<li><strong>Naive 算法的“注意力下沉”现象：</strong> 在 Naive 算法的 Attention Map 中，可以清晰地看到注意力分数高度集中在<strong>每个数据块的最初几个 token 上</strong>（表现为 x 轴上的 4 条亮线）。这是因为在“编译”阶段，每个 chunk 都是独立处理的，它们的位置 ID 都是从 0 开始。在 LLM 机制中，句首位置天然带有吸引注意力的属性（即 Attention Sink 现象）。当这些 chunk 被生硬拼接后，系统里突然出现了多个“假句首”，它们像黑洞一样吸走了大量的注意力权重，导致模型无法关注到真正的答案（例如位于 Chunk 1 尾部的 &ldquo;Chrysan Company&rdquo;）。</li>
+<li><strong>FR 算法的修复机制：</strong> FR 因为进行了全局重计算，每个 token 都获得了在完整 prompt 下的绝对正确的位置 ID。原先各个 chunk 首部的 token 释放了被它们错误霸占的注意力，让注意力流向了相关位置。然而，它们依然保留了相对较强的注意力分数，部分原因是它们往往属于特殊的句首 Token（如 Llama 模型中的 <code>&lt;s&gt;</code>）。</li>
+<li><strong>CacheBlend 算法的偏好：</strong> CacheBlend 的 Attention Map 试图逼近 FR。通过对它动态选出的 15% token 进行分析，作者发现<strong>被选中的往往正是各个 chunk 初始位置的 token</strong>。这进一步印证了：想要纠正注意力偏差，核心就在于处理好这些“首部 token”。</li>
+</ol>
+<h3 id="42-the-legolink-algorithm-legolink-算法详述">4.2. The LegoLink Algorithm (LegoLink 算法详述)<a hidden class="anchor" aria-hidden="true" href="#42-the-legolink-algorithm-legolink-算法详述">#</a></h3>
+<p>基于上述深度分析，作者提出了 <strong>LegoLink 算法</strong>。
+<strong>核心思想：</strong> 既然注意力混乱的罪魁祸首是“每个 chunk 头部的 token 被误认为句首”，那么作者只需要<strong>强制重新计算每个 chunk 前面极少量（$k$ 个）的 token</strong>（第一个 chunk 除外，因为它的句首确实是真正的句首）。通过重计算这 $k$ 个 token，它们在网络中被赋予了正确的绝对位置 ID，从而“认清”了自己不再是句首的事实，主动放弃“注意力陷阱”的特权，将注意力重新导向正确的上下文。</p>
+<p>这就好比拼接乐高积木，作者只需要打磨接口处（每个 block 头部极小的一部分），就能让整个结构浑然一体。在实验中，$k$ 通常只需设置为 $\le 32$。</p>
+<p><strong>LegoLink 极其详尽的数学推导与执行步骤：</strong></p>
+<p>假设总 Prompt 长度为 $N$ 个 token。作者采用<strong>静态稀疏性</strong>策略，提前选出了 $k&rsquo;$ 个需要重计算的 token（$k&rsquo;$ = 每个 chunk 取前 $k$ 个 + 用户最后输入的 Query token）。不需要重计算的缓存 token 数量为 $N - k&rsquo;$。</p>
+<ol>
+<li><strong>获取词嵌入 (Embedding)：</strong>
+首先，获取这 $k&rsquo;$ 个被选中 token 的 Embedding 矩阵 $E$。矩阵 $E$ 的形状 (shape) 为 $(k&rsquo;, d)$，其中 $d$ 为模型的隐藏层维度 (hidden size)。</li>
+<li><strong>计算选中 Token 的 Q、K、V：</strong>
+在模型的第 $i$ 层，仅为这 $k&rsquo;$ 个 token 计算全新的 Query、Key 和 Value 矩阵：
+$$Q = E W_Q, \quad K = E W_K, \quad V = E W_V$$
+其中 $W_Q, W_K, W_V$ 为该层的模型权重矩阵，形状均为 $(d, d)$。得到的 $Q, K, V$ 矩阵形状均为 $(k&rsquo;, d)$。</li>
+<li><strong>展开 K 和 V 矩阵 (Expand K and V)：</strong>
+接下来，将计算得到的 $k&rsquo;$ 个 token 的 $K, V$ 与缓存在 KVCache 中的那 $N - k&rsquo;$ 个未选中 token 的 $KV$ 向量进行融合拼装。按照它们在句子中实际的绝对位置，构建出完整展开的 $K_{exp}$ 和 $V_{exp}$。
+此时，$K_{exp}$ 和 $V_{exp}$ 包含了整个上下文 ($N$ 个 token) 的信息，它们的形状均为 $(N, d)$。</li>
+<li><strong>计算注意力矩阵 A (Attention Matrix Computation)：</strong>
+让 $k&rsquo;$ 个重计算的 Query 关注包含所有 $N$ 个 token 的 $K_{exp}$：
+$$A = \text{softmax}(Q \cdot K_{exp}^T \cdot \text{MASK})$$
+<ul>
+<li>$Q$ 的形状：$(k&rsquo;, d)$</li>
+<li>$K_{exp}^T$ 的形状：$(d, N)$</li>
+<li>矩阵乘法 $Q \cdot K_{exp}^T$ 的结果形状：$(k&rsquo;, N)$</li>
+<li>$\text{MASK}$ 是因果掩码，确保这 $k&rsquo;$ 个 token 只能关注到在它们自身位置之前的 token。经过 Softmax 之后，作者得到了最终的注意力权重矩阵 $A$，形状为 $(k&rsquo;, N)$。</li>
+</ul>
+</li>
+<li><strong>计算最终输出 O (Output Computation)：</strong>
+将注意力矩阵 $A$ 与完整的 $V_{exp}$ 相乘：
+$$O_{temp} = A \cdot V_{exp}$$
+<ul>
+<li>$A$ 的形状：$(k&rsquo;, N)$</li>
+<li>$V_{exp}$ 的形状：$(N, d)$</li>
+<li>结果形状：$(k&rsquo;, d)$
+最后再乘以输出权重矩阵 $W_O$ (形状为 $(d, d)$) 得到本层的最终输出（也就是下一层的输入）：
+$$O = O_{temp} W_O$$
+结果 $O$ 的形状依然是 $(k&rsquo;, d)$。可以看到，整个运算流只涉及这 $k&rsquo;$ 个 token 的传递。</li>
+</ul>
+</li>
+</ol>
+<p><strong>LegoLink 的两个巨大优势（为何远胜 CacheBlend）：</strong></p>
+<ol>
+<li><strong>彻底打破复杂度瓶颈：</strong> 从上述数学推导可以看出，矩阵乘法 $Q \cdot K_{exp}^T$ 的复杂度是 $O(k&rsquo; \cdot d \cdot N)$。因为 $k&rsquo;$ 是由 chunk 的数量和 Query 长度决定的，与总长度 $N$ 相比极小（$k \ll N$），且 $d$ 为常数，因此<strong>重计算的时间复杂度从原先的 $O(N^2)$ 被断崖式地降低到了 $O(k&rsquo;N) \sim O(N)$</strong>。如第 5 节所述，在某些极端友好的情况下，$k$ 甚至可以为 0。</li>
+<li><strong>零运行时决策开销 (静态注意力稀疏性)：</strong> 相比于 CacheBlend 必须要在第一层算完一遍 $O(N^2)$ 还要做 Attention 差异排序的动态策略，LegoLink 采用的是<strong>静态策略</strong>。也就是在 GPU 开动前，系统就已经硬性规定好了只算每个 chunk 的前 $k$ 个 token。这彻底消灭了动态搜索的运行时开销。</li>
+</ol>
+<hr>
+<h2 id="5-evaluation-系统评估">5. Evaluation (系统评估)<a hidden class="anchor" aria-hidden="true" href="#5-evaluation-系统评估">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure7.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure8.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/EPIC-ICML'25/figure9.png"></p>
+<p><em>(本部分结合论文核心主旨、引言提到的定量数据以及提供的图片线索进行极度详尽的分析。)</em></p>
+<h3 id="51-experiment-setup-实验设置">5.1 Experiment Setup (实验设置)<a hidden class="anchor" aria-hidden="true" href="#51-experiment-setup-实验设置">#</a></h3>
+<p>为全面评估 EPIC 的性能，实验基于业界主流的开源推理引擎 <strong>vLLM</strong> (Kwon et al., 2023) 进行系统级实现。对比基线包括原生的 Fully Recompute (FR)、不进行重计算的 Naive 方法，以及 SOTA 基线 CacheBlend (Yao et al., 2025)。实验覆盖了三种模型架构，它们各自具有不同的训练配方 (diverse training recipes)，从而确保了 LegoLink 对注意力下沉现象处理的普适性验证。</p>
+<h3 id="52-workloads-工作负载">5.2 Workloads (工作负载)<a hidden class="anchor" aria-hidden="true" href="#52-workloads-工作负载">#</a></h3>
+<p>实验选取了六种具有不同特征的复杂 NLP 任务（包括长文本问答、少样本学习、RAG 检索增强生成等）。在这些任务中，通常包含大量不变的“背景/参考知识”作为 immutable chunks，以及变动的用户 Query 作为 mutable tokens。这种组合能够完美映射本文所定义的 PIC 两步走框架。</p>
+<h3 id="53-accuracy-latency-trade-off-of-legolink-legolink-在准确率与延迟间的权衡">5.3 Accuracy-Latency Trade-off of LegoLink (LegoLink 在准确率与延迟间的权衡)<a hidden class="anchor" aria-hidden="true" href="#53-accuracy-latency-trade-off-of-legolink-legolink-在准确率与延迟间的权衡">#</a></h3>
+<p>如 <strong>Figure 7 &amp; 8 (隐含指代模型性能曲线)</strong> 分析所示，LegoLink 通过调节参数 $k$（每个 chunk 头部的重计算 token 数量），提供了卓越的精度与延迟权衡方案。</p>
+<ul>
+<li><strong>极小的准确度损失：</strong> 在服务单条请求的基准测试中，相较于 CacheBlend，EPIC 的 LegoLink 将准确率损失严格控制在 <strong>7% 以内</strong>。实验证明，当重计算长度 $k \le 32$ 时，已经足以让这部分 token 重新学习绝对位置信息，破除“注意力陷阱”，达到与全局 $N^2$ 重计算近似的模型表现。在部分任务中，$k$ 的需求极低甚至可能趋近于零 (k=0)。</li>
+<li><strong>极致的首字延迟 (TTFT) 下降：</strong> 在保持高准确度的同时，因其 $O(N)$ 的静态稀疏重计算特征，EPIC 处理单个请求的 TTFT 相比 CacheBlend 实现了高达 <strong>3倍 (3$\times$) 的缩短</strong>（见 Figure 1 引言数据）。</li>
+</ul>
+<h3 id="54-algorithm-analysis-算法深度分析">5.4 Algorithm Analysis (算法深度分析)<a hidden class="anchor" aria-hidden="true" href="#54-algorithm-analysis-算法深度分析">#</a></h3>
+<p>LegoLink 完胜对手的核心在于其对计算复杂度和运行时开销的革命性削减：</p>
+<ul>
+<li><strong>消除动态计算开销：</strong> CacheBlend 必须在模型第一层进行全量的 $O(N^2)$ 计算来比较 Attention Map 获取动态稀疏性，这部分的运行时开销 (runtime overhead) 高达 TTFT 的 <strong>16.3% 至 63.56%</strong>（见 Figure 10 数据关联）。LegoLink 利用先验知识，采用静态规则直接锁定需要计算的 token，将这部分开销直接归零。</li>
+<li><strong>将复杂度降为 $O(N)$：</strong> 随着 Context 变得更长（如数十 K tokens），$O(N^2)$ 的重计算是不可接受的，而 LegoLink 将计算量被锁死在 $O(kN)$，使得系统能够从容应对超长文本的缓存链接任务。</li>
+</ul>
+<h3 id="55-multi-request-serving-and-throughput-多并发请求与吞吐量评估">5.5 Multi-Request Serving and Throughput (多并发请求与吞吐量评估)<a hidden class="anchor" aria-hidden="true" href="#55-multi-request-serving-and-throughput-多并发请求与吞吐量评估">#</a></h3>
+<p>在真实的 Serving 场景中，系统往往需要承受变动速率的并发请求。</p>
+<ul>
+<li>实验验证，在应对不同 QPS (Queries Per Second) 的变动速率多请求负载下，EPIC 的端到端性能提升极其惊人。</li>
+<li>由于极大地降低了链接阶段的计算瓶颈，EPIC 实现了相较于现有基于前缀/动态 PIC 缓存系统高达 <strong>8倍 (8$\times$) 的 TTFT 降低</strong>。</li>
+<li>同时，因为节省出大量的 GPU 计算资源和显存带宽，EPIC 将系统的<strong>整体吞吐量 (Throughput) 拔高了整整 7倍 (7$\times$)</strong>。</li>
+</ul>
+<h3 id="56-memory-footprint-and-oom-avoidance-显存占用与-oom-避免">5.6 Memory Footprint and OOM Avoidance (显存占用与 OOM 避免)<a hidden class="anchor" aria-hidden="true" href="#56-memory-footprint-and-oom-avoidance-显存占用与-oom-避免">#</a></h3>
+<p>本节呼应 <strong>Figure 9</strong> 所展示的现象。在长文本 RAG 或复杂文档分析中，$N$ 极大。</p>
+<ul>
+<li><strong>CacheBlend 的崩溃点：</strong> 即便 CacheBlend 仅选取 15% 的 token，其本质依然是 $O(15% N^2)$。当 Prompt 极长时，注意力计算所需的显存（尤其是第一层全量计算的 KV 张量和 Attention 矩阵）呈二次方爆炸，极易导致系统触发 Out-of-Memory (OOM) 崩溃（参考 Figure 9 的红线/断点）。</li>
+<li><strong>EPIC 的稳定性：</strong> LegoLink 将重计算所需分配的内存控制在 $O(kN)$，实现了内存占用的线性增长。这使得 EPIC 在处理现有硬件下无法容纳的超长并发请求时依然保持高度稳定。</li>
+</ul>
+<h3 id="57-ablation-studies-消融实验">5.7 Ablation Studies (消融实验)<a hidden class="anchor" aria-hidden="true" href="#57-ablation-studies-消融实验">#</a></h3>
+<p>实验进一步对 chunk size（不可变块的大小）和 chunk 数量进行了消融分析。结果证明，无论不可变模块被切割得多么细碎，LegoLink 针对块头部 $k$ 个 token 打击“注意力下沉”的策略始终有效。这也证明了显式缓存管理 (Explicit caching APIs) 赋予用户的细粒度 RAG 块管理权，在 EPIC 架构下不会带来由于碎片化拼接导致的精度暴跌。</p>
+<hr>
+<h2 id="6-conclusion-结论">6. Conclusion (结论)<a hidden class="anchor" aria-hidden="true" href="#6-conclusion-结论">#</a></h2>
+<p>在本文中，作者对位置无关缓存 (Positional Independent-Cache, PIC) 框架进行了形式化的定义。在这一框架内，作者提出了 <strong>EPIC 系统</strong>，该系统集成了 <strong>LegoLink 算法</strong>，旨在解决现有方法中存在的核心局限性。</p>
+<p>通过利用静态的注意力稀疏性 (static attention sparsity)，LegoLink 在链接阶段 (link step) 显著降低了重计算的复杂度（从 $O(N^2)$ 降至 $O(N)$），同时完美地维持了模型的输出准确率。跨越 6 个数据集和 3 种主流 LLM 架构的广泛评估表明，与现有系统相比，EPIC 在首字延迟 (TTFT) 和系统吞吐量上取得了巨大的突破（高达 8倍的延迟降低和 7倍的吞吐量提升），同时保持着几乎为零的极小准确率损失。EPIC 为未来大模型在复杂、长上下文场景下的高效落地指明了全新的方向。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/position-independent-caching/">Position-Independent Caching</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
