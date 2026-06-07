@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26 | JJ&#39;s Blog</title>
+<meta name="keywords" content="Context Caching, System, Paper Note">
+<meta name="description" content="
+Conference： NSDI&#39;26
+Abstract (摘要)
+在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在单一模型的不同输入之间实现前缀 KV Cache 的重用，但如何让一个模型重用另一个不同模型的前缀 KV Cache，目前仍是一个未解的开放性问题。
+本文提出了 DroidSpeak，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 $4\times$ 的吞吐量提升和约 $3.1\times$ 更快的 Prefill（首字延迟 TTFT 提升），而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。
+
+1. Introduction (引言)
+
+当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行同一个 LLM 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于不同的 LLMs，还有待研究。
+新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script type="text/javascript"
+        async
+        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+MathJax.Hub.Config({
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    displayMath: [['$$','$$'], ['\[\[','\]\]']],
+    processEscapes: true,
+    processEnvironments: true,
+    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
+    TeX: { equationNumbers: { autoNumber: "AMS" },
+         extensions: ["AMSmath.js", "AMSsymbols.js"] }
+  }
+});
+
+MathJax.Hub.Queue(function() {
+    
+    
+    
+    var all = MathJax.Hub.getAllJax(), i;
+    for(i = 0; i < all.length; i += 1) {
+        all[i].SourceElement().parentNode.className += ' has-jax';
+    }
+});
+</script>
+
+<style>
+code.has-jax {
+    font: inherit;
+    font-size: 100%;
+    background: inherit;
+    border: inherit;
+    color: #515151;
+}
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26">
+  <meta property="og:description" content="
+Conference： NSDI&#39;26
+Abstract (摘要) 在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在单一模型的不同输入之间实现前缀 KV Cache 的重用，但如何让一个模型重用另一个不同模型的前缀 KV Cache，目前仍是一个未解的开放性问题。
+本文提出了 DroidSpeak，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 $4\times$ 的吞吐量提升和约 $3.1\times$ 更快的 Prefill（首字延迟 TTFT 提升），而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。
+1. Introduction (引言) 当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行同一个 LLM 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于不同的 LLMs，还有待研究。
+新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-06-07T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-06-07T00:00:00+00:00">
+    <meta property="article:tag" content="Context Caching">
+    <meta property="article:tag" content="System">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26">
+<meta name="twitter:description" content="
+Conference： NSDI&#39;26
+Abstract (摘要)
+在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在单一模型的不同输入之间实现前缀 KV Cache 的重用，但如何让一个模型重用另一个不同模型的前缀 KV Cache，目前仍是一个未解的开放性问题。
+本文提出了 DroidSpeak，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 $4\times$ 的吞吐量提升和约 $3.1\times$ 更快的 Prefill（首字延迟 TTFT 提升），而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。
+
+1. Introduction (引言)
+
+当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行同一个 LLM 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于不同的 LLMs，还有待研究。
+新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI'26",
+      "item": "https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI'26",
+  "name": "📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI\u002726",
+  "description": "\nConference： NSDI'26\nAbstract (摘要) 在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在单一模型的不同输入之间实现前缀 KV Cache 的重用，但如何让一个模型重用另一个不同模型的前缀 KV Cache，目前仍是一个未解的开放性问题。\n本文提出了 DroidSpeak，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 $4\\times$ 的吞吐量提升和约 $3.1\\times$ 更快的 Prefill（首字延迟 TTFT 提升），而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。\n1. Introduction (引言) 当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行同一个 LLM 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于不同的 LLMs，还有待研究。\n新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：\n",
+  "keywords": [
+    "Context Caching", "System", "Paper Note"
+  ],
+  "articleBody": "\nConference： NSDI'26\nAbstract (摘要) 在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在单一模型的不同输入之间实现前缀 KV Cache 的重用，但如何让一个模型重用另一个不同模型的前缀 KV Cache，目前仍是一个未解的开放性问题。\n本文提出了 DroidSpeak，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 $4\\times$ 的吞吐量提升和约 $3.1\\times$ 更快的 Prefill（首字延迟 TTFT 提升），而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。\n1. Introduction (引言) 当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行同一个 LLM 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于不同的 LLMs，还有待研究。\n新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：\n多智能体系统（Multi-agent systems）：使用不同的微调模型作为智能体（Agents）来完成协作任务。例如图 1A 中，当编程智能体（Coding Agent）与验证智能体（Validation Agent）对话时，前者的对话历史会被附加到后者的输入中以保证对话连贯性。 多 LoRA 或多微调模型服务（Serving multi-LoRA or multiple fine-tuned models）：例如随着时间推移用新数据不断更新的模型，或并发提供服务的多个 LoRA 适配器（见图 1B）。聊天机器人应用中更新的模型可能会参考旧版本模型处理过的同一段对话历史。 个性化助手系统（Personalized assistant systems）：模型根据用户的编程或写作偏好为每个用户（或用户类型）进行专门微调。在这个场景中（图 1C），同一篇新闻（即查询前缀）可能被用来回答不同用户的查询。 在所有这些场景中，前缀共享（Prefix Sharing）非常普遍。基于上述观察，作者提出一个核心问题：作者能否共享由一个 LLM 在给定上下文上产生的中间状态（即 KV Cache），以加速另一个不同 LLM 的 Prefill（预填充阶段）？\n本文在“两个 LLM 具有不同权重但相同架构”的假设下寻求答案。作者的核心假设是：既然这些模型都是从同一个基础模型微调而来的，它们对相同输入上下文的理解应该是相似的，因此应该有一种方法可以重计算（re-compute）一小部分并重用（re-use）大部分的 KV Cache。挑战在于验证这一假设，并弄清楚如何选择重计算和重用的部分，而不引入过多的延迟开销或质量下降。\n通过深入的实证研究（第 3 2 节），作者发现只有一小部分（通常在 10% 左右）的层对两个模型之间的 KV Cache 差异敏感。作者将这些层称为关键层（Critical Layers）。因此，DroidSpeak 提出了对每一对 LLM，选择性地仅重计算这些关键层的 KV Cache。DroidSpeak 的核心创新包括：\n离线分析（Offline Profiling）：在保留的训练集上识别关键层组，在保证精度的前提下重用尽可能多的 KV Cache。 智能 KV Cache 加载（Smart KV cache loading）：将 KV Cache 的网络加载与关键层的重计算进行流水线并行，尽可能隐藏来自远程节点的加载延迟。 2. Background (背景) 2.1 Prefill interference (预填充干扰与瓶颈) 在 Transformer 架构中，LLM 处理输入并生成输出分为两个截然不同的阶段：Prefill（预填充）阶段和 Decode（解码）阶段。在 Prefill 阶段，LLM 需要处理整个输入上下文，生成所有层上的 Embeddings 和 KV Cache；在 Decode 阶段，模型利用 Prefill 阶段生成的 KV Cache 逐个自回归地生成 Token。\n给定 Prefill 和 Decode 阶段的独特性质，冗长的 Prefill 阶段会显著降低推理系统的 Goodput（在一定的延迟 SLO 内每秒处理的查询数量）。这种下降是因为 TTFT（Time To First Token，首字延迟）随着输入长度呈超线性增长，而且解码阶段必须等预填充阶段完成后才能开始。 因此，长输入往往会让 Prefill 延迟成为端到端的瓶颈。例如，如图 2(b) 所示，在单个 A100 GPU 上运行 Llama-3-8B（处理 5K 和 20K token 的合成输入），如果设定 3 秒的延迟 SLO，仅仅将输入尺寸增加 $4\\times$，系统的 Goodput 就会大幅下降多达 $32\\times$。这凸显了降低 Prefill 延迟（如通过共享 KV Cache）的迫切性。\n3. Reusing KV cache across LLMs (跨 LLM 重用 KV Cache 实证分析) 为了消除重复计算的开销，一个最简单的思路是直接重用另一个 LLM 产生的 KV Cache。例如在使用 Llama-3.1-8B-Instruct 时，重用 40K token 长度的 KV Cache 可以将 Prefill 延迟从 4 秒骤降到 0.08 秒。这自然引出了一个关键问题：直接重用另一个 LLM 的 KV Cache 会对生成质量产生什么影响？\n3.1 Building the benchmarks and datasets (构建基准测试) 为了进行研究，作者构建了一个基准测试集。在这里定义两个核心概念：\nSender Model（发件人模型）：产生上下文 KV Cache 的模型。 Receiver Model（收件人模型）：重用（且进行有限重计算）发件人上下文 KV Cache 的模型。 作者选取的模型对（Model Pairs）必须共享同一个底层架构（同源微调），且收件人模型在特定任务上的表现（Accuracy）优于发件人模型。这是一个极具挑战性的场景：因为发件人模型的准确率低于收件人模型，要想实现高质量生成，就必须适当地“刷新（Refreshing）”发件人传来的 KV Cache。 3.2 Empirical insights of KV cache (关于 KV Cache 的实证洞察) 通过实证研究，作者得出了三个至关重要的洞见：\nInsight 1: 简单粗暴地重用（Naive reusing）整个 KV Cache 会导致巨大的准确率损失。 如果作者不做任何修改，直接让接收者模型在 Decode 阶段使用发送者模型的全量 KV Cache（完全跳过 Prefill 阶段）。作者在图 3 中进行了 A/B/C 三组对照测试：a) 仅收件人模型，b) 重用发件人缓存的收件人模型，c) 仅发件人模型。 结果显示：虽然情况(b)比单独的发件人(c)要好一点，但相比于真正的收件人能力(a)，精度遭遇了断崖式下跌（例如在 HotpotQA 数据集上，大多数模型对损失了超过 50% 的精度）。这证明必须对 KV Cache 进行刷新/重计算。\nInsight 2: 只有一小部分（小比例）的层对 KV Cache 重用（的误差）非常敏感。 并不是所有的层都需要重计算。图 4 展示了如果作者每次只拿发件人其中一层的 KV Cache 替换进收件人模型中（其他层收件人自己算），对质量的影响。 结果表明，对于大多数模型对，只有极少数层的 KV Cache 偏差会导致 F1 分数显著下降（图中标红色的条柱）。作者称这些层为**“关键层（Critical layers）”**。在所有测试的模型对中，平均只有 11% 的层是关键层。\nInsight 3: 不同输入之间的 KV Cache 敏感模式高度相似（仅在关键层有显著波动）。 图 5 的小提琴图展示了不同 Prompt 输入下的敏感度差异。结果揭示：关键层的位置在不同的输入文本下具有高度一致性（波动主要集中在已经确认的关键层上，而非关键层的变化极小）。 这个洞见非常关键，它意味着作者完全可以通过在离线阶段用一些样本输入进行 Profiling（性能分析测试），来提前确定应该重计算哪些层，然后将这个配置应用到线上各种未知的真实请求中。\n4. DroidSpeak Design (DroidSpeak 系统设计) 基于上述发现，DroidSpeak 的核心目标是：如何决定重计算哪些层，以便在尽可能降低延迟的同时，保持质量损失最小？ 这里面临着严峻的系统级挑战。\n4.1 Challenges with Selective KV Cache Reuse (选择性重用 KV Cache 的挑战) 如果只是机械地将分散在模型各处的关键层挑出来进行重计算，在系统实现上是极其低效的。\n挑战一：效率挑战 (The efficiency challenge) —— 非连续的重计算极其低效。 这里必须理解大模型推理的一个底层机制。在 Prefill 阶段，如果某一层作者选择“复用（Reuse）”别人的 KV Cache，为了极致加速，系统实际上跳过了对这一层长文本上下文的前向传播计算，这一层的输出只包含用于预测下一个新 Token 的单个特征，不再包含长文本的中间状态（即 E cache，Embedding cache / Hidden states）。 但是，如果在下一层作者决定“重计算（Recompute）”，重计算是需要完整的长文本上下文作为起点的。为了让这一层能够启动全量计算，作者必须从发送方模型（Sender model）那里获取对应层的 E cache（即图 6 中的 Transition layer，过渡层）。 问题在于，E cache 非常庞大（特别是使用 GQA 优化后，E cache 的体积可达单层 KV cache 的 2 到 4 倍）。如果关键层是分散的，作者就需要频繁地跨节点传输庞大的 E cache，这带来的网络延迟将远远超过本地重计算节省的时间。\n挑战二：精度挑战 (The accuracy challenge) —— 过渡点会导致误差传播。 每次从 Sender 加载 E cache，实际上都在引入一次细微的特征偏差。如果关键层不连续（如图 4 所示，可能是第 16-18，20，25-27 层），作者就需要多次加载 E cache（第 16、20、25 层）。每次加载 E cache 都会引入误差并向后传播，多次断层最终会导致严重的输出误差。 如图 7(a) 所示，如果作者为了避免多次误差截断，干脆将关键层及其包含的非关键层打包成一个连续的重计算组（Contiguous group，比如第 16 到 27 层整体重计算），这样只需要加载一次 E cache，输出误差会大幅降低。\n4.2 Profiling for re-computation configuration (重计算配置的离线分析) 基于 Insight 3，由于关键层对输入的敏感性变化不大，DroidSpeak 设计了**离线分析（Offline Profiling）**机制来寻找最优的重计算策略。\n具体做法是：对于给定的模型对，使用相关的训练数据集进行离线测试，评估不同数量/不同位置的“连续层组合”被重计算后的生成质量。 图 7(b) 展示了离线 Profiling 的散点图。系统会寻找一条帕累托前沿（Pareto frontier），即在特定的重计算层数下能达到的最高 F1 分数。例如，图中选取了 11 层连续重计算的配置作为最佳折中点，因为它将精度损失控制在了原始精度的 5% 以内（5% 是用户可配置的超参数），同时重计算层数最小。\n开销控制：单层逐一 Profiling 复杂度为 $O(l^2)$，但在实际中可以通过按组（例如每 2 层一组）进行 Profiling 来大幅降低分析时间，且不影响最终的策略准确性。 4.3 DroidSpeak runtime design (DroidSpeak 运行时设计) 如图 8 所示，DroidSpeak 由离线阶段和在线运行阶段组成。在线上阶段，系统会根据延迟 SLO 和当前集群负载动态调整选用的帕累托最优配置点。在线阶段最大的亮点在于它对 KV Cache 传输的智能流水线设计。\nSmart KV Cache Loading (智能 KV Cache 跨节点流水线加载)： 考虑到 GPU 可能分布在不同的物理节点上，网络带宽是瓶颈。如果不精细设计，跨网络拉取 E cache 和重用的 KV cache 会造成巨大延迟。\n以图 9 为例，假设收到一个需要处理的请求，每传一层或算一层的耗时记为 1 单位。\n(a) Naive 策略：把过渡层的 E cache 和所有后续重用的 KV cache 全部通过网络发送完毕后，再开始计算。这会导致串行等待，耗时极长（TTFT 为 47）。 (b) 仅传复用层：不传要重计算的层，稍有改进，但仍然没有重叠通信与计算（TTFT 为 30）。 (c) DroidSpeak 的 Pipeline 策略（最优化）：这也是系统工程层面的一大核心贡献。DroidSpeak 解除（Decoupling）了传输和计算的硬依赖。它优先通过网络把起步所需的那一层 E cache 传过来。E cache 一到，GPU 立刻开始那几层关键层的重计算（图中 L4-L10 的橘色块）。于此同时，系统在后台使用网络带宽并行异步传输那些不需要重算的复用层 KV Cache（图中的 L1-L3 绿色块）。 通过这种流水线设计，计算和网络加载被完美隐藏重叠，使总首字延迟（TTFT）降低到 17，比基线带来了近 $2\\times$ 的提升。 4.4 Implementation (实现细节) DroidSpeak 基于 PyTorch v2.0、CUDA 12.0 和 LMCache 实现（约 3K 行代码），集成到了 vLLM 引擎中。核心接口包括：\nstore: 计算 KV cache 后基于 context hash 将其存入 GPU key-value 存储。 fetch: 通过 torch.distributed 从远端拉取数据。 partial_prefill: 执行部分重计算，根据配置调用 fetch_kv（获取重用层）和 fetch_e（获取过渡层的 E cache）。所有的网络传输都被分配在一个与 PyTorch 默认计算流不同的专属 CUDA Stream 上，从而实现了跨节点网络传输与本地 GPU 重计算的完美并行（Overlap）和延迟隐藏。 5. Evaluation (评估) 5.1 Experiment Setup (实验设置) 硬件设置：2 台配备 8x80GB A100 GPU 的虚拟机，节点间通过 200 Gbps NVIDIA Mellanox HDR InfiniBand 连接。 模型（Models）：测试了 8 对基于同源微调的模型（见 Table 1），涵盖了从 7B/8B 到 70B 的规模（如 Mistral 家族、Llama-3/3.1 家族、Phi-3.5，70B 模型使用了 AWQ 4-bit 量化）。 数据集（Datasets）：涵盖问答（QA）、长文本摘要、代码补全 3 种任务共 6 个数据集。使用 HotpotQA 的 50 个样本离线寻找最优层组配置，再将其应用到其他测试集。 Baselines (对比基线)： Full prefill：标准的 vLLM 全量计算，代表最慢但精度最高的上限。 Full KV cache reuse：完全不计算，全盘复用发件人的 KV cache。 CacheBlend：近期提出的混合缓存方法，其基于第一层差异来决定重算哪些 Token（而非哪些 Layer）。 5.2 Lower Latency with Preserved Accuracy (降低延迟的同时保持准确率) 在图 10 中，作者展示了 Prefill 延迟与质量（F1分数等）的权衡。\n相比于 Full prefill 基线，DroidSpeak 在保持生成质量基本无损（极度贴近上限）的前提下，将 Prefill 延迟缩减了 $1.7\\times$ - $3.1\\times$（平均提速 $2.1\\times$）。 相比于 Full KV reuse（盲目复用），虽然 DroidSpeak 因为部分重计算增加了一点点延迟，但彻底拯救了因为盲目复用而崩溃的生成质量。 相比于 CacheBlend，DroidSpeak 的延迟-质量折中更优：在相似的延迟下，DroidSpeak 生成质量比 CacheBlend 高出 5%–33%（平均 16%）。原因在于 DroidSpeak 捕捉到了“层级敏感性（layer-wise sensitivity）”本质并选择关键层，而 CacheBlend 仅根据第一层的偏差来挑选 Token 是不准确的。 5.3 Inference Throughput and Latency Improvement (推理吞吐量与系统延迟改善) 为了在真实在线系统中评估 DroidSpeak，作者在 16 张 A100 组成的 Kubernetes 集群上模拟了泊松分布的到达请求（图 11）。\n首字延迟（TTFT）：在 Full prefill 基线因为算力瓶颈导致排队延迟激增（曲线拐点）时，DroidSpeak 仍能游刃有余地保持极低的 TTFT，支持更高的 QPS（每秒请求数）。 TBT与E2E（字间延迟与端到端延迟）：虽然 DroidSpeak 只优化了 Prefill 阶段，但由于其极大减少了排队和资源占用，降低了整体系统的干扰，从而带来二阶效应，将后续的解码 TBT 和总 E2E 延迟也大幅降低。 吞吐量（Throughput）：总体而言，系统能够支持 $2\\times$ 到 $4\\times$ 的更高吞吐量极限。 5.4 Robustness across datasets \u0026 Agentic workflow (跨数据集鲁棒性与智能体工作流) 配置泛化能力（图 13）：在一个数据集（如 HotpotQA 训练集）上得到的帕累托前沿配置曲线，应用到完全不同的数据集（如 multifieldqa 和 2wikimqa）上时，表现出高度一致的 F1 表现。证明 DroidSpeak 离线提取的配置对数据漂移具有很强的鲁棒性。 智能体系统落地案例（图 12）：作者使用 MetaGPT 搭建了包含“Coder（编程智能体，evolcode模型）”和“Tester（测试智能体，tool-8b模型）”的真实协作系统。在这种高强度上下文共享的场景中，DroidSpeak 将 TTFT 瓶颈降低了 $2.7\\times$，显著缩短了任务完成的端到端时间，同时保持了代码通过率（pass@1 质量）不变。 5.5 Mixture-of-Experts \u0026 Network Impact (MoE模型支持与带宽影响) MoE 模型适用性（图 14）：DroidSpeak 在 Mixtral-8x7B 这种混合专家架构上同样适用。因为 MoE 路由的是线性层的专家，而 KV Cache 处于 Attention 模块，两者是正交的，DroidSpeak 依然能大幅降低 MoE 的 prefill 延迟。 网络带宽分析（图 15）：在不同的节点间带宽限制下，DroidSpeak 的**流水线机制（Pipelining，红色虚线）**始终优于传统串行传输。尤其在带宽较低的场景中，隐藏网络延迟的收益最为明显。 5.6 Profiling Overhead (离线分析开销) 在 32 层模型上，逐层穷举需要耗时 3.6 小时。如果将 2 个层或者 3 个层合并为一组（Group Size=2/3）进行评估，可将耗时分别缩减至 1 小时和 0.375 小时，而最终维持的 F1 分数和重用收益基本没有下降（见图 16）。这意味着离线开销在实际大规模部署面前是可以忽略不计的。\n6. Limitation and Future Work (局限性与未来工作) 跨不同基础模型的共享（KV cache sharing across different foundation models）：目前 DroidSpeak 仅支持从同一个基础模型同源微调出来的模型变体之间的共享。不同基础模型之间的状态张量维度和表示空间可能完全不同，这具有极大挑战，留作未来研究。 基于带宽的动态调整（Re-computation adaptation with network bandwidth）：在 4.3 节的动态策略中只考虑了系统负载，未来可以进一步引入对实时网络带宽的感知，在带宽受限时适当增加重计算层数。 配置的数据漂移（Data drift in the re-computation configuration）：离线提取的策略在严重的数据分布偏移下可能会失效，未来可以探索定期重分析（periodic re-profiling）的机制。 多于两个模型的复用组合：目前的评估集中在“Sender-Receiver”一对一关系，若需要在一个上下文中做多个模型的排列组合最大化复用，还需要更高阶的调度优化。 7. Conclusion (结论) 在这项工作中，作者识别了在复合 AI 系统中由于多个模型处理共享上下文而带来的核心挑战——计算冗余。作者提出了 DroidSpeak 框架来实现不同微调变体模型间的 KV Cache 共享。基于“只有模型中的子集层需要重计算来维持准确率”的重大发现，作者设计了离线分析与线上流水线传输重计算并行的系统。实验结果证明，作者的解决方案对多种模型对、模型架构和数据集具有极佳的鲁棒性，能够在保持生成质量的同时大幅降低系统延迟、提升吞吐量，为未来更为复杂的 Agentic 和个性化 LLM 系统的底层基础设施指明了方向。\n",
+  "wordCount" : "837",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-06-07T00:00:00Z",
+  "dateModified": "2026-06-07T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26
+    </h1>
+    <div class="post-meta"><span title='2026-06-07 00:00:00 +0000 UTC'>June 7, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/title.png"></p>
+<p><strong>Conference：</strong> <strong>NSDI'26</strong></p>
+<h2 id="abstract-摘要">Abstract (摘要)<a hidden class="anchor" aria-hidden="true" href="#abstract-摘要">#</a></h2>
+<p>在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在<strong>单一模型</strong>的不同输入之间实现前缀 KV Cache 的重用，但如何让<strong>一个模型重用另一个不同模型的</strong>前缀 KV Cache，目前仍是一个未解的开放性问题。</p>
+<p>本文提出了 <strong>DroidSpeak</strong>，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够<strong>选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache</strong>，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 <strong>$4\times$ 的吞吐量提升</strong>和约 <strong>$3.1\times$ 更快的 Prefill（首字延迟 TTFT 提升）</strong>，而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。</p>
+<hr>
+<h2 id="1-introduction-引言">1. Introduction (引言)<a hidden class="anchor" aria-hidden="true" href="#1-introduction-引言">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure1.png"></p>
+<p>当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行<strong>同一个 LLM</strong> 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于<strong>不同的 LLMs</strong>，还有待研究。</p>
+<p>新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：</p>
+<ol>
+<li><strong>多智能体系统（Multi-agent systems）</strong>：使用不同的微调模型作为智能体（Agents）来完成协作任务。例如图 1A 中，当编程智能体（Coding Agent）与验证智能体（Validation Agent）对话时，前者的对话历史会被附加到后者的输入中以保证对话连贯性。</li>
+<li><strong>多 LoRA 或多微调模型服务（Serving multi-LoRA or multiple fine-tuned models）</strong>：例如随着时间推移用新数据不断更新的模型，或并发提供服务的多个 LoRA 适配器（见图 1B）。聊天机器人应用中更新的模型可能会参考旧版本模型处理过的同一段对话历史。</li>
+<li><strong>个性化助手系统（Personalized assistant systems）</strong>：模型根据用户的编程或写作偏好为每个用户（或用户类型）进行专门微调。在这个场景中（图 1C），同一篇新闻（即查询前缀）可能被用来回答不同用户的查询。</li>
+</ol>
+<p>在所有这些场景中，前缀共享（Prefix Sharing）非常普遍。基于上述观察，作者提出一个核心问题：<strong>作者能否共享由一个 LLM 在给定上下文上产生的中间状态（即 KV Cache），以加速另一个不同 LLM 的 Prefill（预填充阶段）？</strong></p>
+<p>本文在“两个 LLM 具有不同权重但相同架构”的假设下寻求答案。作者的核心假设是：既然这些模型都是从同一个基础模型微调而来的，它们对相同输入上下文的理解应该是相似的，因此应该有一种方法可以<strong>重计算（re-compute）一小部分并重用（re-use）大部分的 KV Cache</strong>。挑战在于验证这一假设，并弄清楚如何选择重计算和重用的部分，而不引入过多的延迟开销或质量下降。</p>
+<p>通过深入的实证研究（第 3 2 节），作者发现只有一小部分（通常在 10% 左右）的层对两个模型之间的 KV Cache 差异敏感。作者将这些层称为<strong>关键层（Critical Layers）</strong>。因此，DroidSpeak 提出了对每一对 LLM，选择性地仅重计算这些关键层的 KV Cache。DroidSpeak 的核心创新包括：</p>
+<ol>
+<li><strong>离线分析（Offline Profiling）</strong>：在保留的训练集上识别关键层组，在保证精度的前提下重用尽可能多的 KV Cache。</li>
+<li><strong>智能 KV Cache 加载（Smart KV cache loading）</strong>：将 KV Cache 的网络加载与关键层的重计算进行流水线并行，尽可能隐藏来自远程节点的加载延迟。</li>
+</ol>
+<hr>
+<h2 id="2-background-背景">2. Background (背景)<a hidden class="anchor" aria-hidden="true" href="#2-background-背景">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure2.png"></p>
+<h3 id="21-prefill-interference-预填充干扰与瓶颈">2.1 Prefill interference (预填充干扰与瓶颈)<a hidden class="anchor" aria-hidden="true" href="#21-prefill-interference-预填充干扰与瓶颈">#</a></h3>
+<p>在 Transformer 架构中，LLM 处理输入并生成输出分为两个截然不同的阶段：<strong>Prefill（预填充）阶段</strong>和 <strong>Decode（解码）阶段</strong>。在 Prefill 阶段，LLM 需要处理整个输入上下文，生成所有层上的 Embeddings 和 KV Cache；在 Decode 阶段，模型利用 Prefill 阶段生成的 KV Cache 逐个自回归地生成 Token。</p>
+<p>给定 Prefill 和 Decode 阶段的独特性质，冗长的 Prefill 阶段会显著降低推理系统的 Goodput（在一定的延迟 SLO 内每秒处理的查询数量）。这种下降是因为 <strong>TTFT（Time To First Token，首字延迟）随着输入长度呈超线性增长</strong>，而且解码阶段必须等预填充阶段完成后才能开始。
+因此，长输入往往会让 Prefill 延迟成为端到端的瓶颈。例如，如图 2(b) 所示，在单个 A100 GPU 上运行 Llama-3-8B（处理 5K 和 20K token 的合成输入），如果设定 3 秒的延迟 SLO，仅仅将输入尺寸增加 $4\times$，系统的 Goodput 就会大幅下降多达 $32\times$。这凸显了降低 Prefill 延迟（如通过共享 KV Cache）的迫切性。</p>
+<hr>
+<h2 id="3-reusing-kv-cache-across-llms-跨-llm-重用-kv-cache-实证分析">3. Reusing KV cache across LLMs (跨 LLM 重用 KV Cache 实证分析)<a hidden class="anchor" aria-hidden="true" href="#3-reusing-kv-cache-across-llms-跨-llm-重用-kv-cache-实证分析">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure3.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure4.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure5.png"></p>
+<p>为了消除重复计算的开销，一个最简单的思路是直接重用另一个 LLM 产生的 KV Cache。例如在使用 Llama-3.1-8B-Instruct 时，重用 40K token 长度的 KV Cache 可以将 Prefill 延迟从 4 秒骤降到 0.08 秒。这自然引出了一个关键问题：<strong>直接重用另一个 LLM 的 KV Cache 会对生成质量产生什么影响？</strong></p>
+<h3 id="31-building-the-benchmarks-and-datasets-构建基准测试">3.1 Building the benchmarks and datasets (构建基准测试)<a hidden class="anchor" aria-hidden="true" href="#31-building-the-benchmarks-and-datasets-构建基准测试">#</a></h3>
+<p>为了进行研究，作者构建了一个基准测试集。在这里定义两个核心概念：</p>
+<ul>
+<li><strong>Sender Model（发件人模型）</strong>：产生上下文 KV Cache 的模型。</li>
+<li><strong>Receiver Model（收件人模型）</strong>：重用（且进行有限重计算）发件人上下文 KV Cache 的模型。
+作者选取的模型对（Model Pairs）必须共享同一个底层架构（同源微调），且收件人模型在特定任务上的表现（Accuracy）优于发件人模型。这是一个极具挑战性的场景：因为发件人模型的准确率低于收件人模型，要想实现高质量生成，就必须适当地“刷新（Refreshing）”发件人传来的 KV Cache。</li>
+</ul>
+<h3 id="32-empirical-insights-of-kv-cache-关于-kv-cache-的实证洞察">3.2 Empirical insights of KV cache (关于 KV Cache 的实证洞察)<a hidden class="anchor" aria-hidden="true" href="#32-empirical-insights-of-kv-cache-关于-kv-cache-的实证洞察">#</a></h3>
+<p>通过实证研究，作者得出了三个至关重要的洞见：</p>
+<p><strong>Insight 1: 简单粗暴地重用（Naive reusing）整个 KV Cache 会导致巨大的准确率损失。</strong>
+如果作者不做任何修改，直接让接收者模型在 Decode 阶段使用发送者模型的全量 KV Cache（完全跳过 Prefill 阶段）。作者在图 3 中进行了 A/B/C 三组对照测试：a) 仅收件人模型，b) 重用发件人缓存的收件人模型，c) 仅发件人模型。
+结果显示：虽然情况(b)比单独的发件人(c)要好一点，但相比于真正的收件人能力(a)，精度遭遇了断崖式下跌（例如在 HotpotQA 数据集上，大多数模型对损失了超过 50% 的精度）。这证明<strong>必须对 KV Cache 进行刷新/重计算</strong>。</p>
+<p><strong>Insight 2: 只有一小部分（小比例）的层对 KV Cache 重用（的误差）非常敏感。</strong>
+并不是所有的层都需要重计算。图 4 展示了如果作者每次只拿发件人其中一层的 KV Cache 替换进收件人模型中（其他层收件人自己算），对质量的影响。
+结果表明，对于大多数模型对，只有极少数层的 KV Cache 偏差会导致 F1 分数显著下降（图中标红色的条柱）。作者称这些层为**“关键层（Critical layers）”**。在所有测试的模型对中，平均只有 <strong>11%</strong> 的层是关键层。</p>
+<p><strong>Insight 3: 不同输入之间的 KV Cache 敏感模式高度相似（仅在关键层有显著波动）。</strong>
+图 5 的小提琴图展示了不同 Prompt 输入下的敏感度差异。结果揭示：关键层的位置在不同的输入文本下具有高度一致性（波动主要集中在已经确认的关键层上，而非关键层的变化极小）。
+这个洞见非常关键，它意味着作者<strong>完全可以通过在离线阶段用一些样本输入进行 Profiling（性能分析测试），来提前确定应该重计算哪些层</strong>，然后将这个配置应用到线上各种未知的真实请求中。</p>
+<hr>
+<h2 id="4-droidspeak-design-droidspeak-系统设计">4. DroidSpeak Design (DroidSpeak 系统设计)<a hidden class="anchor" aria-hidden="true" href="#4-droidspeak-design-droidspeak-系统设计">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure6.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure7.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure8.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure9.png"></p>
+<p>基于上述发现，DroidSpeak 的核心目标是：<strong>如何决定重计算哪些层，以便在尽可能降低延迟的同时，保持质量损失最小？</strong> 这里面临着严峻的系统级挑战。</p>
+<h3 id="41-challenges-with-selective-kv-cache-reuse-选择性重用-kv-cache-的挑战">4.1 Challenges with Selective KV Cache Reuse (选择性重用 KV Cache 的挑战)<a hidden class="anchor" aria-hidden="true" href="#41-challenges-with-selective-kv-cache-reuse-选择性重用-kv-cache-的挑战">#</a></h3>
+<p>如果只是机械地将分散在模型各处的关键层挑出来进行重计算，在系统实现上是极其低效的。</p>
+<p><strong>挑战一：效率挑战 (The efficiency challenge) —— 非连续的重计算极其低效。</strong>
+这里必须理解大模型推理的一个底层机制。在 Prefill 阶段，如果某一层作者选择“复用（Reuse）”别人的 KV Cache，为了极致加速，系统实际上跳过了对这一层长文本上下文的前向传播计算，这一层的输出只包含用于预测下一个新 Token 的单个特征，不再包含长文本的中间状态（即 E cache，Embedding cache / Hidden states）。
+但是，如果在下一层作者决定“重计算（Recompute）”，重计算是需要完整的长文本上下文作为起点的。为了让这一层能够启动全量计算，作者必须从发送方模型（Sender model）那里获取对应层的 E cache（即图 6 中的 Transition layer，过渡层）。
+问题在于，<strong>E cache 非常庞大</strong>（特别是使用 GQA 优化后，E cache 的体积可达单层 KV cache 的 2 到 4 倍）。如果关键层是分散的，作者就需要频繁地跨节点传输庞大的 E cache，这带来的网络延迟将远远超过本地重计算节省的时间。</p>
+<p><strong>挑战二：精度挑战 (The accuracy challenge) —— 过渡点会导致误差传播。</strong>
+每次从 Sender 加载 E cache，实际上都在引入一次细微的特征偏差。如果关键层不连续（如图 4 所示，可能是第 16-18，20，25-27 层），作者就需要多次加载 E cache（第 16、20、25 层）。每次加载 E cache 都会引入误差并向后传播，多次断层最终会导致严重的输出误差。
+如<strong>图 7(a)</strong> 所示，如果作者为了避免多次误差截断，干脆<strong>将关键层及其包含的非关键层打包成一个连续的重计算组（Contiguous group，比如第 16 到 27 层整体重计算）</strong>，这样只需要加载一次 E cache，输出误差会大幅降低。</p>
+<h3 id="42-profiling-for-re-computation-configuration-重计算配置的离线分析">4.2 Profiling for re-computation configuration (重计算配置的离线分析)<a hidden class="anchor" aria-hidden="true" href="#42-profiling-for-re-computation-configuration-重计算配置的离线分析">#</a></h3>
+<p>基于 Insight 3，由于关键层对输入的敏感性变化不大，DroidSpeak 设计了**离线分析（Offline Profiling）**机制来寻找最优的重计算策略。</p>
+<p>具体做法是：对于给定的模型对，使用相关的训练数据集进行离线测试，评估不同数量/不同位置的“连续层组合”被重计算后的生成质量。
+<strong>图 7(b)</strong> 展示了离线 Profiling 的散点图。系统会寻找一条<strong>帕累托前沿（Pareto frontier）</strong>，即在特定的重计算层数下能达到的最高 F1 分数。例如，图中选取了 11 层连续重计算的配置作为最佳折中点，因为它将精度损失控制在了原始精度的 5% 以内（5% 是用户可配置的超参数），同时重计算层数最小。</p>
+<ul>
+<li><strong>开销控制</strong>：单层逐一 Profiling 复杂度为 $O(l^2)$，但在实际中可以通过按组（例如每 2 层一组）进行 Profiling 来大幅降低分析时间，且不影响最终的策略准确性。</li>
+</ul>
+<h3 id="43-droidspeak-runtime-design-droidspeak-运行时设计">4.3 DroidSpeak runtime design (DroidSpeak 运行时设计)<a hidden class="anchor" aria-hidden="true" href="#43-droidspeak-runtime-design-droidspeak-运行时设计">#</a></h3>
+<p>如图 8 所示，DroidSpeak 由离线阶段和在线运行阶段组成。在线上阶段，系统会根据延迟 SLO 和当前集群负载动态调整选用的帕累托最优配置点。在线阶段最大的亮点在于它对 KV Cache 传输的智能流水线设计。</p>
+<p><strong>Smart KV Cache Loading (智能 KV Cache 跨节点流水线加载)</strong>：
+考虑到 GPU 可能分布在不同的物理节点上，网络带宽是瓶颈。如果不精细设计，跨网络拉取 E cache 和重用的 KV cache 会造成巨大延迟。</p>
+<p>以<strong>图 9</strong> 为例，假设收到一个需要处理的请求，每传一层或算一层的耗时记为 1 单位。</p>
+<ul>
+<li>(a) <strong>Naive 策略</strong>：把过渡层的 E cache 和所有后续重用的 KV cache 全部通过网络发送完毕后，再开始计算。这会导致串行等待，耗时极长（TTFT 为 47）。</li>
+<li>(b) <strong>仅传复用层</strong>：不传要重计算的层，稍有改进，但仍然没有重叠通信与计算（TTFT 为 30）。</li>
+<li><strong>(c) DroidSpeak 的 Pipeline 策略（最优化）</strong>：这也是系统工程层面的一大核心贡献。DroidSpeak <strong>解除（Decoupling）了传输和计算的硬依赖</strong>。它优先通过网络把<strong>起步所需的那一层 E cache 传过来</strong>。E cache 一到，GPU <strong>立刻</strong>开始那几层关键层的重计算（图中 L4-L10 的橘色块）。于此同时，系统在后台使用网络带宽<strong>并行异步传输那些不需要重算的复用层 KV Cache</strong>（图中的 L1-L3 绿色块）。
+通过这种流水线设计，计算和网络加载被完美隐藏重叠，使总首字延迟（TTFT）降低到 17，比基线带来了近 $2\times$ 的提升。</li>
+</ul>
+<h3 id="44-implementation-实现细节">4.4 Implementation (实现细节)<a hidden class="anchor" aria-hidden="true" href="#44-implementation-实现细节">#</a></h3>
+<p>DroidSpeak 基于 PyTorch v2.0、CUDA 12.0 和 LMCache 实现（约 3K 行代码），集成到了 vLLM 引擎中。核心接口包括：</p>
+<ul>
+<li><code>store</code>: 计算 KV cache 后基于 context hash 将其存入 GPU key-value 存储。</li>
+<li><code>fetch</code>: 通过 <code>torch.distributed</code> 从远端拉取数据。</li>
+<li><code>partial_prefill</code>: 执行部分重计算，根据配置调用 <code>fetch_kv</code>（获取重用层）和 <code>fetch_e</code>（获取过渡层的 E cache）。所有的网络传输都被分配在一个<strong>与 PyTorch 默认计算流不同的专属 CUDA Stream 上</strong>，从而实现了跨节点网络传输与本地 GPU 重计算的完美并行（Overlap）和延迟隐藏。</li>
+</ul>
+<hr>
+<h2 id="5-evaluation-评估">5. Evaluation (评估)<a hidden class="anchor" aria-hidden="true" href="#5-evaluation-评估">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure10.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure11.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure12.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure13.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure14.png">
+<img loading="lazy" src="https://jjl357.github.io/blog/image/DroidSpeak/figure15.png"></p>
+<h3 id="51-experiment-setup-实验设置">5.1 Experiment Setup (实验设置)<a hidden class="anchor" aria-hidden="true" href="#51-experiment-setup-实验设置">#</a></h3>
+<ul>
+<li><strong>硬件设置</strong>：2 台配备 8x80GB A100 GPU 的虚拟机，节点间通过 200 Gbps NVIDIA Mellanox HDR InfiniBand 连接。</li>
+<li><strong>模型（Models）</strong>：测试了 8 对基于同源微调的模型（见 Table 1），涵盖了从 7B/8B 到 70B 的规模（如 Mistral 家族、Llama-3/3.1 家族、Phi-3.5，70B 模型使用了 AWQ 4-bit 量化）。</li>
+<li><strong>数据集（Datasets）</strong>：涵盖问答（QA）、长文本摘要、代码补全 3 种任务共 6 个数据集。使用 HotpotQA 的 50 个样本离线寻找最优层组配置，再将其应用到其他测试集。</li>
+<li><strong>Baselines (对比基线)</strong>：
+<ol>
+<li><strong>Full prefill</strong>：标准的 vLLM 全量计算，代表最慢但精度最高的上限。</li>
+<li><strong>Full KV cache reuse</strong>：完全不计算，全盘复用发件人的 KV cache。</li>
+<li><strong>CacheBlend</strong>：近期提出的混合缓存方法，其基于第一层差异来决定重算哪些 Token（而非哪些 Layer）。</li>
+</ol>
+</li>
+</ul>
+<h3 id="52-lower-latency-with-preserved-accuracy-降低延迟的同时保持准确率">5.2 Lower Latency with Preserved Accuracy (降低延迟的同时保持准确率)<a hidden class="anchor" aria-hidden="true" href="#52-lower-latency-with-preserved-accuracy-降低延迟的同时保持准确率">#</a></h3>
+<p>在<strong>图 10</strong> 中，作者展示了 Prefill 延迟与质量（F1分数等）的权衡。</p>
+<ul>
+<li>相比于 <strong>Full prefill</strong> 基线，DroidSpeak 在保持生成质量基本无损（极度贴近上限）的前提下，将 Prefill 延迟缩减了 <strong>$1.7\times$ - $3.1\times$</strong>（平均提速 $2.1\times$）。</li>
+<li>相比于 <strong>Full KV reuse</strong>（盲目复用），虽然 DroidSpeak 因为部分重计算增加了一点点延迟，但彻底拯救了因为盲目复用而崩溃的生成质量。</li>
+<li>相比于 <strong>CacheBlend</strong>，DroidSpeak 的延迟-质量折中更优：在相似的延迟下，DroidSpeak 生成质量比 CacheBlend 高出 5%–33%（平均 16%）。原因在于 DroidSpeak 捕捉到了“层级敏感性（layer-wise sensitivity）”本质并选择关键层，而 CacheBlend 仅根据第一层的偏差来挑选 Token 是不准确的。</li>
+</ul>
+<h3 id="53-inference-throughput-and-latency-improvement-推理吞吐量与系统延迟改善">5.3 Inference Throughput and Latency Improvement (推理吞吐量与系统延迟改善)<a hidden class="anchor" aria-hidden="true" href="#53-inference-throughput-and-latency-improvement-推理吞吐量与系统延迟改善">#</a></h3>
+<p>为了在真实在线系统中评估 DroidSpeak，作者在 16 张 A100 组成的 Kubernetes 集群上模拟了泊松分布的到达请求（<strong>图 11</strong>）。</p>
+<ul>
+<li><strong>首字延迟（TTFT）</strong>：在 Full prefill 基线因为算力瓶颈导致排队延迟激增（曲线拐点）时，DroidSpeak 仍能游刃有余地保持极低的 TTFT，支持更高的 QPS（每秒请求数）。</li>
+<li><strong>TBT与E2E（字间延迟与端到端延迟）</strong>：虽然 DroidSpeak 只优化了 Prefill 阶段，但由于其极大减少了排队和资源占用，降低了整体系统的干扰，从而带来二阶效应，将后续的解码 TBT 和总 E2E 延迟也大幅降低。</li>
+<li><strong>吞吐量（Throughput）</strong>：总体而言，系统能够支持 <strong>$2\times$ 到 $4\times$</strong> 的更高吞吐量极限。</li>
+</ul>
+<h3 id="54-robustness-across-datasets--agentic-workflow-跨数据集鲁棒性与智能体工作流">5.4 Robustness across datasets &amp; Agentic workflow (跨数据集鲁棒性与智能体工作流)<a hidden class="anchor" aria-hidden="true" href="#54-robustness-across-datasets--agentic-workflow-跨数据集鲁棒性与智能体工作流">#</a></h3>
+<ul>
+<li><strong>配置泛化能力（图 13）</strong>：在一个数据集（如 HotpotQA 训练集）上得到的帕累托前沿配置曲线，应用到完全不同的数据集（如 multifieldqa 和 2wikimqa）上时，表现出高度一致的 F1 表现。证明 DroidSpeak 离线提取的配置对数据漂移具有很强的鲁棒性。</li>
+<li><strong>智能体系统落地案例（图 12）</strong>：作者使用 MetaGPT 搭建了包含“Coder（编程智能体，evolcode模型）”和“Tester（测试智能体，tool-8b模型）”的真实协作系统。在这种高强度上下文共享的场景中，DroidSpeak 将 TTFT 瓶颈降低了 <strong>$2.7\times$</strong>，显著缩短了任务完成的端到端时间，同时保持了代码通过率（pass@1 质量）不变。</li>
+</ul>
+<h3 id="55-mixture-of-experts--network-impact-moe模型支持与带宽影响">5.5 Mixture-of-Experts &amp; Network Impact (MoE模型支持与带宽影响)<a hidden class="anchor" aria-hidden="true" href="#55-mixture-of-experts--network-impact-moe模型支持与带宽影响">#</a></h3>
+<ul>
+<li><strong>MoE 模型适用性（图 14）</strong>：DroidSpeak 在 Mixtral-8x7B 这种混合专家架构上同样适用。因为 MoE 路由的是线性层的专家，而 KV Cache 处于 Attention 模块，两者是正交的，DroidSpeak 依然能大幅降低 MoE 的 prefill 延迟。</li>
+<li><strong>网络带宽分析（图 15）</strong>：在不同的节点间带宽限制下，DroidSpeak 的**流水线机制（Pipelining，红色虚线）**始终优于传统串行传输。尤其在带宽较低的场景中，隐藏网络延迟的收益最为明显。</li>
+</ul>
+<h3 id="56-profiling-overhead-离线分析开销">5.6 Profiling Overhead (离线分析开销)<a hidden class="anchor" aria-hidden="true" href="#56-profiling-overhead-离线分析开销">#</a></h3>
+<p>在 32 层模型上，逐层穷举需要耗时 3.6 小时。如果将 2 个层或者 3 个层合并为一组（Group Size=2/3）进行评估，可将耗时分别缩减至 1 小时和 0.375 小时，而最终维持的 F1 分数和重用收益基本没有下降（见图 16）。这意味着离线开销在实际大规模部署面前是可以忽略不计的。</p>
+<hr>
+<h2 id="6-limitation-and-future-work-局限性与未来工作">6. Limitation and Future Work (局限性与未来工作)<a hidden class="anchor" aria-hidden="true" href="#6-limitation-and-future-work-局限性与未来工作">#</a></h2>
+<ul>
+<li><strong>跨不同基础模型的共享（KV cache sharing across different foundation models）</strong>：目前 DroidSpeak 仅支持从同一个基础模型同源微调出来的模型变体之间的共享。不同基础模型之间的状态张量维度和表示空间可能完全不同，这具有极大挑战，留作未来研究。</li>
+<li><strong>基于带宽的动态调整（Re-computation adaptation with network bandwidth）</strong>：在 4.3 节的动态策略中只考虑了系统负载，未来可以进一步引入对实时网络带宽的感知，在带宽受限时适当增加重计算层数。</li>
+<li><strong>配置的数据漂移（Data drift in the re-computation configuration）</strong>：离线提取的策略在严重的数据分布偏移下可能会失效，未来可以探索定期重分析（periodic re-profiling）的机制。</li>
+<li><strong>多于两个模型的复用组合</strong>：目前的评估集中在“Sender-Receiver”一对一关系，若需要在一个上下文中做多个模型的排列组合最大化复用，还需要更高阶的调度优化。</li>
+</ul>
+<hr>
+<h2 id="7-conclusion-结论">7. Conclusion (结论)<a hidden class="anchor" aria-hidden="true" href="#7-conclusion-结论">#</a></h2>
+<p>在这项工作中，作者识别了在复合 AI 系统中由于多个模型处理共享上下文而带来的核心挑战——计算冗余。作者提出了 <strong>DroidSpeak</strong> 框架来实现不同微调变体模型间的 KV Cache 共享。基于“只有模型中的子集层需要重计算来维持准确率”的重大发现，作者设计了离线分析与线上流水线传输重计算并行的系统。实验结果证明，作者的解决方案对多种模型对、模型架构和数据集具有极佳的鲁棒性，能够在保持生成质量的同时大幅降低系统延迟、提升吞吐量，为未来更为复杂的 Agentic 和个性化 LLM 系统的底层基础设施指明了方向。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/context-caching/">Context Caching</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/system/">System</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

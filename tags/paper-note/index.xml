@@ -6,8 +6,24 @@
     <description>Recent content in Paper Note on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Fri, 05 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 07 Jun 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/paper-note/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26</title>
+      <link>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</link>
+      <pubDate>Sun, 07 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DroidSpeak/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference：&lt;/strong&gt; &lt;strong&gt;NSDI&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;abstract-摘要&#34;&gt;Abstract (摘要)&lt;/h2&gt;
+&lt;p&gt;在大型企业环境中，复合型人工智能系统（Compound AI systems，例如多智能体 Agentic 系统）正成为一种新兴趋势。在这些系统中，专门为不同用户、任务或角色微调（Fine-tuned）的多个大语言模型（LLMs）协同工作。在这些场景下，不同的模型通常会处理共享相同上下文前缀（Context Prefix）的输入。尽管过去有许多工作致力于在&lt;strong&gt;单一模型&lt;/strong&gt;的不同输入之间实现前缀 KV Cache 的重用，但如何让&lt;strong&gt;一个模型重用另一个不同模型的&lt;/strong&gt;前缀 KV Cache，目前仍是一个未解的开放性问题。&lt;/p&gt;
+&lt;p&gt;本文提出了 &lt;strong&gt;DroidSpeak&lt;/strong&gt;，这是第一个支持在运行不同 LLMs（只要这些模型具有相同的底层架构）的分布式节点之间实现 KV Cache 跨模型重用的分布式 LLM 推理系统。作者首先进行了一项首创性的实证研究，旨在理解跨不同 LLM 共享 KV Cache 的影响，以及这种共享是否/何时会影响生成质量。基于研究发现，作者设计了 DroidSpeak，该系统能够&lt;strong&gt;选择性地重新计算（recompute）由另一个 LLM 产生的 KV Cache 的少数几层，并直接重用（reuse）其余层的 KV Cache&lt;/strong&gt;，从而将质量损失降至可以忽略的程度。此外，作者精心设计了层级重计算与复用 KV Cache 加载之间的流水线（Pipelining）机制，进一步提升了推理性能。在多样化的数据集和模型对（Model Pairs）上的实验表明，相比于不允许跨模型共享的基线，DroidSpeak 能够实现高达 &lt;strong&gt;$4\times$ 的吞吐量提升&lt;/strong&gt;和约 &lt;strong&gt;$3.1\times$ 更快的 Prefill（首字延迟 TTFT 提升）&lt;/strong&gt;，而在 F1 分数、Rouge-L 或代码相似度得分上的质量损失可以忽略不计。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-introduction-引言&#34;&gt;1. Introduction (引言)&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DroidSpeak/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;当前，LLM 推理已经成为工业界最消耗资源的负载之一。为了降低计算需求，一个常见的优化是：在运行&lt;strong&gt;同一个 LLM&lt;/strong&gt; 的 GPU 机器上，通过网络共享并重用输入前缀的 KV Cache。然而，这项优化如何应用于&lt;strong&gt;不同的 LLMs&lt;/strong&gt;，还有待研究。&lt;/p&gt;
+&lt;p&gt;新兴的趋势是：在一个 GPU 集群中托管多个不同的 LLM。因为在复杂或个性化任务中，往往需要多个由同一个基础模型（Foundation Model）微调而来的模型，来服务不同的用户或扮演不同的角色。为了阐明这一挑战的动机，作者强调了多个微调模型在系统中协同工作的三个常见用例：&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 EPIC: Efficient Position-Independent Caching for Serving Large Language Models - ICML&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/</link>
