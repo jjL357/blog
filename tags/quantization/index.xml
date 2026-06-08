@@ -6,8 +6,26 @@
     <description>Recent content in Quantization on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 09 Nov 2025 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Mon, 01 Jun 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/quantization/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 TwinQuant: Learnable Subspace Decomposition for 4-Bit LLM Quantization - ICML&#39;26</title>
+      <link>https://jjl357.github.io/blog/posts/twinquant---learnable-subspace-decomposition-for-4-bit-llm-quantization---icml26/</link>
+      <pubDate>Mon, 01 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/twinquant---learnable-subspace-decomposition-for-4-bit-llm-quantization---icml26/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/TwinQuant/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;26&lt;/strong&gt;&lt;/p&gt;
+&lt;h2 id=&#34;abstract-摘要&#34;&gt;Abstract (摘要)&lt;/h2&gt;
+&lt;p&gt;4-bit 量化能够显著减少大型语言模型（LLMs）推理时的显存占用并降低延迟，但激进的精度压缩往往会导致模型准确率严重下降。之前的方法通常通过&lt;strong&gt;将每个权重矩阵分解为两个组件&lt;/strong&gt;来解决这个问题（例如，通过奇异值分解 SVD），并分别对它们进行量化：将大部分数值分配给低精度（如 4-bit）的残差（residual）组件，同时使用高精度（如 FP16）的低秩（low-rank）组件来处理异常值（outliers）。然而，&lt;strong&gt;这类传统的分解方法旨在最小化残差的实数域能量（real-valued energy），而不是最小化残差和低秩组件在量化后的误差（post-quantization error）&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;为了解决这一问题，本文提出了 &lt;strong&gt;TwinQuant&lt;/strong&gt;，这是一种针对 LLMs 的 4-bit 量化框架。该框架能够学习到“量化友好（quantization-friendly）”的分解子空间，并联合重塑低秩组件和残差组件的分布。TwinQuant 通过在&lt;strong&gt;斯蒂费尔流形（Stiefel manifold，正交约束）&lt;strong&gt;和&lt;/strong&gt;一般线性流形（general linear manifolds）&lt;strong&gt;上进行联合优化，学习特定于组件的变换矩阵，从而展平它们的数据分布并减少动态范围的不平衡。为了实现端到端的高效执行，作者进一步设计了一个&lt;/strong&gt;融合的双组件计算核（fused dual-component kernel）&lt;/strong&gt;，该算子将两阶段的低秩计算在片内（on-chip）流水线化，并在单个 epilogue（收尾阶段）中将两个组件合并，从而完全避免了中间结果导致的全局内存读写（global-memory traffic）。&lt;/p&gt;
+&lt;p&gt;在 LLaMA3 和 Qwen3 模型上的实验表明，TwinQuant 能够保持接近 FP16 的精度，并相比于 FP16 基线实现了高达 1.8 倍的端到端加速。&lt;/p&gt;
+&lt;h2 id=&#34;1-introduction-引言&#34;&gt;1. Introduction (引言)&lt;/h2&gt;
+&lt;p&gt;大型语言模型（LLMs）已成为对话助手、医疗决策支持和代码生成等领域的核心基础设施。随着模型参数从 7B 扩展到 70B 甚至超过 600B，推理过程越来越受到大型矩阵乘法的支配，这放大了计算和内存访问的成本，造成了关键的部署瓶颈。&lt;/p&gt;
+&lt;p&gt;为了缓解这一压力，现代加速器原生支持了低精度计算（如 NVIDIA Blackwell 架构上的 FP8/FP4）。同时，**训练后量化（PTQ, Post-Training Quantization）**技术将权重和运行时激活值压缩为低比特格式，减少了显存占用并提高了吞吐量，使量化成为高效 LLM 服务的关键技术。&lt;/p&gt;
+&lt;p&gt;然而，&lt;strong&gt;将权重和激活值激进地量化到低比特通常会导致精度的巨大下降&lt;/strong&gt;。这是因为它们具有**重尾（heavy-tailed）&lt;strong&gt;和&lt;/strong&gt;高度各向异性（highly anisotropic）**的统计特征，异构组件耦合在同一个张量中，导致量化误差被少数特定方向和大幅值（即异常值）所主导。早期的方法应用缩放和矩阵变换在量化前重新分布权重和激活值，但它们主要是在不同的坐标系中重新表达张量，并没有消除其固有的各向异性：少数主导方向仍然决定了动态范围，迫使所有组共享有限的 4-bit 缩放因子（scales），留下了仅仅靠重新分布无法消除的严重失真。&lt;/p&gt;
+&lt;p&gt;更近期的方法（如 SVDQuant）超越了单一空间，将每个权重分解为两个组件：截断 SVD 可以将异常值吸收到一个很小的高精度低秩分支中，同时对残差进行量化。当奇异值快速衰减时（如扩散模型中），微小的秩（tiny rank）就能保留大多数异常值。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;然而，在主流 LLMs 中，作者通过实验观察到奇异值衰减非常缓慢（详见 Section 3），因此微小的秩无法吸收足够的异常值。这就产生了一个“困境”：&lt;/strong&gt;&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 DartQuant: Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25</title>
       <link>https://jjl357.github.io/blog/posts/dartquant---efficient-rotational-distribution-calibration-for-llm-quantization---neurips25/</link>

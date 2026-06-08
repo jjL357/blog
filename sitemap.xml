@@ -38,6 +38,12 @@
     <loc>https://jjl357.github.io/blog/tags/position-independent-caching/</loc>
     <lastmod>2026-06-05T00:00:00+00:00</lastmod>
   </url><url>
+    <loc>https://jjl357.github.io/blog/posts/twinquant---learnable-subspace-decomposition-for-4-bit-llm-quantization---icml26/</loc>
+    <lastmod>2026-06-01T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/quantization/</loc>
+    <lastmod>2026-06-01T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/posts/learnpruner---rethinking-attention-based-token-pruning-in-vision-language-models---iclr26/</loc>
     <lastmod>2026-05-09T00:00:00+00:00</lastmod>
   </url><url>
@@ -243,9 +249,6 @@
     <lastmod>2025-11-09T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/offload/</loc>
-    <lastmod>2025-11-09T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/quantization/</loc>
     <lastmod>2025-11-09T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/rotation/</loc>
