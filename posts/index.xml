@@ -6,8 +6,28 @@
     <description>Recent content in Posts on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 07 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 18 Jun 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/posts/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 ThunderAgent: A Simple, Fast and Program-Aware Agentic Inference System - ICML&#39;26 Spotlight</title>
+      <link>https://jjl357.github.io/blog/posts/thunderagent---a-simple-fast-and-program-aware-agentic-inference-system---icml26-spotlight/</link>
+      <pubDate>Thu, 18 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/thunderagent---a-simple-fast-and-program-aware-agentic-inference-system---icml26-spotlight/</guid>
+      <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/ThunderAgent/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;26 Spotlight&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/ThunderAgent-org/ThunderAgent&#34;&gt;https://github.com/ThunderAgent-org/ThunderAgent&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;这篇论文研究的是 &lt;strong&gt;agentic inference system&lt;/strong&gt;，也就是面向 LLM Agent 多轮推理、多轮工具调用、多轮环境交互的推理系统。论文的核心问题是：现在的大模型不再只是一次性回答用户问题，而是越来越多地作为 Agent 使用，例如代码修复 Agent、科学发现 Agent、routing Agent、computer-use Agent 等。这类 Agent 往往需要在一个长时间运行的 workflow 中不断执行：&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;LLM reasoning $\rightarrow$ tool call $\rightarrow$ tool observation $\rightarrow$ LLM reasoning $\rightarrow$ tool call $\rightarrow \cdots$&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;这与传统 LLM serving 中“一个 prompt 对应一次 request”的模式不同。传统系统通常把 agentic inference 拆成两个彼此独立的组件：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;LLM inference engine&lt;/strong&gt;，例如 vLLM、SGLang；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;tool orchestrator&lt;/strong&gt;，例如 Kubernetes、Docker sandbox、API server 管理器等。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这种组合虽然工程上容易实现，但系统只在 &lt;strong&gt;per-request&lt;/strong&gt; 层面调度资源，而没有看到整个 agent workflow 的 end-to-end 生命周期。论文指出，这种 request-aware 设计会导致两个关键资源管理不佳：&lt;/p&gt;</description>
+    </item>
     <item>
       <title>📝 DroidSpeak: KV Cache Sharing Across Fine-tuned Model Variants - NSDI&#39;26</title>
       <link>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</link>
@@ -1321,7 +1341,7 @@ This long CoT (chain-of-thought) generation necessitates the development of &lt;
       <pubDate>Fri, 24 Oct 2025 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/posts/cdpruner---beyond-attention-or-similarity---maximizing-conditional-diversity-for-token-pruning-in-mllms-neuirips25/</guid>
       <description>&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/CDPruner%20-%20Beyond%20Attention%20or%20Similarity%20-/title.png&#34;&gt;&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;: &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference&lt;/strong&gt;:  &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
 &lt;p&gt;&lt;strong&gt;github&lt;/strong&gt;: &lt;a href=&#34;https://github.com/Theia-4869/CDPruner&#34;&gt;https://github.com/Theia-4869/CDPruner&lt;/a&gt;&lt;/p&gt;
 &lt;hr&gt;
 &lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;

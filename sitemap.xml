@@ -2,37 +2,43 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
+    <loc>https://jjl357.github.io/blog/posts/thunderagent---a-simple-fast-and-program-aware-agentic-inference-system---icml26-spotlight/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/agent/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/categories/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/system/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/</loc>
+    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</loc>
     <lastmod>2026-06-07T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/context-caching/</loc>
     <lastmod>2026-06-07T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://jjl357.github.io/blog/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/posts/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/system/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/</loc>
-    <lastmod>2026-06-07T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://jjl357.github.io/blog/posts/epic---efficient-position-independent-caching-for-serving-large-language-models---icml25/</loc>
-    <lastmod>2026-06-05T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
     <lastmod>2026-06-05T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/position-independent-caching/</loc>
@@ -195,9 +201,6 @@
     <lastmod>2025-11-21T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/suffixdecoding---extreme-speculative-decoding-for-emerging-ai-applications---neurips25-spotlight/</loc>
-    <lastmod>2025-11-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/agent/</loc>
     <lastmod>2025-11-18T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/breaking-the-wall---unifying-edge-gpus-and-npus-into-pipeline-parallelism-for-efficient-llm-fine-tuning/</loc>
