@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Prefix Caching on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/prefix-caching/</link>
+    <description>Recent content in Prefix Caching on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 20 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/prefix-caching/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows</title>
+      <link>https://jjl357.github.io/blog/posts/kvflow---efficient-prefix-caching-for-accelerating-llm-based-multi-agent-workflows/</link>
+      <pubDate>Sat, 20 Jun 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/kvflow---efficient-prefix-caching-for-accelerating-llm-based-multi-agent-workflows/</guid>
+      <description>&lt;h1 id=&#34;kvflow-efficient-prefix-caching-for-accelerating-llm-based-multi-agent-workflows&#34;&gt;KVFlow: Efficient Prefix Caching for Accelerating LLM-Based Multi-Agent Workflows&lt;/h1&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/KVFlow/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;NeurIPS&#39;25&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/PanZaifeng/KVFlow/tree/main&#34;&gt;https://github.com/PanZaifeng/KVFlow/tree/main&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;论文主题概括：&lt;/strong&gt;
+这篇论文研究的是 &lt;strong&gt;LLM-based multi-agent workflows&lt;/strong&gt; 中的系统级推理加速问题，重点不是提升模型能力，也不是改 prompt 或 agent 协作策略，而是优化底层 LLM serving system 中的 &lt;strong&gt;KV cache 管理机制&lt;/strong&gt;。论文指出，现有系统通常使用 &lt;strong&gt;LRU&lt;/strong&gt; 策略管理 prefix KV cache，但 LRU 只根据过去访问时间做决策，无法理解多智能体工作流中 agent 的未来执行顺序，因此容易把“马上就要再次使用”的 agent prefix cache 提前驱逐掉。KVFlow 利用 workflow 结构预测 agent 的未来调用顺序，并据此进行 cache eviction 和 prefetching，从而减少 cache miss、降低 prefill 或 CPU-GPU loading 开销，提高多智能体工作流的执行效率。&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;核心关键词：&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;LLM Serving&lt;/li&gt;
+&lt;li&gt;Agentic Workflow&lt;/li&gt;
+&lt;li&gt;Multi-Agent Workflow&lt;/li&gt;
+&lt;li&gt;Prefix Caching&lt;/li&gt;
+&lt;li&gt;KV Cache&lt;/li&gt;
+&lt;li&gt;Cache Eviction&lt;/li&gt;
+&lt;li&gt;LRU&lt;/li&gt;
+&lt;li&gt;Radix Tree Cache&lt;/li&gt;
+&lt;li&gt;Workflow-aware Cache Management&lt;/li&gt;
+&lt;li&gt;Agent Step Graph&lt;/li&gt;
+&lt;li&gt;Steps-to-execution&lt;/li&gt;
+&lt;li&gt;KV Prefetching&lt;/li&gt;
+&lt;li&gt;CPU-GPU Transfer&lt;/li&gt;
+&lt;li&gt;SGLang&lt;/li&gt;
+&lt;li&gt;HiCache&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;这篇论文的出发点是：
+现在很多复杂任务会通过 &lt;strong&gt;LLM-based agentic workflows&lt;/strong&gt; 来完成，即把一个复杂任务拆成多个 agent，每个 agent 有自己的角色、固定 prompt 和子任务。例如一个软件开发类 workflow 可能包含 Product Manager、Architect、Engineer、Reviewer 等 agent。每个 agent 在 workflow 中会被反复调用，每次调用 LLM 时都要处理自己的 prompt。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

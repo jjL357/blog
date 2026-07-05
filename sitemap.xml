@@ -2,34 +2,43 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://jjl357.github.io/blog/posts/kvflow---efficient-prefix-caching-for-accelerating-llm-based-multi-agent-workflows/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/agentic-workflow/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/prefix-caching/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/</loc>
+    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/posts/thunderagent---a-simple-fast-and-program-aware-agentic-inference-system---icml26-spotlight/</loc>
     <lastmod>2026-06-18T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/agent/</loc>
     <lastmod>2026-06-18T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://jjl357.github.io/blog/categories/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/posts/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://jjl357.github.io/blog/tags/system/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/</loc>
     <lastmod>2026-06-18T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/posts/droidspeak---kv-cache-sharing--across-fine-tuned-model-variants---nsdi26/</loc>
