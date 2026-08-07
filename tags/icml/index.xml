@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>ICML on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/icml/</link>
+    <description>Recent content in ICML on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 10 Jul 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/icml/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Long-Context Modeling with Dynamic Hierarchical Sparse Attention for Memory-Constrained LLM Inference - ICML&#39;26 Spotlight</title>
+      <link>https://jjl357.github.io/blog/posts/long-context-modeling-with-dynamic-hierarchical-sparse-attention-for-memory-constrained-llm-inference---icml26-spotlight/</link>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/long-context-modeling-with-dynamic-hierarchical-sparse-attention-for-memory-constrained-llm-inference---icml26-spotlight/</guid>
+      <description>&lt;h1 id=&#34;long-context-modeling-with-dynamic-hierarchical-sparse-attention-for-memory-constrained-llm-inference&#34;&gt;Long-Context Modeling with Dynamic Hierarchical Sparse Attention for Memory-Constrained LLM Inference&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICML&#39;26 Spotlight&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2510.24606&#34;&gt;https://arxiv.org/abs/2510.24606&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/xiongsiheng/DHSA&#34;&gt;https://github.com/xiongsiheng/DHSA&lt;/a&gt;&lt;/p&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;Transformer Attention 的时间和显存开销随上下文长度平方增长，限制了长上下文 LLM 在有限显存设备上的部署。虽然长上下文 Attention 通常具有明显稀疏性，但显著 token 的位置会随任务和输入变化。Sliding Window、A-shape 和固定 Block-Sparse 等静态模式无法充分适应这种输入相关的稀疏分布；部分动态方法又依赖预定义模板或启发式规则。&lt;/p&gt;
+&lt;p&gt;论文提出 &lt;strong&gt;Dynamic Hierarchical Sparse Attention（DHSA）&lt;/strong&gt;。DHSA 保持 LLM backbone 冻结，根据每层的 query/key 表征在线预测稀疏模式。方法首先使用轻量级边界预测器将序列划分为可变长 chunk，然后计算 chunk-level similarity，并将高分 chunk 展开为 token-level key index。稀疏注意力后端只对被选中的 token 执行精确 causal attention。&lt;/p&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DHSA/niah-and-ttft.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;在 Needle-in-a-Haystack、LongBench 和 RULER 上，DHSA 在低 token density 下保持接近 Dense Attention 的准确率。在效率方面：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;相同 prefill 成本下，相比 Block-Sparse 获得约 &lt;strong&gt;12%–20% relative accuracy gain&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;128K context、6.25% token density 下，attention kernel 相对 FlashAttention-2 加速约 &lt;strong&gt;10.66×&lt;/strong&gt;；&lt;/li&gt;
+&lt;li&gt;LLaMA-3.1-8B 4-bit 在单张 RTX 3090 24GB 上可以处理 100K context，而 Dense Attention 无法在该显存限制下运行；&lt;/li&gt;
+&lt;li&gt;LongBench 上平均 TTFT 从 Dense FA2 的 3.28 秒降低到 1.88 秒。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2 id=&#34;1-introduction&#34;&gt;1. Introduction&lt;/h2&gt;
+&lt;p&gt;长上下文能力使 LLM 能够处理长文档问答、代码仓库分析、历史记录总结和长时间 Agent 交互。然而，标准 Attention 需要计算所有 query-key pair：&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

@@ -71,40 +71,30 @@
         document.querySelector("html").dataset.theme = 'light';
     }
 
-</script><script type="text/javascript"
-        async
-        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     }
-});
+  };
 </script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/tags/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
@@ -163,16 +153,40 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/adaptive-patch-size/">Adaptive Patch Size <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
-        <a href="https://jjl357.github.io/blog/tags/agent/">Agent <sup><strong><sup>2</sup></strong></sup> </a>
+        <a href="https://jjl357.github.io/blog/tags/agent/">Agent <sup><strong><sup>4</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/agentic-workflow/">Agentic Workflow <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/ase/">ASE <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/asynchronous-inference/">Asynchronous Inference <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/cloud-edge/">Cloud-Edge <sup><strong><sup>2</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/code-generation/">Code Generation <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/code-llm/">Code LLM <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/coding-agent/">Coding Agent <sup><strong><sup>2</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/confidence-estimation/">Confidence Estimation <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/context-caching/">Context Caching <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/context-compression/">Context Compression <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/context-pruning/">Context Pruning <sup><strong><sup>2</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/diffusion-llm/">Diffusion LLM <sup><strong><sup>1</sup></strong></sup> </a>
@@ -187,13 +201,31 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/efficient-calibration/">Efficient Calibration <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/efficient-inference/">Efficient Inference <sup><strong><sup>2</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/fine-tune/">Fine-tune <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/iclr/">ICLR <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/icml/">ICML <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/knowledge-distillation/">Knowledge Distillation <sup><strong><sup>3</sup></strong></sup> </a>
     </li>
     <li>
-        <a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache <sup><strong><sup>13</sup></strong></sup> </a>
+        <a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache <sup><strong><sup>14</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/llm-inference/">LLM Inference <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/llm-reasoning/">LLM Reasoning <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/long-context/">Long Context <sup><strong><sup>3</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/lora/">Lora <sup><strong><sup>2</sup></strong></sup> </a>
@@ -220,7 +252,7 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/offloading/">Offloading <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
-        <a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note <sup><strong><sup>51</sup></strong></sup> </a>
+        <a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note <sup><strong><sup>57</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/parallelism/">Parallelism <sup><strong><sup>2</sup></strong></sup> </a>
@@ -241,10 +273,16 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/quantization/">Quantization <sup><strong><sup>4</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/real-time-inference/">Real-Time Inference <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/reasoning-model/">Reasoning Model <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/reinforcement-learning/">Reinforcement Learning <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/robotics/">Robotics <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/rotation/">Rotation <sup><strong><sup>1</sup></strong></sup> </a>
@@ -253,7 +291,13 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/running/">Running <sup><strong><sup>2</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/self-consistency/">Self-Consistency <sup><strong><sup>1</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/serving/">Serving <sup><strong><sup>6</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/sparse-attention/">Sparse Attention <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/speculative-decoding/">Speculative Decoding <sup><strong><sup>10</sup></strong></sup> </a>
@@ -265,7 +309,13 @@ code.has-jax {
         <a href="https://jjl357.github.io/blog/tags/svd/">SVD <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
+        <a href="https://jjl357.github.io/blog/tags/swe-bench/">SWE-Bench <sup><strong><sup>2</sup></strong></sup> </a>
+    </li>
+    <li>
         <a href="https://jjl357.github.io/blog/tags/system/">System <sup><strong><sup>12</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/test-time-scaling/">Test-Time Scaling <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/token-pruning/">Token Pruning <sup><strong><sup>6</sup></strong></sup> </a>
@@ -278,6 +328,9 @@ code.has-jax {
     </li>
     <li>
         <a href="https://jjl357.github.io/blog/tags/visual-token-pruning/">Visual Token Pruning <sup><strong><sup>2</sup></strong></sup> </a>
+    </li>
+    <li>
+        <a href="https://jjl357.github.io/blog/tags/vla/">VLA <sup><strong><sup>1</sup></strong></sup> </a>
     </li>
 </ul>
     </main>

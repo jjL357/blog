@@ -86,40 +86,30 @@ DOCPRUNE 的核心优势在于：
         document.querySelector("html").dataset.theme = 'light';
     }
 
-</script><script type="text/javascript"
-        async
-        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     }
-});
+  };
 </script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/docprune---efficient-document-question-answering-via-background-question-and-comprehension-aware-token-pruning---cvpr26/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
@@ -192,7 +182,7 @@ DOCPRUNE 的核心优势在于：
   "keywords": [
     "MLLM", "Visual Token Pruning", "OCR", "Paper Note"
   ],
-  "articleBody": "\nConference: CVPR'26\n1. Abstract 近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。 然而，文档图像与自然图像存在显著差异：文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。\n作者观察到，现有的针对自然图像和视频的 Token 减少方法（token-reduction methods，例如 FastV 等），在利用文档独有的“结构稀疏性（structural sparsity）”时显得力不从心。为了解决这一痛点，作者提出了 DOCPRUNE——一个免训练（training-free） 且 渐进式（progressive） 的文档 Token 剪枝框架，专为高效的长文档理解而设计。\nDOCPRUNE 的核心优势在于：\n它只保留对当前任务至关重要的 Token，同时剔除不必要的 Token（如纯背景或与问题无关的 Token）。 它能够根据模型内部的“理解力水平（level of comprehension）”，自动选择在哪一层网络触发 Token 剪枝。 最终，在 M3DocRAG 基准上的实验表明，DOCPRUNE 在 Vision Encoder（视觉编码器）和 LLM Decoder（大语言模型解码器）中分别将吞吐量（throughput）提升了 3.0倍 和 3.3倍，同时 F1 分数还提升了 +1.0。实现了在不进行任何额外训练（without any additional training） 的前提下，精度与效率的提升。\n2. Introduction 在文档理解中，长文档通常包含数百页，但有用的内容（文本、表格、图表等）却散布在巨大的背景中。Transformer 架构处理单页就会产生数千个视觉 Token，计算成本极其高昂。\n传统的降低成本的方法是 Token Reduction（如针对自然图像或视频的合并和剪枝），其核心假设是“相邻 patch 通常包含相似的视觉信息”。然而，这一假设在文档中是失效的：文档排版（如文本行、表格）具有极其严格的空间组织规律，即使是微小的 Token 删减也极易破坏文本连贯性或丢失重要的排版线索（destroy important layout cues）。 因此，基于视觉冗余的传统方法在文档上性能下降严重。 另外，现有的剪枝方法往往通过固定的启发式规则（fixed heuristics）来决定剪枝层，忽略了模型理解力在各层之间的演变（neglecting how comprehension evolves across layers）。这种忽略导致剪枝可能发生得过早或不一致，造成性能不稳定及效率提升有限。\n针对上述局限性，作者从“以文档为中心（document-centric）”的视角出发，得出了三大关键观察（详见 Section 3）。基于这些发现，提出了三阶段渐进式框架 DOCPRUNE (Figure 7)：\n背景 Token 剪枝 (Background Token Pruning, BTP): 在进入编码器前，去除无信息量的背景区域。 问题感知 Token 剪枝 (Question-aware Token Pruning, QTP): 利用检索阶段获得的问题和文档的 Embedding 相似度，进一步过滤掉不必要的内容 Token。 理解感知 Token 剪枝 (Comprehension-aware Token Pruning, CTP): 监控输出 Token 的 L2 范数（L2 norm）来反映各层模型的理解度，一旦理解度达标，即触发自适应剪枝。 核心贡献（Contributions）：\n首次对文档理解中的 Token 冗余和逐层理解力进行了全面研究，揭示了自然图像所不具备的独特结构稀疏性。 提出了 DOCPRUNE，一个免训练的渐进式 Token 剪枝框架。 取得了显著的效率提升，同时保持甚至超越了 Baseline 的精度。 3. Key observations 为了理解文档所面临的独特挑战，作者详细分析了三种现象，这些观察揭示了现有方法次优的原因，并直接启发了本文的方法设计：\n背景区域的绝对主导 (Dominance of background regions): 文档图像存在大面积无语义的空白（如页边距、行间距），却依然消耗算力。作者统计了 M3DocRAG 数据集，将图像切分为 $32 \\times 32$ 的 patch (参考 Figure 2)。如果一个 patch 的所有像素值与文档主导背景色相同，则被视为背景。分析表明，平均有 36% 的 patch 是纯背景。这证实了结构稀疏性的普遍存在，直接启发了后文的 BTP（背景剪枝）。\n问题相关内容的极端稀疏性 (Sparsity of question-relevant content): 排除背景后，实际用于回答问题的“证据”只集中在文档中非常小的局部区域 (参见 Figure 2 中高亮部分)。注意力分析 (Figure 3) 显示，排名前 10% 的高注意力 Token 占据了总注意力的 50%~80%。在 Table 1 中，如果在第 20 层仅保留最受关注的前 10% Token，F1 分数仅微降 1.2 点，但计算成本降至原来的 $1/9$，吞吐量提升 6.46 倍。这证明大多数 Token 只是徒增计算负担，由此启发了 QTP（问题感知剪枝），专门保留与问题相关的关键证据。\n与层级相关的剪枝效应 (Layer-dependent pruning effects): 以往的固定层剪枝缺乏泛化性。作者在解码器的不同层强行剪去 90% 的 Token (Figure 4)，发现：在浅层，基于注意力的剪枝效果和随机剪枝一样差，说明浅层的 Attention 还不能识别显著特征；但到了第 15 层之后，性能急剧上升并在第 20 层左右达到峰值。这说明剪枝时机非常关键。 由于固定层剪枝在推理时不够自适应，作者引入了一个替代指标：输出 Token 隐藏状态的 L2 范数 $c_l = ||x^l_T||$。在 Figure 5 和 Figure 6 中，作者证明了 $c_l$ 越高的样本准确率越好；同时，简单样本（easier samples）会在更浅的层达到较高的 $c_l$ 值，而困难样本需要更深的层。 这个发现证明 $c_l$ 完美捕捉了模型不断演进的置信度，这启发了 CTP（理解感知剪枝）。\n4. Method 本节详细阐述 DOCPRUNE 如何实现免训练的渐进式剪枝。整体流程可视化可以参考 Figure 7 和 Figure 8。\n3.1. Overall architecture (总体架构) 系统建立在目前主流的“检索增强（RAG）文档理解”双阶段 pipeline 上（例如 M3DocRAG, SV-RAG）。\n阶段一 (Retrieval): 给定问题 $q$ 和大规模文档集 $D$，检索模型 $f_{RET}$ 会召回最相关的 Top-$K$ 页文档。公式如下： $$ \\tilde{D} = f_{RET}(q, D; K) $$ 阶段二 (Question Answering): 多模态 QA 模型 $f_{QA}$ 使用召回的文档 $\\tilde{D}$ 生成最终答案 $y$。公式如下： $$ y = f_{QA}(q, \\tilde{D}) $$ 在这个架构下，DOCPRUNE 被巧妙地安插在不同阶段：BTP 和 QTP 用于减少视觉编码器（Vision Encoder）的输入负担，而 CTP 用于在 LLM 解码器（Decoder）内部进行自适应剪枝。 3.2. Background Token Pruning (BTP - 背景 Token 剪枝) 区别于以往 VLM 会破坏文档排版，BTP 的目标是在进行深度编码前，显式地检测并移除大面积背景，同时保留所有图文内容。 具体实现细节：\n给定输入图像 $I \\in \\mathbb{R}^{H \\times W \\times 3}$，切分为互不重叠的 $P \\times P$ 大小的 patch。得到初始 Token 集合 $T = {t_i \\in \\mathbb{R}^{P \\times P \\times 3}}_{i=1}^N$，其中 $N = \\frac{W}{P} \\times \\frac{H}{P}$。 将每个 patch 转换为灰度图 $\\hat{t}_i \\in \\mathbb{R}^{P \\times P}$，以此简化背景检测。 统计整张图片，计算出出现频率最高的像素值作为主导背景强度（mode value） $m$。 计算每个 patch 的背景比例（background ratio） $R_i$，即该 patch 内部有多少像素的值接近于 $m$： $$ R_i = \\frac{1}{P^2} \\sum_{p=1}^{P^2} \\mathbb{1} \\left[ |\\hat{t}_i^{(p)} - m| \u003c \\tau_e \\right] $$ 注：$\\hat{t}_i^{(p)}$ 是第 $i$ 个 patch 内第 $p$ 个像素的灰度值；$\\tau_e$ 是容错阈值（应对扫描或图片噪点导致的背景颜色微小波动）；$\\mathbb{1}[\\cdot]$ 是指示函数。 最后，如果一个 Token 的背景比例过高（大于阈值 $\\tau_{bg}$），就判定为纯背景并抛弃。保留下来的内容 Token 集合（content tokens） $\\tilde{T}$ 定义为： $$ \\tilde{T} = { t_i \\in T \\mid R_i \\le \\tau_{bg} } $$ BTP 会同时应用在 Retrieval 和 QA 两个阶段的编码器之前，极其有效地降低了无用 Token 数量 (参见 Figure 7)。 3.3. Question-aware Token Pruning (QTP - 问题感知 Token 剪枝) 仅仅去除了背景还不够，因为留下的文字/表格中，大部分和用户的提问毫无关系（观察二）。QTP 旨在根据语义相关性进一步筛除 Token。 具体实现细节：\n重用检索阶段的特征： 巧妙利用文档检索阶段已经计算好的“文档 Token 向量” $E^{doc} = {e_i^{doc} \\in \\mathbb{R}^C}{i=1}^{N{doc}}$ 和“问题 Token 向量” $E^{qst} = {e_j^{qst} \\in \\mathbb{R}^C}{j=1}^{N{qst}}$，免去了额外的计算开销。 计算相似度： 计算每个文档 Token 和所有问题 Token 之间的余弦相似度，并累加得到该文档 Token 的总相关度分数 $s_i$： $$ s_i = \\sum_{j=1}^{N_{qst}} \\cos(e_i^{doc}, e_j^{qst}) $$ 这得到了一张相似度分数图 $S = {s_i}{i=1}^{N{doc}}$。 解决分辨率差异（Bridge the resolution gap）： 因为检索模型（如 ColPali）和 QA 模型（如 Qwen2-VL）往往处理图像的分辨率不同，因此使用**双线性插值（bilinear interpolation）**将 $S$ 缩放到匹配 QA 模型的特征图分辨率。 高斯平滑（Gaussian smoothing）： 作者发现初始的相似度图主要在“关键词”周围形成尖锐的激活点。为了不切碎关键证据的上下文，并消除局部噪点，对相似度图应用高斯平滑操作 (参见 Figure 9)： $$ S’ = G_\\sigma * S $$ 注：$G_\\sigma$ 是标准差为 $\\sigma$ 的高斯核，$\\ast$ 是卷积操作。 执行剪枝： 设定相关性阈值 $\\tau_{qst}$，只保留大于阈值的 Token： $$ \\tilde{T} = { t_i \\in T \\mid S’i \\ge \\tau{qst} } $$ 3.4. Comprehension-aware Token Pruning (CTP - 理解感知 Token 剪枝) 经过 BTP 和 QTP 送入大模型的 Token 已经非常精简，但在 LLM 内部随着层数的加深，模型逐渐“理解”了图像和文本的对应关系。CTP 旨在模型达到“充分理解”时，立刻抛弃视觉 Token 以加速后续层的推理。(逻辑图参考 Figure 8) 具体实现细节： CTP 基于两个标准来进行自适应剪枝（确定何时剪、剪什么）：\n确定剪枝层（When to prune）： 对于解码器的第 $l$ 层，Token 表示为 $X^l = {x_i^l}{i=1}^N$，其中序列的最后一个 Token 为 $x_N^l \\in \\mathbb{R}^C$（该 Token 聚合了整个序列的信息）。 计算最后一层 Token 的 L2 范数 $c_l = ||x_N^l||$ 作为模型“理解度（comprehension）”的代理指标。一旦 $c_l$ 超过预设的理解力阈值 $\\tau{comp}$，即刻判定模型已充分理解，触发剪枝。触发层 $l^$ 计算如下： $$ l^ = \\min({l \\mid c_l \\ge \\tau_{comp}}) $$ 确定丢弃的 Token（What to prune）： 一旦确定在第 $l^$ 层剪枝，提取最后一个 Token 对所有视觉 Token 的注意力权重（Attention Weights）作为重要性得分，记为 $a^{l^} \\in \\mathbb{R}^{N_{doc}}$。 丢弃所有注意力分数低于 $\\tau_{att}$ 的视觉 Token，将浓缩后的 $\\tilde{X}^{l^}$ 传递给下一层： $$ \\tilde{X}^{l^} = { x_i^{l^} \\in X^{l^} \\mid a_i^{l^*} \\ge \\tau_{att} } $$ 5. Experiments 4.1. Implementation details (实施细节) 模型与基准： 作者使用 M3DocRAG 为主 Baseline，采用 ColPali-v1 进行检索，Qwen2-VL (7B) 为 QA 模型。同时也扩展测试了 VDocRAG 架构。 硬件配置： 单张 NVIDIA RTX A6000 GPU + AMD EPYC 7763 CPU。\n4.2. Evaluation setup (评估设置) 性能指标: Accuracy (ACC), Exact Match (EM), F1 分数（并分别按图片/表格/文本模态，以及单跳/多跳逻辑进行拆解）。 效率指标: 视觉 Token 丢弃率 (Visual token drop rate)、TFLOPs (计算量) 以及吞吐量 (Throughput, samples/s)。并拆分开报告 Encoder 和 Decoder 的指标。 4.3. Main results (主要结果) 开放域 Doc-VQA (Open-domain Doc-VQA，Table 2): 在 M3DocVQA 测试集上，DOCPRUNE 碾压了现有的所有剪枝 baseline (FastV, DivPrune, VTW)。在 Top-4 检索配置下，Encoder 和 Decoder 的 TFLOPs 下降了 70% 以上。吞吐量最高提升 3.3倍，且 EM 提升了 1.5，F1 提升了 1.0。 对比同行： VTW 粗暴的层级剪枝损害了细粒度理解；DivPrune 迭代计算带来的开销在大量 Token 下反而拖慢了吞吐量。只有 DOCPRUNE 实现了全 pipeline 加速并超越不剪枝的基础模型。此外，Table 4 证明其在 VDocRAG 上依然通用，带来 2.4倍加速。 闭域 Doc-VQA (Closed-domain Doc-VQA，Table 3): 在长文档基准 MMLongBench-Doc（使用 Qwen2.5-VL），Top-1 配置下，DOCPRUNE 吞吐量提升 2.1倍，ACC 增加 +0.9，F1 增加 +0.4。 4.4. Analyses (深入分析) 定性可视化分析 (Qualitative analysis, Figure 10 \u0026 附录 Figure A/C): 以 Figure 10 为例，一张原始图片生成 2508 个 Token。 应用 BTP 后 (Figure 10-b)：大白边消失，降至 1340 Token。 应用 QTP 后 (Figure 10-c)：与问题无关的段落被剔除，降至 460 Token（只有包含了问题关键词 cue 的蓝色区域保留）。 应用 CTP 后 (Figure 10-d)：根据深层理解力，模型提炼出了最核心的 Token，最终只剩 168 个 Token（仅占初始的 7%），却精准包含了证据和答案（红色区域）。去除了大量噪音后，模型注意力更集中，甚至提高了预测的正确率。 组件消融实验 (Component ablations, Table 5): 单独添加 BTP、QTP、CTP，吞吐量和 QA 性能（EM, F1）均呈“阶梯状”递增。三者结合产生最强协同效应。 模型理解力指标筛选 (Model comprehension criteria, Table 6 \u0026 附录 Figure B): 作者对比了三种代理指标以确定 CTP 的最佳触发层： Entropy (信息熵)：利用输出分布的不确定性。但发现相关性最弱，大量样本集中在 9-10 层，区分度差。 Feature ∆ (特征差)：测量相邻层的特征差异。效果尚可。 L2 Norm (输出Token L2范数，本文采用)：达到了的吞吐量与精度的平衡。 6. Conclusion 在这项工作中，作者引入了 DocPrune，这是一个专为提升文档视觉问答效率而设计的、完全免训练且渐进式的 Token 剪枝框架。 与主要为图像和视频开发、依赖经验性选择固定剪枝层的早期剪枝方法不同，DocPrune 充分利用了文档的结构化布局特性（structured layout of documents），并独创性地采用了“理解感知（comprehension-aware）”标准来自适应地选择在何时进行剪枝。\n该框架通过三个的阶段运行：\n背景 Token 剪枝 (BTP)：消除主导文档的大面积无信息背景区域。 问题感知 Token 剪枝 (QTP)：去除那些与问题语义对齐度弱的冗余 Token。 理解感知 Token 剪枝 (CTP)：通过动态追踪模型逐层的内部理解状态，自适应地抛弃深层网络中不再需要的 Token。 ",
+  "articleBody": "\nConference: CVPR'26\n1. Abstract 近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。 然而，文档图像与自然图像存在显著差异：文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。\n作者观察到，现有的针对自然图像和视频的 Token 减少方法（token-reduction methods，例如 FastV 等），在利用文档独有的“结构稀疏性（structural sparsity）”时显得力不从心。为了解决这一痛点，作者提出了 DOCPRUNE——一个免训练（training-free） 且 渐进式（progressive） 的文档 Token 剪枝框架，专为高效的长文档理解而设计。\nDOCPRUNE 的核心优势在于：\n它只保留对当前任务至关重要的 Token，同时剔除不必要的 Token（如纯背景或与问题无关的 Token）。 它能够根据模型内部的“理解力水平（level of comprehension）”，自动选择在哪一层网络触发 Token 剪枝。 最终，在 M3DocRAG 基准上的实验表明，DOCPRUNE 在 Vision Encoder（视觉编码器）和 LLM Decoder（大语言模型解码器）中分别将吞吐量（throughput）提升了 3.0倍 和 3.3倍，同时 F1 分数还提升了 +1.0。实现了在不进行任何额外训练（without any additional training） 的前提下，精度与效率的提升。\n2. Introduction 在文档理解中，长文档通常包含数百页，但有用的内容（文本、表格、图表等）却散布在巨大的背景中。Transformer 架构处理单页就会产生数千个视觉 Token，计算成本极其高昂。\n传统的降低成本的方法是 Token Reduction（如针对自然图像或视频的合并和剪枝），其核心假设是“相邻 patch 通常包含相似的视觉信息”。然而，这一假设在文档中是失效的：文档排版（如文本行、表格）具有极其严格的空间组织规律，即使是微小的 Token 删减也极易破坏文本连贯性或丢失重要的排版线索（destroy important layout cues）。 因此，基于视觉冗余的传统方法在文档上性能下降严重。 另外，现有的剪枝方法往往通过固定的启发式规则（fixed heuristics）来决定剪枝层，忽略了模型理解力在各层之间的演变（neglecting how comprehension evolves across layers）。这种忽略导致剪枝可能发生得过早或不一致，造成性能不稳定及效率提升有限。\n针对上述局限性，作者从“以文档为中心（document-centric）”的视角出发，得出了三大关键观察（详见 Section 3）。基于这些发现，提出了三阶段渐进式框架 DOCPRUNE (Figure 7)：\n背景 Token 剪枝 (Background Token Pruning, BTP): 在进入编码器前，去除无信息量的背景区域。 问题感知 Token 剪枝 (Question-aware Token Pruning, QTP): 利用检索阶段获得的问题和文档的 Embedding 相似度，进一步过滤掉不必要的内容 Token。 理解感知 Token 剪枝 (Comprehension-aware Token Pruning, CTP): 监控输出 Token 的 L2 范数（L2 norm）来反映各层模型的理解度，一旦理解度达标，即触发自适应剪枝。 核心贡献（Contributions）：\n首次对文档理解中的 Token 冗余和逐层理解力进行了全面研究，揭示了自然图像所不具备的独特结构稀疏性。 提出了 DOCPRUNE，一个免训练的渐进式 Token 剪枝框架。 取得了显著的效率提升，同时保持甚至超越了 Baseline 的精度。 3. Key observations 为了理解文档所面临的独特挑战，作者详细分析了三种现象，这些观察揭示了现有方法次优的原因，并直接启发了本文的方法设计：\n背景区域的绝对主导 (Dominance of background regions): 文档图像存在大面积无语义的空白（如页边距、行间距），却依然消耗算力。作者统计了 M3DocRAG 数据集，将图像切分为 $32 \\times 32$ 的 patch (参考 Figure 2)。如果一个 patch 的所有像素值与文档主导背景色相同，则被视为背景。分析表明，平均有 36% 的 patch 是纯背景。这证实了结构稀疏性的普遍存在，直接启发了后文的 BTP（背景剪枝）。\n问题相关内容的极端稀疏性 (Sparsity of question-relevant content): 排除背景后，实际用于回答问题的“证据”只集中在文档中非常小的局部区域 (参见 Figure 2 中高亮部分)。注意力分析 (Figure 3) 显示，排名前 10% 的高注意力 Token 占据了总注意力的 50%~80%。在 Table 1 中，如果在第 20 层仅保留最受关注的前 10% Token，F1 分数仅微降 1.2 点，但计算成本降至原来的 $1/9$，吞吐量提升 6.46 倍。这证明大多数 Token 只是徒增计算负担，由此启发了 QTP（问题感知剪枝），专门保留与问题相关的关键证据。\n与层级相关的剪枝效应 (Layer-dependent pruning effects): 以往的固定层剪枝缺乏泛化性。作者在解码器的不同层强行剪去 90% 的 Token (Figure 4)，发现：在浅层，基于注意力的剪枝效果和随机剪枝一样差，说明浅层的 Attention 还不能识别显著特征；但到了第 15 层之后，性能急剧上升并在第 20 层左右达到峰值。这说明剪枝时机非常关键。 由于固定层剪枝在推理时不够自适应，作者引入了一个替代指标：输出 Token 隐藏状态的 L2 范数 $c_l = ||x^l_T||$。在 Figure 5 和 Figure 6 中，作者证明了 $c_l$ 越高的样本准确率越好；同时，简单样本（easier samples）会在更浅的层达到较高的 $c_l$ 值，而困难样本需要更深的层。 这个发现证明 $c_l$ 完美捕捉了模型不断演进的置信度，这启发了 CTP（理解感知剪枝）。\n4. Method 本节详细阐述 DOCPRUNE 如何实现免训练的渐进式剪枝。整体流程可视化可以参考 Figure 7 和 Figure 8。\n3.1. Overall architecture (总体架构) 系统建立在目前主流的“检索增强（RAG）文档理解”双阶段 pipeline 上（例如 M3DocRAG, SV-RAG）。\n阶段一 (Retrieval): 给定问题 $q$ 和大规模文档集 $D$，检索模型 $f_{RET}$ 会召回最相关的 Top-$K$ 页文档。公式如下： $$\r\\tilde{D} = f_{RET}(q, D; K)\r$$ 阶段二 (Question Answering): 多模态 QA 模型 $f_{QA}$ 使用召回的文档 $\\tilde{D}$ 生成最终答案 $y$。公式如下： $$\ry = f_{QA}(q, \\tilde{D})\r$$ 在这个架构下，DOCPRUNE 被巧妙地安插在不同阶段：BTP 和 QTP 用于减少视觉编码器（Vision Encoder）的输入负担，而 CTP 用于在 LLM 解码器（Decoder）内部进行自适应剪枝。 3.2. Background Token Pruning (BTP - 背景 Token 剪枝) 区别于以往 VLM 会破坏文档排版，BTP 的目标是在进行深度编码前，显式地检测并移除大面积背景，同时保留所有图文内容。 具体实现细节：\n给定输入图像 $I \\in \\mathbb{R}^{H \\times W \\times 3}$，切分为互不重叠的 $P \\times P$ 大小的 patch。得到初始 Token 集合 $T = {t_i \\in \\mathbb{R}^{P \\times P \\times 3}}_{i=1}^N$，其中 $N = \\frac{W}{P} \\times \\frac{H}{P}$。 将每个 patch 转换为灰度图 $\\hat{t}_i \\in \\mathbb{R}^{P \\times P}$，以此简化背景检测。 统计整张图片，计算出出现频率最高的像素值作为主导背景强度（mode value） $m$。 计算每个 patch 的背景比例（background ratio） $R_i$，即该 patch 内部有多少像素的值接近于 $m$： $$\rR_i = \\frac{1}{P^2} \\sum_{p=1}^{P^2} \\mathbb{1} \\left[ |\\hat{t}_i^{(p)} - m| \u003c \\tau_e \\right]\r$$ 注：$\\hat{t}_i^{(p)}$ 是第 $i$ 个 patch 内第 $p$ 个像素的灰度值；$\\tau_e$ 是容错阈值（应对扫描或图片噪点导致的背景颜色微小波动）；$\\mathbb{1}[\\cdot]$ 是指示函数。 最后，如果一个 Token 的背景比例过高（大于阈值 $\\tau_{bg}$），就判定为纯背景并抛弃。保留下来的内容 Token 集合（content tokens） $\\tilde{T}$ 定义为： $$\r\\tilde{T} = \\{ t_i \\in T \\mid R_i \\le \\tau_{bg} \\}\r$$ BTP 会同时应用在 Retrieval 和 QA 两个阶段的编码器之前，极其有效地降低了无用 Token 数量 (参见 Figure 7)。 3.3. Question-aware Token Pruning (QTP - 问题感知 Token 剪枝) 仅仅去除了背景还不够，因为留下的文字/表格中，大部分和用户的提问毫无关系（观察二）。QTP 旨在根据语义相关性进一步筛除 Token。 具体实现细节：\n重用检索阶段的特征： 巧妙利用文档检索阶段已经计算好的“文档 Token 向量” \\(E^{doc} = \\{e_i^{doc} \\in \\mathbb{R}^C\\}_{i=1}^{N_{doc}}\\) 和“问题 Token 向量” \\(E^{qst} = \\{e_j^{qst} \\in \\mathbb{R}^C\\}_{j=1}^{N_{qst}}\\)，免去了额外的计算开销。 计算相似度： 计算每个文档 Token 和所有问题 Token 之间的余弦相似度，并累加得到该文档 Token 的总相关度分数 $s_i$： $$\rs_i = \\sum_{j=1}^{N_{qst}} \\cos(e_i^{doc}, e_j^{qst})\r$$ 这得到了一张相似度分数图 \\(S = \\{s_i\\}_{i=1}^{N_{doc}}\\)。 解决分辨率差异（Bridge the resolution gap）： 因为检索模型（如 ColPali）和 QA 模型（如 Qwen2-VL）往往处理图像的分辨率不同，因此使用**双线性插值（bilinear interpolation）**将 $S$ 缩放到匹配 QA 模型的特征图分辨率。 高斯平滑（Gaussian smoothing）： 作者发现初始的相似度图主要在“关键词”周围形成尖锐的激活点。为了不切碎关键证据的上下文，并消除局部噪点，对相似度图应用高斯平滑操作 (参见 Figure 9)： $$\rS' = G_\\sigma * S\r$$ 注：$G_\\sigma$ 是标准差为 $\\sigma$ 的高斯核，$\\ast$ 是卷积操作。 执行剪枝： 设定相关性阈值 $\\tau_{qst}$，只保留大于阈值的 Token： $$\r\\tilde{T} = \\{ t_i \\in T \\mid S'_i \\ge \\tau_{qst} \\}\r$$ 3.4. Comprehension-aware Token Pruning (CTP - 理解感知 Token 剪枝) 经过 BTP 和 QTP 送入大模型的 Token 已经非常精简，但在 LLM 内部随着层数的加深，模型逐渐“理解”了图像和文本的对应关系。CTP 旨在模型达到“充分理解”时，立刻抛弃视觉 Token 以加速后续层的推理。(逻辑图参考 Figure 8) 具体实现细节： CTP 基于两个标准来进行自适应剪枝（确定何时剪、剪什么）：\n确定剪枝层（When to prune）： 对于解码器的第 $l$ 层，Token 表示为 \\(X^l = \\{x_i^l\\}_{i=1}^N\\)，其中序列的最后一个 Token 为 $x_N^l \\in \\mathbb{R}^C$（该 Token 聚合了整个序列的信息）。 计算最后一层 Token 的 L2 范数 $c_l = ||x_N^l||$ 作为模型“理解度（comprehension）”的代理指标。一旦 $c_l$ 超过预设的理解力阈值 \\(\\tau_{comp}\\)，即刻判定模型已充分理解，触发剪枝。触发层 \\(l^{\\ast}\\) 计算如下： $$\rl^{\\ast} = \\min(\\{l \\mid c_l \\ge \\tau_{comp}\\}) $$ 确定丢弃的 Token（What to prune）： 一旦确定在第 \\(l^{\\ast}\\) 层剪枝，提取最后一个 Token 对所有视觉 Token 的注意力权重（Attention Weights）作为重要性得分，记为 \\(a^{l^{\\ast}} \\in \\mathbb{R}^{N_{doc}}\\)。 丢弃所有注意力分数低于 $\\tau_{att}$ 的视觉 Token，将浓缩后的 \\(\\tilde{X}^{l^{\\ast}}\\) 传递给下一层： $$\r\\tilde{X}^{l^{\\ast}} = \\{ x_i^{l^{\\ast}} \\in X^{l^{\\ast}} \\mid a_i^{l^{\\ast}} \\ge \\tau_{att} \\} $$ 5. Experiments 4.1. Implementation details (实施细节) 模型与基准： 作者使用 M3DocRAG 为主 Baseline，采用 ColPali-v1 进行检索，Qwen2-VL (7B) 为 QA 模型。同时也扩展测试了 VDocRAG 架构。 硬件配置： 单张 NVIDIA RTX A6000 GPU + AMD EPYC 7763 CPU。\n4.2. Evaluation setup (评估设置) 性能指标: Accuracy (ACC), Exact Match (EM), F1 分数（并分别按图片/表格/文本模态，以及单跳/多跳逻辑进行拆解）。 效率指标: 视觉 Token 丢弃率 (Visual token drop rate)、TFLOPs (计算量) 以及吞吐量 (Throughput, samples/s)。并拆分开报告 Encoder 和 Decoder 的指标。 4.3. Main results (主要结果) 开放域 Doc-VQA (Open-domain Doc-VQA，Table 2): 在 M3DocVQA 测试集上，DOCPRUNE 碾压了现有的所有剪枝 baseline (FastV, DivPrune, VTW)。在 Top-4 检索配置下，Encoder 和 Decoder 的 TFLOPs 下降了 70% 以上。吞吐量最高提升 3.3倍，且 EM 提升了 1.5，F1 提升了 1.0。 对比同行： VTW 粗暴的层级剪枝损害了细粒度理解；DivPrune 迭代计算带来的开销在大量 Token 下反而拖慢了吞吐量。只有 DOCPRUNE 实现了全 pipeline 加速并超越不剪枝的基础模型。此外，Table 4 证明其在 VDocRAG 上依然通用，带来 2.4倍加速。 闭域 Doc-VQA (Closed-domain Doc-VQA，Table 3): 在长文档基准 MMLongBench-Doc（使用 Qwen2.5-VL），Top-1 配置下，DOCPRUNE 吞吐量提升 2.1倍，ACC 增加 +0.9，F1 增加 +0.4。 4.4. Analyses (深入分析) 定性可视化分析 (Qualitative analysis, Figure 10 \u0026 附录 Figure A/C): 以 Figure 10 为例，一张原始图片生成 2508 个 Token。 应用 BTP 后 (Figure 10-b)：大白边消失，降至 1340 Token。 应用 QTP 后 (Figure 10-c)：与问题无关的段落被剔除，降至 460 Token（只有包含了问题关键词 cue 的蓝色区域保留）。 应用 CTP 后 (Figure 10-d)：根据深层理解力，模型提炼出了最核心的 Token，最终只剩 168 个 Token（仅占初始的 7%），却精准包含了证据和答案（红色区域）。去除了大量噪音后，模型注意力更集中，甚至提高了预测的正确率。 组件消融实验 (Component ablations, Table 5): 单独添加 BTP、QTP、CTP，吞吐量和 QA 性能（EM, F1）均呈“阶梯状”递增。三者结合产生最强协同效应。 模型理解力指标筛选 (Model comprehension criteria, Table 6 \u0026 附录 Figure B): 作者对比了三种代理指标以确定 CTP 的最佳触发层： Entropy (信息熵)：利用输出分布的不确定性。但发现相关性最弱，大量样本集中在 9-10 层，区分度差。 Feature ∆ (特征差)：测量相邻层的特征差异。效果尚可。 L2 Norm (输出Token L2范数，本文采用)：达到了的吞吐量与精度的平衡。 6. Conclusion 在这项工作中，作者引入了 DocPrune，这是一个专为提升文档视觉问答效率而设计的、完全免训练且渐进式的 Token 剪枝框架。 与主要为图像和视频开发、依赖经验性选择固定剪枝层的早期剪枝方法不同，DocPrune 充分利用了文档的结构化布局特性（structured layout of documents），并独创性地采用了“理解感知（comprehension-aware）”标准来自适应地选择在何时进行剪枝。\n该框架通过三个的阶段运行：\n背景 Token 剪枝 (BTP)：消除主导文档的大面积无信息背景区域。 问题感知 Token 剪枝 (QTP)：去除那些与问题语义对齐度弱的冗余 Token。 理解感知 Token 剪枝 (CTP)：通过动态追踪模型逐层的内部理解状态，自适应地抛弃深层网络中不再需要的 Token。 ",
   "wordCount" : "838",
   "inLanguage": "zh-cn",
   "datePublished": "2026-04-29T00:00:00Z",
@@ -317,12 +307,12 @@ DOCPRUNE 的核心优势在于：
 <ul>
 <li><strong>阶段一 (Retrieval):</strong> 给定问题 $q$ 和大规模文档集 $D$，检索模型 $f_{RET}$ 会召回最相关的 Top-$K$ 页文档。公式如下：
 $$
-\tilde{D} = f_{RET}(q, D; K)
-$$</li>
+  \tilde{D} = f_{RET}(q, D; K)
+  $$</li>
 <li><strong>阶段二 (Question Answering):</strong> 多模态 QA 模型 $f_{QA}$ 使用召回的文档 $\tilde{D}$ 生成最终答案 $y$。公式如下：
 $$
-y = f_{QA}(q, \tilde{D})
-$$
+  y = f_{QA}(q, \tilde{D})
+  $$
 在这个架构下，DOCPRUNE 被巧妙地安插在不同阶段：BTP 和 QTP 用于减少视觉编码器（Vision Encoder）的输入负担，而 CTP 用于在 LLM 解码器（Decoder）内部进行自适应剪枝。</li>
 </ul>
 <p><img loading="lazy" src="https://jjl357.github.io/blog/image/DocPrune/f8.png"></p>
@@ -335,35 +325,35 @@ $$
 <li>统计整张图片，计算出出现频率最高的像素值作为<strong>主导背景强度（mode value）</strong> $m$。</li>
 <li>计算每个 patch 的<strong>背景比例（background ratio）</strong> $R_i$，即该 patch 内部有多少像素的值接近于 $m$：
 $$
-R_i = \frac{1}{P^2} \sum_{p=1}^{P^2} \mathbb{1} \left[ |\hat{t}_i^{(p)} - m| &lt; \tau_e \right]
-$$
+   R_i = \frac{1}{P^2} \sum_{p=1}^{P^2} \mathbb{1} \left[ |\hat{t}_i^{(p)} - m| < \tau_e \right]
+   $$
 <em>注：$\hat{t}_i^{(p)}$ 是第 $i$ 个 patch 内第 $p$ 个像素的灰度值；$\tau_e$ 是容错阈值（应对扫描或图片噪点导致的背景颜色微小波动）；$\mathbb{1}[\cdot]$ 是指示函数。</em></li>
 <li>最后，如果一个 Token 的背景比例过高（大于阈值 $\tau_{bg}$），就判定为纯背景并抛弃。保留下来的<strong>内容 Token 集合（content tokens）</strong> $\tilde{T}$ 定义为：
 $$
-\tilde{T} = { t_i \in T \mid R_i \le \tau_{bg} }
-$$
+   \tilde{T} = \{ t_i \in T \mid R_i \le \tau_{bg} \}
+   $$
 BTP 会同时应用在 Retrieval 和 QA 两个阶段的编码器之前，极其有效地降低了无用 Token 数量 <strong>(参见 Figure 7)</strong>。</li>
 </ol>
 <h3 id="33-question-aware-token-pruning-qtp---问题感知-token-剪枝">3.3. Question-aware Token Pruning (QTP - 问题感知 Token 剪枝)<a hidden class="anchor" aria-hidden="true" href="#33-question-aware-token-pruning-qtp---问题感知-token-剪枝">#</a></h3>
 <p>仅仅去除了背景还不够，因为留下的文字/表格中，大部分和用户的提问毫无关系（观察二）。QTP 旨在根据语义相关性进一步筛除 Token。
 <strong>具体实现细节：</strong></p>
 <ol>
-<li><strong>重用检索阶段的特征：</strong> 巧妙利用文档检索阶段已经计算好的“文档 Token 向量” $E^{doc} = {e_i^{doc} \in \mathbb{R}^C}<em>{i=1}^{N</em>{doc}}$ 和“问题 Token 向量” $E^{qst} = {e_j^{qst} \in \mathbb{R}^C}<em>{j=1}^{N</em>{qst}}$，免去了额外的计算开销。</li>
+<li><strong>重用检索阶段的特征：</strong> 巧妙利用文档检索阶段已经计算好的“文档 Token 向量” \(E^{doc} = \{e_i^{doc} \in \mathbb{R}^C\}_{i=1}^{N_{doc}}\) 和“问题 Token 向量” \(E^{qst} = \{e_j^{qst} \in \mathbb{R}^C\}_{j=1}^{N_{qst}}\)，免去了额外的计算开销。</li>
 <li><strong>计算相似度：</strong> 计算每个文档 Token 和所有问题 Token 之间的余弦相似度，并累加得到该文档 Token 的总相关度分数 $s_i$：
 $$
-s_i = \sum_{j=1}^{N_{qst}} \cos(e_i^{doc}, e_j^{qst})
-$$
-这得到了一张相似度分数图 $S = {s_i}<em>{i=1}^{N</em>{doc}}$。</li>
+   s_i = \sum_{j=1}^{N_{qst}} \cos(e_i^{doc}, e_j^{qst})
+   $$
+这得到了一张相似度分数图 \(S = \{s_i\}_{i=1}^{N_{doc}}\)。</li>
 <li><strong>解决分辨率差异（Bridge the resolution gap）：</strong> 因为检索模型（如 ColPali）和 QA 模型（如 Qwen2-VL）往往处理图像的分辨率不同，因此使用**双线性插值（bilinear interpolation）**将 $S$ 缩放到匹配 QA 模型的特征图分辨率。</li>
 <li><strong>高斯平滑（Gaussian smoothing）：</strong> 作者发现初始的相似度图主要在“关键词”周围形成尖锐的激活点。为了不切碎关键证据的上下文，并消除局部噪点，对相似度图应用高斯平滑操作 <strong>(参见 Figure 9)</strong>：
 $$
-S&rsquo; = G_\sigma * S
-$$
+   S' = G_\sigma * S
+   $$
 <em>注：$G_\sigma$ 是标准差为 $\sigma$ 的高斯核，$\ast$ 是卷积操作。</em></li>
 <li><strong>执行剪枝：</strong> 设定相关性阈值 $\tau_{qst}$，只保留大于阈值的 Token：
 $$
-\tilde{T} = { t_i \in T \mid S&rsquo;<em>i \ge \tau</em>{qst} }
-$$</li>
+   \tilde{T} = \{ t_i \in T \mid S'_i \ge \tau_{qst} \}
+   $$</li>
 </ol>
 <h3 id="34-comprehension-aware-token-pruning-ctp---理解感知-token-剪枝">3.4. Comprehension-aware Token Pruning (CTP - 理解感知 Token 剪枝)<a hidden class="anchor" aria-hidden="true" href="#34-comprehension-aware-token-pruning-ctp---理解感知-token-剪枝">#</a></h3>
 <p><img loading="lazy" src="https://jjl357.github.io/blog/image/DocPrune/f9.png"></p>
@@ -372,17 +362,17 @@ $$</li>
 CTP 基于两个标准来进行自适应剪枝（确定何时剪、剪什么）：</p>
 <ol>
 <li><strong>确定剪枝层（When to prune）：</strong>
-对于解码器的第 $l$ 层，Token 表示为 $X^l = {x_i^l}<em>{i=1}^N$，其中序列的最后一个 Token 为 $x_N^l \in \mathbb{R}^C$（该 Token 聚合了整个序列的信息）。
-计算最后一层 Token 的 L2 范数 $c_l = ||x_N^l||$ 作为模型“理解度（comprehension）”的代理指标。一旦 $c_l$ 超过预设的理解力阈值 $\tau</em>{comp}$，即刻判定模型已充分理解，触发剪枝。触发层 $l^<em>$ 计算如下：
+对于解码器的第 $l$ 层，Token 表示为 \(X^l = \{x_i^l\}_{i=1}^N\)，其中序列的最后一个 Token 为 $x_N^l \in \mathbb{R}^C$（该 Token 聚合了整个序列的信息）。
+计算最后一层 Token 的 L2 范数 $c_l = ||x_N^l||$ 作为模型“理解度（comprehension）”的代理指标。一旦 $c_l$ 超过预设的理解力阈值 \(\tau_{comp}\)，即刻判定模型已充分理解，触发剪枝。触发层 \(l^{\ast}\) 计算如下：
 $$
-l^</em> = \min({l \mid c_l \ge \tau_{comp}})
-$$</li>
+   l^{\ast} = \min(\{l \mid c_l \ge \tau_{comp}\})
+   $$</li>
 <li><strong>确定丢弃的 Token（What to prune）：</strong>
-一旦确定在第 $l^<em>$ 层剪枝，提取最后一个 Token 对所有视觉 Token 的注意力权重（Attention Weights）作为重要性得分，记为 $a^{l^</em>} \in \mathbb{R}^{N_{doc}}$。
-丢弃所有注意力分数低于 $\tau_{att}$ 的视觉 Token，将浓缩后的 $\tilde{X}^{l^<em>}$ 传递给下一层：
+一旦确定在第 \(l^{\ast}\) 层剪枝，提取最后一个 Token 对所有视觉 Token 的注意力权重（Attention Weights）作为重要性得分，记为 \(a^{l^{\ast}} \in \mathbb{R}^{N_{doc}}\)。
+丢弃所有注意力分数低于 $\tau_{att}$ 的视觉 Token，将浓缩后的 \(\tilde{X}^{l^{\ast}}\) 传递给下一层：
 $$
-\tilde{X}^{l^</em>} = { x_i^{l^<em>} \in X^{l^</em>} \mid a_i^{l^*} \ge \tau_{att} }
-$$</li>
+   \tilde{X}^{l^{\ast}} = \{ x_i^{l^{\ast}} \in X^{l^{\ast}} \mid a_i^{l^{\ast}} \ge \tau_{att} \}
+   $$</li>
 </ol>
 <h2 id="5-experiments">5. Experiments<a hidden class="anchor" aria-hidden="true" href="#5-experiments">#</a></h2>
 <p><img loading="lazy" src="https://jjl357.github.io/blog/image/DocPrune/t2.png"></p>

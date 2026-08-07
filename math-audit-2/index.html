@@ -1,0 +1,2754 @@
+<!doctype html>
+<html lang="zh-cn">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=14183&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="utf-8">
+  <title>Math Audit</title>
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+
+</head>
+<body>
+  
+  
+  
+    <section data-source="posts\DOCPRUNE - Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning - CVPR&#39;26.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/title.png"></p>
+<p><strong>Conference:</strong> <strong>CVPR'26</strong></p>
+<h2 id="1-abstract">1. Abstract</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/figure1.png"></p>
+<p>近年来，视觉-语言大模型（Vision-Language Models, VLMs）在多模态任务中展现了卓越的性能，其中包括文档问答（Document Question Answering, DocQA）。DocQA 任务不仅依赖文本，还需要利用排版、表格和图表中的结构化视觉线索（structured visual cues）。
+然而，文档图像与自然图像存在显著差异：<strong>文档图像包含大量的背景区域（large backgrounds），并且支持回答问题的证据极其稀疏（only sparse supporting evidence）</strong>。这种特性导致在处理尤其是长文档时，计算资源被极其低效地消耗。</p>
+<p>作者观察到，现有的针对自然图像和视频的 Token 减少方法（token-reduction methods，例如 FastV 等），在利用文档独有的“结构稀疏性（structural sparsity）”时显得力不从心。为了解决这一痛点，作者提出了 <strong>DOCPRUNE</strong>——一个<strong>免训练（training-free）</strong> 且 <strong>渐进式（progressive）</strong> 的文档 Token 剪枝框架，专为高效的长文档理解而设计。</p>
+<p>DOCPRUNE 的核心优势在于：</p>
+<ol>
+<li>它只保留对当前任务至关重要的 Token，同时剔除不必要的 Token（如纯背景或与问题无关的 Token）。</li>
+<li>它能够根据模型内部的“理解力水平（level of comprehension）”，自动选择在哪一层网络触发 Token 剪枝。</li>
+</ol>
+<p>最终，在 M3DocRAG 基准上的实验表明，DOCPRUNE 在 Vision Encoder（视觉编码器）和 LLM Decoder（大语言模型解码器）中分别将吞吐量（throughput）提升了 <strong>3.0倍</strong> 和 <strong>3.3倍</strong>，同时 F1 分数还提升了 <strong>+1.0</strong>。实现了在<strong>不进行任何额外训练（without any additional training）</strong> 的前提下，精度与效率的提升。</p>
+<h2 id="2-introduction">2. Introduction</h2>
+<p>在文档理解中，长文档通常包含数百页，但有用的内容（文本、表格、图表等）却散布在巨大的背景中。Transformer 架构处理单页就会产生数千个视觉 Token，计算成本极其高昂。</p>
+<p>传统的降低成本的方法是 Token Reduction（如针对自然图像或视频的合并和剪枝），其核心假设是“相邻 patch 通常包含相似的视觉信息”。然而，这一假设在文档中是失效的：<strong>文档排版（如文本行、表格）具有极其严格的空间组织规律，即使是微小的 Token 删减也极易破坏文本连贯性或丢失重要的排版线索（destroy important layout cues）。</strong> 因此，基于视觉冗余的传统方法在文档上性能下降严重。
+另外，现有的剪枝方法往往通过固定的启发式规则（fixed heuristics）来决定剪枝层，忽略了模型理解力在各层之间的演变（neglecting how comprehension evolves across layers）。这种忽略导致剪枝可能发生得过早或不一致，造成性能不稳定及效率提升有限。</p>
+<p>针对上述局限性，作者从“以文档为中心（document-centric）”的视角出发，得出了三大关键观察（详见 Section 3）。基于这些发现，提出了三阶段渐进式框架 <strong>DOCPRUNE (Figure 7)</strong>：</p>
+<ol>
+<li><strong>背景 Token 剪枝 (Background Token Pruning, BTP):</strong> 在进入编码器前，去除无信息量的背景区域。</li>
+<li><strong>问题感知 Token 剪枝 (Question-aware Token Pruning, QTP):</strong> 利用检索阶段获得的问题和文档的 Embedding 相似度，进一步过滤掉不必要的内容 Token。</li>
+<li><strong>理解感知 Token 剪枝 (Comprehension-aware Token Pruning, CTP):</strong> 监控输出 Token 的 L2 范数（L2 norm）来反映各层模型的理解度，一旦理解度达标，即触发自适应剪枝。</li>
+</ol>
+<p><strong>核心贡献（Contributions）：</strong></p>
+<ul>
+<li>首次对文档理解中的 Token 冗余和逐层理解力进行了全面研究，揭示了自然图像所不具备的独特结构稀疏性。</li>
+<li>提出了 DOCPRUNE，一个免训练的渐进式 Token 剪枝框架。</li>
+<li>取得了显著的效率提升，同时保持甚至超越了 Baseline 的精度。</li>
+</ul>
+<h2 id="3-key-observations">3. Key observations</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f2-3-t1.png"></p>
+<p>为了理解文档所面临的独特挑战，作者详细分析了三种现象，这些观察揭示了现有方法次优的原因，并直接启发了本文的方法设计：</p>
+<ol>
+<li>
+<p><strong>背景区域的绝对主导 (Dominance of background regions):</strong>
+文档图像存在大面积无语义的空白（如页边距、行间距），却依然消耗算力。作者统计了 M3DocRAG 数据集，将图像切分为 $32 \times 32$ 的 patch <strong>(参考 Figure 2)</strong>。如果一个 patch 的所有像素值与文档主导背景色相同，则被视为背景。分析表明，<strong>平均有 36% 的 patch 是纯背景</strong>。这证实了结构稀疏性的普遍存在，直接启发了后文的 <strong>BTP（背景剪枝）</strong>。</p>
+</li>
+<li>
+<p><strong>问题相关内容的极端稀疏性 (Sparsity of question-relevant content):</strong>
+排除背景后，实际用于回答问题的“证据”只集中在文档中非常小的局部区域 <strong>(参见 Figure 2 中高亮部分)</strong>。注意力分析 <strong>(Figure 3)</strong> 显示，排名前 10% 的高注意力 Token 占据了总注意力的 50%~80%。在 <strong>Table 1</strong> 中，如果在第 20 层仅保留最受关注的前 10% Token，F1 分数仅微降 1.2 点，但计算成本降至原来的 $1/9$，吞吐量提升 6.46 倍。这证明大多数 Token 只是徒增计算负担，由此启发了 <strong>QTP（问题感知剪枝）</strong>，专门保留与问题相关的关键证据。</p>
+</li>
+<li>
+<p><strong>与层级相关的剪枝效应 (Layer-dependent pruning effects):</strong>
+以往的固定层剪枝缺乏泛化性。作者在解码器的不同层强行剪去 90% 的 Token <strong>(Figure 4)</strong>，发现：在浅层，基于注意力的剪枝效果和随机剪枝一样差，说明浅层的 Attention 还不能识别显著特征；但到了第 15 层之后，性能急剧上升并在第 20 层左右达到峰值。这说明剪枝时机非常关键。
+由于固定层剪枝在推理时不够自适应，作者引入了一个替代指标：<strong>输出 Token 隐藏状态的 L2 范数 $c_l = ||x^l_T||$</strong>。在 <strong>Figure 5</strong> 和 <strong>Figure 6</strong> 中，作者证明了 $c_l$ 越高的样本准确率越好；同时，<strong>简单样本（easier samples）会在更浅的层达到较高的 $c_l$ 值，而困难样本需要更深的层。</strong> 这个发现证明 $c_l$ 完美捕捉了模型不断演进的置信度，这启发了 <strong>CTP（理解感知剪枝）</strong>。</p>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f-4-5-6.png"></p>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f7.png"></p>
+<p>本节详细阐述 DOCPRUNE 如何实现免训练的渐进式剪枝。整体流程可视化可以参考 <strong>Figure 7</strong> 和 <strong>Figure 8</strong>。</p>
+<h3 id="31-overall-architecture-总体架构">3.1. Overall architecture (总体架构)</h3>
+<p>系统建立在目前主流的“检索增强（RAG）文档理解”双阶段 pipeline 上（例如 M3DocRAG, SV-RAG）。</p>
+<ul>
+<li><strong>阶段一 (Retrieval):</strong> 给定问题 $q$ 和大规模文档集 $D$，检索模型 $f_{RET}$ 会召回最相关的 Top-$K$ 页文档。公式如下：
+$$
+  \tilde{D} = f_{RET}(q, D; K)
+  $$</li>
+<li><strong>阶段二 (Question Answering):</strong> 多模态 QA 模型 $f_{QA}$ 使用召回的文档 $\tilde{D}$ 生成最终答案 $y$。公式如下：
+$$
+  y = f_{QA}(q, \tilde{D})
+  $$
+在这个架构下，DOCPRUNE 被巧妙地安插在不同阶段：BTP 和 QTP 用于减少视觉编码器（Vision Encoder）的输入负担，而 CTP 用于在 LLM 解码器（Decoder）内部进行自适应剪枝。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f8.png"></p>
+<h3 id="32-background-token-pruning-btp---背景-token-剪枝">3.2. Background Token Pruning (BTP - 背景 Token 剪枝)</h3>
+<p>区别于以往 VLM 会破坏文档排版，BTP 的目标是在进行深度编码前，显式地检测并移除大面积背景，同时保留所有图文内容。
+<strong>具体实现细节：</strong></p>
+<ol>
+<li>给定输入图像 $I \in \mathbb{R}^{H \times W \times 3}$，切分为互不重叠的 $P \times P$ 大小的 patch。得到初始 Token 集合 $T = {t_i \in \mathbb{R}^{P \times P \times 3}}_{i=1}^N$，其中 $N = \frac{W}{P} \times \frac{H}{P}$。</li>
+<li>将每个 patch 转换为灰度图 $\hat{t}_i \in \mathbb{R}^{P \times P}$，以此简化背景检测。</li>
+<li>统计整张图片，计算出出现频率最高的像素值作为<strong>主导背景强度（mode value）</strong> $m$。</li>
+<li>计算每个 patch 的<strong>背景比例（background ratio）</strong> $R_i$，即该 patch 内部有多少像素的值接近于 $m$：
+$$
+   R_i = \frac{1}{P^2} \sum_{p=1}^{P^2} \mathbb{1} \left[ |\hat{t}_i^{(p)} - m| < \tau_e \right]
+   $$
+<em>注：$\hat{t}_i^{(p)}$ 是第 $i$ 个 patch 内第 $p$ 个像素的灰度值；$\tau_e$ 是容错阈值（应对扫描或图片噪点导致的背景颜色微小波动）；$\mathbb{1}[\cdot]$ 是指示函数。</em></li>
+<li>最后，如果一个 Token 的背景比例过高（大于阈值 $\tau_{bg}$），就判定为纯背景并抛弃。保留下来的<strong>内容 Token 集合（content tokens）</strong> $\tilde{T}$ 定义为：
+$$
+   \tilde{T} = \{ t_i \in T \mid R_i \le \tau_{bg} \}
+   $$
+BTP 会同时应用在 Retrieval 和 QA 两个阶段的编码器之前，极其有效地降低了无用 Token 数量 <strong>(参见 Figure 7)</strong>。</li>
+</ol>
+<h3 id="33-question-aware-token-pruning-qtp---问题感知-token-剪枝">3.3. Question-aware Token Pruning (QTP - 问题感知 Token 剪枝)</h3>
+<p>仅仅去除了背景还不够，因为留下的文字/表格中，大部分和用户的提问毫无关系（观察二）。QTP 旨在根据语义相关性进一步筛除 Token。
+<strong>具体实现细节：</strong></p>
+<ol>
+<li><strong>重用检索阶段的特征：</strong> 巧妙利用文档检索阶段已经计算好的“文档 Token 向量” \(E^{doc} = \{e_i^{doc} \in \mathbb{R}^C\}_{i=1}^{N_{doc}}\) 和“问题 Token 向量” \(E^{qst} = \{e_j^{qst} \in \mathbb{R}^C\}_{j=1}^{N_{qst}}\)，免去了额外的计算开销。</li>
+<li><strong>计算相似度：</strong> 计算每个文档 Token 和所有问题 Token 之间的余弦相似度，并累加得到该文档 Token 的总相关度分数 $s_i$：
+$$
+   s_i = \sum_{j=1}^{N_{qst}} \cos(e_i^{doc}, e_j^{qst})
+   $$
+这得到了一张相似度分数图 \(S = \{s_i\}_{i=1}^{N_{doc}}\)。</li>
+<li><strong>解决分辨率差异（Bridge the resolution gap）：</strong> 因为检索模型（如 ColPali）和 QA 模型（如 Qwen2-VL）往往处理图像的分辨率不同，因此使用**双线性插值（bilinear interpolation）**将 $S$ 缩放到匹配 QA 模型的特征图分辨率。</li>
+<li><strong>高斯平滑（Gaussian smoothing）：</strong> 作者发现初始的相似度图主要在“关键词”周围形成尖锐的激活点。为了不切碎关键证据的上下文，并消除局部噪点，对相似度图应用高斯平滑操作 <strong>(参见 Figure 9)</strong>：
+$$
+   S' = G_\sigma * S
+   $$
+<em>注：$G_\sigma$ 是标准差为 $\sigma$ 的高斯核，$\ast$ 是卷积操作。</em></li>
+<li><strong>执行剪枝：</strong> 设定相关性阈值 $\tau_{qst}$，只保留大于阈值的 Token：
+$$
+   \tilde{T} = \{ t_i \in T \mid S'_i \ge \tau_{qst} \}
+   $$</li>
+</ol>
+<h3 id="34-comprehension-aware-token-pruning-ctp---理解感知-token-剪枝">3.4. Comprehension-aware Token Pruning (CTP - 理解感知 Token 剪枝)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f9.png"></p>
+<p>经过 BTP 和 QTP 送入大模型的 Token 已经非常精简，但在 LLM 内部随着层数的加深，模型逐渐“理解”了图像和文本的对应关系。CTP 旨在模型达到“充分理解”时，立刻抛弃视觉 Token 以加速后续层的推理。<strong>(逻辑图参考 Figure 8)</strong>
+<strong>具体实现细节：</strong>
+CTP 基于两个标准来进行自适应剪枝（确定何时剪、剪什么）：</p>
+<ol>
+<li><strong>确定剪枝层（When to prune）：</strong>
+对于解码器的第 $l$ 层，Token 表示为 \(X^l = \{x_i^l\}_{i=1}^N\)，其中序列的最后一个 Token 为 $x_N^l \in \mathbb{R}^C$（该 Token 聚合了整个序列的信息）。
+计算最后一层 Token 的 L2 范数 $c_l = ||x_N^l||$ 作为模型“理解度（comprehension）”的代理指标。一旦 $c_l$ 超过预设的理解力阈值 \(\tau_{comp}\)，即刻判定模型已充分理解，触发剪枝。触发层 \(l^{\ast}\) 计算如下：
+$$
+   l^{\ast} = \min(\{l \mid c_l \ge \tau_{comp}\})
+   $$</li>
+<li><strong>确定丢弃的 Token（What to prune）：</strong>
+一旦确定在第 \(l^{\ast}\) 层剪枝，提取最后一个 Token 对所有视觉 Token 的注意力权重（Attention Weights）作为重要性得分，记为 \(a^{l^{\ast}} \in \mathbb{R}^{N_{doc}}\)。
+丢弃所有注意力分数低于 $\tau_{att}$ 的视觉 Token，将浓缩后的 \(\tilde{X}^{l^{\ast}}\) 传递给下一层：
+$$
+   \tilde{X}^{l^{\ast}} = \{ x_i^{l^{\ast}} \in X^{l^{\ast}} \mid a_i^{l^{\ast}} \ge \tau_{att} \}
+   $$</li>
+</ol>
+<h2 id="5-experiments">5. Experiments</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/t2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/t3-4.png"></p>
+<h3 id="41-implementation-details-实施细节">4.1. Implementation details (实施细节)</h3>
+<p><strong>模型与基准：</strong> 作者使用 M3DocRAG 为主 Baseline，采用 ColPali-v1 进行检索，Qwen2-VL (7B) 为 QA 模型。同时也扩展测试了 VDocRAG 架构。
+<strong>硬件配置：</strong> 单张 NVIDIA RTX A6000 GPU + AMD EPYC 7763 CPU。</p>
+<h3 id="42-evaluation-setup-评估设置">4.2. Evaluation setup (评估设置)</h3>
+<ul>
+<li><strong>性能指标:</strong> Accuracy (ACC), Exact Match (EM), F1 分数（并分别按图片/表格/文本模态，以及单跳/多跳逻辑进行拆解）。</li>
+<li><strong>效率指标:</strong> 视觉 Token 丢弃率 (Visual token drop rate)、TFLOPs (计算量) 以及吞吐量 (Throughput, samples/s)。并拆分开报告 Encoder 和 Decoder 的指标。</li>
+</ul>
+<h3 id="43-main-results-主要结果">4.3. Main results (主要结果)</h3>
+<ul>
+<li><strong>开放域 Doc-VQA (Open-domain Doc-VQA，Table 2):</strong>
+在 M3DocVQA 测试集上，DOCPRUNE 碾压了现有的所有剪枝 baseline (FastV, DivPrune, VTW)。在 Top-4 检索配置下，Encoder 和 Decoder 的 TFLOPs 下降了 <strong>70%</strong> 以上。吞吐量最高提升 <strong>3.3倍</strong>，且 EM 提升了 1.5，F1 提升了 1.0。
+<em>对比同行：</em> VTW 粗暴的层级剪枝损害了细粒度理解；DivPrune 迭代计算带来的开销在大量 Token 下反而拖慢了吞吐量。只有 DOCPRUNE 实现了全 pipeline 加速并超越不剪枝的基础模型。此外，<strong>Table 4</strong> 证明其在 VDocRAG 上依然通用，带来 2.4倍加速。</li>
+<li><strong>闭域 Doc-VQA (Closed-domain Doc-VQA，Table 3):</strong>
+在长文档基准 MMLongBench-Doc（使用 Qwen2.5-VL），Top-1 配置下，DOCPRUNE 吞吐量提升 2.1倍，ACC 增加 +0.9，F1 增加 +0.4。</li>
+</ul>
+<h3 id="44-analyses-深入分析">4.4. Analyses (深入分析)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/f10.png"></p>
+<ul>
+<li><strong>定性可视化分析 (Qualitative analysis, Figure 10 &amp; 附录 Figure A/C):</strong>
+以 <strong>Figure 10</strong> 为例，一张原始图片生成 2508 个 Token。
+<ul>
+<li>应用 BTP 后 (Figure 10-b)：大白边消失，降至 1340 Token。</li>
+<li>应用 QTP 后 (Figure 10-c)：与问题无关的段落被剔除，降至 460 Token（只有包含了问题关键词 cue 的蓝色区域保留）。</li>
+<li>应用 CTP 后 (Figure 10-d)：根据深层理解力，模型提炼出了最核心的 Token，最终只剩 168 个 Token（<strong>仅占初始的 7%</strong>），却精准包含了证据和答案（红色区域）。去除了大量噪音后，模型注意力更集中，甚至提高了预测的正确率。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/t5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/DocPrune/t6.png"></p>
+<ul>
+<li><strong>组件消融实验 (Component ablations, Table 5):</strong>
+单独添加 BTP、QTP、CTP，吞吐量和 QA 性能（EM, F1）均呈“阶梯状”递增。三者结合产生最强协同效应。</li>
+<li><strong>模型理解力指标筛选 (Model comprehension criteria, Table 6 &amp; 附录 Figure B):</strong>
+作者对比了三种代理指标以确定 CTP 的最佳触发层：
+<ol>
+<li><code>Entropy (信息熵)</code>：利用输出分布的不确定性。但发现相关性最弱，大量样本集中在 9-10 层，区分度差。</li>
+<li><code>Feature ∆ (特征差)</code>：测量相邻层的特征差异。效果尚可。</li>
+<li><code>L2 Norm (输出Token L2范数，本文采用)</code>：达到了的吞吐量与精度的平衡。</li>
+</ol>
+</li>
+</ul>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>在这项工作中，作者引入了 DocPrune，这是一个专为提升文档视觉问答效率而设计的、完全免训练且渐进式的 Token 剪枝框架。
+与主要为图像和视频开发、依赖经验性选择固定剪枝层的早期剪枝方法不同，DocPrune 充分利用了文档的结构化布局特性（structured layout of documents），并独创性地采用了“理解感知（comprehension-aware）”标准来自适应地选择在何时进行剪枝。</p>
+<p>该框架通过三个的阶段运行：</p>
+<ol>
+<li><strong>背景 Token 剪枝 (BTP)</strong>：消除主导文档的大面积无信息背景区域。</li>
+<li><strong>问题感知 Token 剪枝 (QTP)</strong>：去除那些与问题语义对齐度弱的冗余 Token。</li>
+<li><strong>理解感知 Token 剪枝 (CTP)</strong>：通过动态追踪模型逐层的内部理解状态，自适应地抛弃深层网络中不再需要的 Token。</li>
+</ol>
+
+    </section>
+  
+    <section data-source="posts\Empirical Recipes for Efficient and Compact Vision-Language Models.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/title.png"></p>
+<h2 id="1-abstract">1. Abstract</h2>
+<p>在资源受限的环境中部署视觉语言模型 (VLMs) 要求低延迟和高吞吐量。然而，现有的轻量级 (Compact) VLMs 往往无法达到其参数量缩减所应带来的推理加速。为了解释这一现象，作者进行了端到端的效率分析，并系统地剖析了推理过程以识别主要瓶颈。</p>
+<p>基于这些发现，作者为轻量级 VLMs 量身定制了一系列优化方案 (Recipes)，在保持准确性的同时大幅降低了延迟。这些技术将 InternVL3-2B 的首字生成时间 (Time To First Token, TTFT) 降低了 53%，在 SmolVLM-256M 上降低了 93%。作者的优化方案广泛适用于各种 VLM 架构和主流服务框架。</p>
+<p>此外，作者研究了如何扩展轻量级 VLM 以支持结构化感知输出，并推出了 <strong>ARGUSVLM</strong> 模型系列。ARGUSVLM 在多个基准测试中表现强劲，同时保持了紧凑且高效的设计。</p>
+<h2 id="2-introduction">2. Introduction</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure1.png"></p>
+<p>尽管紧凑型模型参数量更小，但它们在端到端效率上的表现往往不如预期。例如，SmolVLM-256M 的参数量远小于 InternVL3-8B，但其 TTFT (344.7 ms) 却比后者 (177.4 ms) 更长。</p>
+<p>通过系统性分析，作者发现：在轻量级模型中，以往被忽视的 <strong>CPU 端操作</strong>（如图像预处理、文本分词）往往主导了整体延迟。相比之下，得益于 FlashAttention、CUDA Graphs 和算子融合 (Kernel Fusion) 等技术，GPU 端的计算占比反而较低。</p>
+<p>本研究通过针对性的 CPU 端优化，将 InternVL3-2B 的 TTFT 从 124.0 ms 降至 57.7 ms，将 SmolVLM-256M 的 TTFT 从 344.7 ms 降至 22.8 ms (如图 1 所示)。</p>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure2.png"></p>
+<p>作者的贡献主要分为三个方面：</p>
+<ol>
+<li><strong>系统性分析</strong>：对紧凑型 VLM 进行了端到端的 Profiling 研究，揭示了主要延迟瓶颈并提供了实际部署指南。</li>
+<li><strong>ARGUSVLM 模型系列</strong>：开发了参数量覆盖 256M 到 2B 的模型系列，并对边界框 (Bounding-box) 预测公式进行了受控研究，以统一结构化视觉感知与多模态理解。</li>
+<li><strong>卓越性能与效率</strong>：ARGUSVLM 在 VQA、图像描述及密集图像描述任务上表现出色，且在延迟和吞吐量上远优达标 (如图 2)。</li>
+</ol>
+<h2 id="4-recipes-to-improve-inference-efficiency">4. Recipes to Improve Inference Efficiency</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure4.png"></p>
+<p>作者基于 vLLM 推理框架构建并识别优化路径。</p>
+<h3 id="31-inference-computation-profiling-推理计算剖析">3.1. Inference Computation Profiling (推理计算剖析)</h3>
+<p><strong>Profiler 工具选择：</strong></p>
+<ul>
+<li><strong>CPU 端：</strong> 推荐使用 <strong>austin</strong>。相比 cProfile，它的开销更低；相比 py-spy，它对 vLLM 这种多进程应用的支持更好，能有效生成火焰图 (Flame Graphs) 识别热点。</li>
+<li><strong>GPU 端：</strong> 使用 <strong>NVIDIA Nsight Systems</strong>，用于诊断内核计时、内存传输及量化性能。</li>
+</ul>
+<p><strong>关键发现：</strong></p>
+<ol>
+<li><strong>量化在紧凑型模型上可能失效</strong>：
+在 H100 上对 ARGUSVLM-256M 进行 FP8 W8A8 量化测试发现，量化模型的吞吐量反而比 bfloat16 低 6.4% (499.08 vs 533.28 tokens/s)。
+<ul>
+<li><strong>原因分析</strong>：虽然量化矩阵乘法 (GEMM) 快了 1.1 倍，但<strong>激活量化 (Activation Quantization)</strong> 引入了显著的额外开销 (+5.50µs)，即便已融合进 LayerNorm 或 Silu 内核，该开销仍抵消了计算收益。</li>
+</ul>
+</li>
+<li><strong>CPU 操作是主要瓶颈</strong>：
+由于 GPU 端已经高度优化（FlashAttention, CUDA Graphs），GPU 执行时间已接近饱和。在轻量级模型中，CPU 端的任务（如图像解码、Tokenization）由于无法并行且涉及频繁的 Host-to-Device (H2D) 通信，成为了 TTFT 的核心瓶颈。</li>
+</ol>
+<h3 id="32-case-studies--33-practical-recipes">3.2. Case Studies &amp; 3.3. Practical Recipes</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/table1&2.png"></p>
+<p>通过对 InternVL3-2B 和 SmolVLM-256M 的案例研究，作者提炼出以下实用优化方案：</p>
+<h4 id="a-最小化关键路径上的图像处理-minimize-image-processing"><strong>A. 最小化关键路径上的图像处理 (Minimize image processing)</strong></h4>
+<ul>
+<li><strong>避免重复操作</strong>：减少重复的图像编解码、缩放 (Resizing)、裁剪 (Cropping) 和填充 (Padding)。</li>
+<li><strong>使用高效库</strong>：使用 <strong>Pillow-SIMD</strong> 替代原生 Pillow 进行图像解码，使用 <strong>torchvision</strong> 处理转换操作。</li>
+<li><strong>GPU 卸载</strong>：尽可能将 Resize 和 Normalize 等预处理步骤从 CPU 转移到 GPU 执行。</li>
+<li><strong>简化逻辑</strong>：去除不必要的图像处理冗余步骤。</li>
+</ul>
+<h4 id="b-减少-cpu-gpu-通信-reduce-cpu-gpu-communication"><strong>B. 减少 CPU-GPU 通信 (Reduce CPU-GPU communication)</strong></h4>
+<ul>
+<li><strong>传输更小的数据类型</strong>：传输 <code>UInt8</code> 格式的图像而非 <code>Float32</code>，在 GPU 设备端再进行类型转换。</li>
+<li><strong>使用固定内存 (Pinned Memory)</strong>：利用 Page-locked 内存加速 H2D 传输。</li>
+<li><strong>合并传输</strong>：将多个小的 H2D 传输合并为一个大传输。</li>
+</ul>
+<h4 id="c-优化-tokenization-分词优化"><strong>C. 优化 Tokenization (分词优化)</strong></h4>
+<ul>
+<li><strong>简化占位符</strong>：VLM 通常使用大量重复的图像 Token 占位符（如 <code>&lt;IMG_CONTEXT&gt;</code>），导致 Prompt 极长，显著拖慢分词速度。采用更紧凑的占位符方案可显著提升 TTFT。</li>
+</ul>
+<h4 id="d-策略顺序"><strong>D. 策略顺序</strong></h4>
+<ul>
+<li><strong>先剖析，后优化</strong>：先用工具定位真实瓶颈，避免过早优化不重要的部分。</li>
+</ul>
+<h2 id="5-recipes-for-building-compact-vlms-模型构建方法详解">5. Recipes for Building Compact VLMs (模型构建方法详解)</h2>
+<p>本节详细介绍了 ARGUSVLM 的架构设计及如何实现细粒度的结构化感知。</p>
+<h3 id="51-model-architecture-模型架构">5.1. Model Architecture (模型架构)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure5.png"></p>
+<p>ARGUSVLM 采用标准的 Encoder-Projector-LLM 架构：</p>
+<ul>
+<li><strong>Vision Encoder</strong>: 采用 <strong>SigLIP-SO400M</strong>，能够处理多尺度输入。</li>
+<li><strong>Language Model</strong>:
+<ul>
+<li><strong>ARGUSVLM-256M</strong>: 基于 <strong>SmolLM2-135M</strong>。</li>
+<li><strong>ARGUSVLM-2B</strong>: 基于 <strong>Qwen2.5-1.5B</strong>。</li>
+</ul>
+</li>
+<li><strong>Projector</strong>: 简单的 MLP 映射层，将视觉特征对齐到文本空间。</li>
+</ul>
+<h3 id="52-structured-perception-结构化感知与边界框预测">5.2. Structured Perception (结构化感知与边界框预测)</h3>
+<p>为了让轻量级 VLM 具备检测目标位置的能力，论文研究了三种边界框 ($[x_{min}, y_{min}, x_{max}, y_{max}]$) 的表征方法：</p>
+<ol>
+<li><strong>Float-based (基于浮点数)</strong>:
+直接预测归一化后的浮点数坐标。虽然直观，但与 LLM 的离散 Token 预测本质冲突。</li>
+<li><strong>Bin-based (基于分箱)</strong>:
+将连续坐标映射为离散的整数索引（如 0-999）。
+$$\text{bin}_x = \lfloor x \times (N-1) \rfloor$$
+其中 $N$ 是分箱数量。这种方法能很好地适配 LLM 的分类损失函数。</li>
+<li><strong>Codebook-based (基于代码本)</strong>:
+使用类似于 VQ-VAE 的量化方法，从预定义的代码本中选择代表坐标的 Token。</li>
+</ol>
+<p><strong>结论</strong>：实验表明，对于紧凑型模型，<strong>Bin-based</strong> 表征在收敛速度和定位精度上表现最佳，因为它利用了 LLM 已有的预测头结构，同时提供了足够的空间分辨率。</p>
+<h3 id="53-training-stages-训练阶段">5.3. Training Stages (训练阶段)</h3>
+<ul>
+<li><strong>Stage 1: Pre-training</strong>: 在大规模图像-文本对上训练，重点在于视觉特征与文本语义的对齐。</li>
+<li><strong>Stage 2: Instruction Fine-tuning</strong>: 引入混合指令数据集，包括通用 VQA、Dense Captioning 和基于坐标的任务。</li>
+</ul>
+<h2 id="6-evaluation-实验评估">6. Evaluation (实验评估)</h2>
+<p>作者对推理效率和模型能力进行了全面评估。</p>
+<h3 id="61-efficiency-evaluation-效率评估">6.1. Efficiency Evaluation (效率评估)</h3>
+<p>测试环境：单张 NVIDIA H100 GPU，vLLM 推理后端。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/table1&2.png"></p>
+<ul>
+<li><strong>延迟对比 (Table 1 &amp; 2)</strong>:
+<ul>
+<li><strong>InternVL3-2B</strong>: 优化后 TTFT 降低 53% (124ms -&gt; 57.7ms)，端到端延迟降低 44%。</li>
+<li><strong>SmolVLM-256M</strong>: 优化后 TTFT 降低 93% (344.7ms -&gt; 22.8ms)，端到端延迟降低 80%。</li>
+</ul>
+</li>
+<li><strong>吞吐量 (Throughput)</strong>:
+ARGUSVLM 在处理高并发请求时表现出显著优势。在相同的硬件条件下，由于 CPU 开销的移除，ARGUSVLM 的总吞吐量比原始实现的紧凑型 VLM 提升了数倍。</li>
+</ul>
+<h3 id="62-benchmarking-model-capability-模型能力基准">6.2. Benchmarking Model Capability (模型能力基准)</h3>
+<p>ARGUSVLM 在多个主流榜单上进行了测试：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/table3.png"></p>
+<ul>
+<li>
+<p><strong>常规 VQA 基准 (Table 3)</strong>:
+评估包括 MMBench, SEED-Bench, ScienceQA 等。</p>
+<ul>
+<li><strong>ARGUSVLM-2B</strong> 在多个任务上超越了同尺寸的 InternVL2-2B 和 Qwen2-VL-2B。</li>
+<li><strong>ARGUSVLM-256M</strong> 尽管参数量极小，但在文本识别和基础推理任务上展现了极高的效率比。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure6.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/table4.png"></p>
+<ul>
+<li>
+<p><strong>密集感知任务 (Figure 6 &amp; Table 4)</strong>:
+针对边界框预测任务（Visual Grounding &amp; Dense Captioning）：</p>
+<ul>
+<li>ARGUSVLM 能够准确生成目标物体的坐标 Token。</li>
+<li><strong>Figure 6</strong> 展示了其在复杂场景下的定位能力，不仅能描述物体，还能给出精确的空间范围。</li>
+</ul>
+</li>
+</ul>
+<h3 id="63-quantization-vs-fp16-figure-4--7">6.3. Quantization vs. FP16 (Figure 4 &amp; 7)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ARGUSVLM/figure7.png"></p>
+<ul>
+<li><strong>图 4 (GPU Timeline)</strong>: 通过 Nsight 剖析展示了 FP8 量化带来的 Kernel 执行间隙。可以观察到，虽然算子本身变快了，但算子前后的 Data Conversion (bfloat16 $\leftrightarrow$ FP8) 消耗了大量时间，导致 GPU 存在明显的空闲等待。</li>
+<li><strong>图 7 (Scaling Laws)</strong>: 研究了模型尺寸与精度之间的平衡，证明了通过优化推理方案，256M 级别的模型可以在极低延迟下达到可用的精度标准。</li>
+</ul>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>作者推出了 <strong>ARGUSVLM</strong>，这是一个紧凑且高效的视觉语言模型系列，成功统一了文本视觉理解与精细化感知。</p>
+<p>通过对紧凑型 VLM 推理过程的端到端剖析，作者识别了关键的实现瓶颈，并提出了针对性的优化方案，在不损失准确性的前提下显著降低了延迟。为了扩展紧凑型模型的结构化感知能力，作者深入研究了在下次 Token 预测目标下，学习空间定位输出（如边界框）的有效公式。</p>
+<p>大量实验证明，ARGUSVLM 在保持轻量化的同时性能强劲，且推理速度远超现有的同类模型。总之，作者的研究为构建高效且强大的视觉语言系统提供了实用的经验指导和实证证据。</p>
+
+    </section>
+  
+    <section data-source="posts\Variation-aware Vision Token Dropping for Faster Large Vision-Language Models - CVPR&#39;26.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/title.png"></p>
+<p><strong>Conference:</strong> <strong>CVPR'26</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/xuyang-liu16/V2Drop">https://github.com/xuyang-liu16/V2Drop</a></p>
+<hr>
+<h2 id="abstract">Abstract</h2>
+<p>Large vision-language models（LVLMs）在多模态理解任务上表现强大，但随着高分辨率图像与长视频理解需求不断增加，视觉 token 数量急剧上升，从而显著降低推理效率。Token compression 提供了一条直接路径：在不改变模型结构的前提下减少待处理 token 数，从而提升计算效率。作者通过系统分析指出，现有 inner-LLM token compression 方法主要存在两个关键问题：<strong>positional bias</strong> 和 <strong>incompatibility with efficient operators</strong>，这两点严重阻碍了它们在 LVLM 加速中的实际部署。本文提出了<strong>首个从动态 token variation 视角出发的方法</strong>，发现 LLM 内部的视觉 token variation 具有 task-agnostic 特性。基于这一观察，作者提出 <strong>Variation-aware Vision Token Dropping（V2Drop）</strong>，在 LVLM 推理过程中逐步移除 variation 最小的视觉 token，从而提升计算效率。大量实验表明，V2Drop 在图像理解任务和视频理解任务上分别保留了原始性能的 <strong>94.0%</strong> 和 <strong>98.6%</strong>，同时将 LLM generation latency 分别降低了 <strong>31.5%</strong> 和 <strong>74.2%</strong>。</p>
+<hr>
+<h2 id="1-introduction">1. Introduction</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure3.png"></p>
+<p>Large vision-language models（LVLMs）在视觉理解与推理任务上表现突出，能够覆盖多种 vision-language 任务；但高分辨率图像理解和长视频理解会引入大量视觉 token，导致推理开销快速增长并限制实际部署。作者指出，随着输入分辨率和视频长度的提升，视觉 token 的数量增加会带来明显的计算复杂度压力，尤其是在 LLM 侧的 prefilling 和 generation 阶段。</p>
+<p>为缓解这一问题，已有大量 token compression 方法被提出，用于去除冗余视觉 token 并尽可能保留性能。其中，<strong>Inner-LLM compression</strong> 因其 architecture-agnostic 和 plug-and-play 的性质受到特别关注：这类方法不需要修改主干结构，而是在 LLM forward 过程中进行 token 剪枝或合并。典型方法往往依赖 LLM attention weights 来选择“重要 token”，但作者强调，这类策略存在根本缺陷。</p>
+<p>作者进一步分析了 attention-guided 方法（如 FastV、SparseVLM）与 variation-aware evaluation 的 token 保留分布：前者会显著偏向保留视觉序列末端 token，而不管内容是否真的重要；后者则能产生更自然、更均匀的空间分布。Figure 2 和 Figure 3 共同说明了这一点：attention-guided 方法表现出<strong>information-agnostic positional bias</strong>，即高重要性偏置与内容无关，更多与 token 位置相关；而 variation-aware 方法则更符合视觉语义的实际分布。这个偏差会导致早期重要 token 被误删，进而加剧 multimodal hallucination。与此同时，attention weight 的显式计算还会与 FlashAttention 等 efficient operators 冲突，造成额外显存开销，甚至峰值显存高于不压缩模型。</p>
+<p>基于上述问题，作者提出了一个核心问题：<strong>是否可以不依赖间接 attention signal，而是直接利用 token 在模型内部的行为变化来判断其重要性？</strong> 为此，本文从 token variation 的角度重新审视“什么才是真正重要的视觉 token”。作者的核心洞察是：<strong>真正参与 LLM 计算的 token，会在层与层之间表现出更显著的表征变化；而作用较小的 token 则在多个层之间保持相对静态。</strong> 因此，作者定义这类变化缓慢的 token 为 lazy tokens，并提出 V2Drop：通过识别并逐步丢弃 lazy tokens，实现高效的 LVLM 推理加速，同时避免 positional bias，并保持与 efficient operators 的兼容性。</p>
+<p>最终，V2Drop 在图像理解和视频理解上都取得了良好的 performance-efficiency trade-off：图像理解任务上达到 <strong>1.30×</strong> 加速，视频理解任务上达到 <strong>1.87×</strong> 加速。作者总结了三点贡献：第一，系统性分析 token variation pattern，证明 variation magnitude 与任务相关性和 token 重要性相关；第二，提出 variation-aware token dropping，在不依赖 attention weights 的情况下实现 progressive dropping；第三，通过大量实验验证其在不同 LVLM 和 VideoLLM 上均能兼顾准确率与效率。</p>
+<hr>
+<h2 id="2-related-work">2. Related Work</h2>
+<h3 id="large-vision-language-models">Large Vision-Language Models</h3>
+<p>LVLM 通常采用 <strong>ViT-Projector-LLM</strong> 范式：视觉编码器首先将图像或视频编码为视觉 embeddings，再通过 projector（通常是两层 MLP）映射为 vision tokens，最后交由 LLM 进行文本生成。近年来，LVLM 为适应更高分辨率输入和更长视频序列，开始引入动态裁剪、native resolution 和长上下文建模等策略，例如 InternVL-3、LLaVA-OneVision、Qwen2-VL、Seed1.5-VL、VideoLLaMA3 等。但这些改进也使 visual token 数量进一步增长，导致二次复杂度问题更加严重，影响 scalability 和 practical deployment。</p>
+<h3 id="token-compression-for-lvlms">Token Compression for LVLMs</h3>
+<p>Token compression 的目标是直接缩短 token 序列，从而提升模型效率。相关工作从 training-aware paradigm 逐步发展到 training-free 方法，后者更适合 plug-and-play 式的推理加速。作者将方法分为两类：</p>
+<ol>
+<li><strong>Pre-LLM compression</strong>：在进入 LLM 之前对视觉 token 进行压缩；</li>
+<li><strong>Inner-LLM compression</strong>：在 LLM forward 过程中完成压缩。</li>
+</ol>
+<p>然而，大多数 Inner-LLM 方法依赖 attention weights，因而存在两个问题：一是无法与 FlashAttention 等 efficient attention operator 兼容，导致显存峰值上升；二是容易产生 positional bias，偏向保留序列末端 token，而忽略真正关键的视觉区域。作者因此转向<strong>低 variation token 的渐进式丢弃</strong>，以实现无需 attention weights 的训练自由加速。</p>
+<hr>
+<h2 id="3-methodology">3. Methodology</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure5.png"></p>
+<h3 id="31-preliminary-lvlms">3.1. Preliminary: LVLMs</h3>
+<p>LVLM 主要遵循 “ViT-Projector-LLM” 架构。给定图像 $I \in \mathbb{R}^{H \times W \times 3}$ 或视频 \(V = \{v_i\}_{i=1}^{T} \in \mathbb{R}^{T \times H \times W \times 3}\)，其处理流程可概括为三步：
+(i) <strong>Visual encoder（ViT）</strong> 将输入映射为视觉 embeddings $E \in \mathbb{R}^{N \times D}$（图像）或 \(E = \{e_i\}_{i=1}^{T} \in \mathbb{R}^{T \times N \times D}\)（视频）；
+(ii) <strong>Projector（通常为 2-layer MLP）</strong> 将 embeddings 映射为 vision tokens $F_v \in \mathbb{R}^{M \times D&rsquo;}$（图像）或 $F_v = {f_v^i}_{i=1}^{T} \in \mathbb{R}^{T \times M \times D&rsquo;}$（视频），其中 $M \le N$；
+(iii) <strong>LLM decoder</strong> 在 prefilling 阶段同时处理视觉 token 和文本 token $F_t$，并在 decoding 阶段自回归地产生答案。生成过程可写为：</p>
+$$
+p(Y \mid F_v, F_t)=\prod_{j=1}^{L} p\left(y_j \mid F_v, F_t, Y_{1:j-1}\right),
+$$<p>其中 $Y={y_j}_{j=1}^{L}$ 表示最终生成 token 序列。这里作者强调，不同 LVLM 的 token 数变化存在差异：例如 LLaVA-1.5 在 projector 后 token 数通常保持不变（$M=N$），而部分 VideoLLM 会为了效率在 projector 阶段提前压缩 token（$M \lt N$）。这也解释了为什么 token compression 在不同模型上的作用位置和收益会不同。</p>
+<h3 id="32-token-variation-in-lvlms">3.2. Token Variation in LVLMs</h3>
+<p>为克服 attention-guided 的局限，作者从“外部信号”转向“内部属性”，重新思考 token importance 的本质：<strong>一个视觉 token 之所以重要，是因为它在 LLM 处理过程中持续参与并引发表征变化。</strong> 与之相对，变化较小的 token 更像是“lazy token”，对最终输出贡献有限。</p>
+<h4 id="token-variation-metrics">Token Variation Metrics</h4>
+<p>作者定义了相邻 LLM transformer layers 之间的 token variation，并使用三种指标衡量：L1 Distance、L2 Distance 和 Cosine Similarity。对于第 $l$ 层的第 $i$ 个视觉 token $f_i^{(l)}$，variation 记为：</p>
+$$
+\text{Var}(f_i^{(l-1)}, f_i^{(l)})=
+\begin{cases}
+|f_i^{(l)}-f_i^{(l-1)}|_1, & \text{L1 Distance} \
+|f_i^{(l)}-f_i^{(l-1)}|_2, & \text{L2 Distance} \
+1-\dfrac{f_i^{(l)} \cdot f_i^{(l-1)}}{|f_i^{(l)}|_2 |f_i^{(l-1)}|_2}, & \text{Cosine Similarity}
+\end{cases}
+$$<p>其中，数值越大表示 token 在相邻层之间表征变化越显著。三种指标分别反映不同类型的变化：L1 更关注稀疏变化，L2 反映整体幅度变化，Cosine Similarity 则关注方向变化。作者默认在实验中采用 <strong>L2 distance</strong>，并在消融实验中验证其他指标也同样有效。</p>
+<h4 id="variation-relevance-relationship">Variation-Relevance Relationship</h4>
+<p>Figure 4 给出定性证据：在 LLaVA-1.5-7B 第三层 transformer 中，具有显著 variation 的 token（高 L1/L2、低 cosine similarity）与答案相关区域高度一致，例如 “Are these bottles of pepsi?” 中与 pepsi 瓶子相关的 token，以及 “What number is on the player&rsquo;s jersey?” 中与球衣数字相关的 token（如答案 22 对应区域）。相反，variation 较小的 token 多落在任务无关区域。</p>
+<p>更重要的是，Figure 4 展示了两个不同空间位置的例子：一个答案区域位于图像中部，另一个位于底部，对应的 token index 也处于不同区间。但三种 variation 指标都能准确识别这些语义关键区域，说明 variation 机制具有<strong>spatial-agnostic</strong> 能力，不依赖 token 在序列中的绝对位置。这个性质恰好克服了 attention-guided 方法的 positional bias。作者由此提出：<strong>高 variation token 正在 actively participating in reasoning process，因此应被保留；低 variation token 代表稳定、贡献有限的 lazy tokens，可安全丢弃。</strong></p>
+<h3 id="33-variation-aware-vision-token-dropping">3.3. Variation-aware Vision Token Dropping</h3>
+<p>基于上述观察，作者提出 <strong>V2Drop</strong>：在 LLM 推理过程中，按 layer 逐步识别并丢弃 low-variation 的 vision tokens，同时保留语义上更关键的 token。</p>
+<p>V2Drop 的核心设置是：给定 LLM 中的 vision tokens 序列 $F_v \in \mathbb{R}^{M \times D&rsquo;}$，采用一个 <strong>multi-stage progressive dropping</strong> 策略，在预先选定的三处 LLM 层上进行 pruning。作者将这三层设计为覆盖 shallow / middle / deep 三个阶段，以在压缩率与性能保持之间取得平衡。Figure 5 展示了整体框架：V2Drop 在相邻层间比较 token variation，并在若干关键层进行逐步丢弃。</p>
+<p>在第 $k$ 个 pruning layer $l_k \in L$，V2Drop 依次执行三个步骤：</p>
+<h4 id="i-variation-computation">(i) Variation Computation</h4>
+<p>对于层 $l_k$ 上的每个 token $f_i^{(l_k)}$，计算它相对于前一层 $l_k-1$ 的变化幅度：</p>
+$$
+S^{(l_k)} = \left\{\operatorname{Var}\left(f_i^{(l_k-1)}, f_i^{(l_k)}\right)\right\}_{i=1}^{M_{l_k}},
+$$<p>其中 $M_{l_k}$ 表示该层当前剩余的视觉 token 数。默认使用 L2 distance，因为实验表明它在性能与效率之间取得较好平衡。作者强调，该步骤只需要简单的向量差分与范数计算，不需要重新计算 attention weights，因此在实现上非常轻量。</p>
+<h4 id="ii-token-ranking-and-selection">(ii) Token Ranking and Selection</h4>
+<p>接着，将所有视觉 token 按 variation score 从大到小排序，保留 top-$K_{l_k}$ 个 variation 最大的 token：</p>
+$$
+\hat{F}_v^{l_k} = \operatorname{TopK}\left(F_v^{l_k}, S^{(l_k)}, K_{l_k}\right).
+$$<p>这一机制的关键在于：<strong>variation 大的 token 更可能承载与当前推理问题相关的关键信息，因此应被保留；variation 小的 token 更可能是冗余或无关信息，因此可被丢弃。</strong> 由于排名依据来自 token 自身的动态变化，而非 attention scores，因此不会出现“总偏向序列末尾 token”的问题。</p>
+<h4 id="iii-token-reorganization">(iii) Token Reorganization</h4>
+<p>保留下来的 token 会被重组为后续层的输入，且满足 $K_{l_k} &lt; M_{l_k}$，从而完成 progressive visual token dropping。作者使用一个预定义的压缩日程：</p>
+$$
+M \rightarrow K_a \rightarrow K_b \rightarrow K_c,
+$$<p>其中 $K_a, K_b, K_c$ 分别是三个阶段的压缩目标，可用于调节 performance-efficiency trade-off。也就是说，V2Drop 并非一次性把 token 大幅砍掉，而是在模型的浅层、中层、深层逐步压缩，以尽量减少早期误删导致的信息损失。作者在消融实验中证明，<strong>progressive dropping 明显优于 one-time dropping</strong>，同时不同 pruning layer 的选择也较为鲁棒。</p>
+<p>从方法设计上看，V2Drop 的关键优势是两点：第一，它不再使用 attention weights，所以天然避免 attention-guided 的 positional bias；第二，它与 FlashAttention 等 efficient operators 完全兼容，因为不需要为 token selection 额外保留昂贵的 attention map。</p>
+<h3 id="34-theoretical-analysis">3.4. Theoretical Analysis</h3>
+<p>作者通过一阶分析建立了 token variation 与模型输出变化之间的理论联系，从而证明 variation magnitude 可以作为 token importance 的有效 proxy。</p>
+<h4 id="341-problem-formulation">3.4.1. Problem Formulation</h4>
+<p>设第 $t$ 层的 token 表示为：</p>
+$$
+X^{(t)}={x_1^{(t)}, \ldots, x_n^{(t)}}\subset \mathbb{R}^{d}.
+$$<p>定义 token $j$ 的层间 variation 为：</p>
+$$
+\Delta x_j^{(t)} = x_j^{(t+1)} - x_j^{(t)}.
+$$<p>令 $f:\mathbb{R}^{n \times d} \rightarrow \mathbb{R}^{k}$ 表示从第 $t+1$ 层表示到最终输出的映射，则 token $j$ 关于输出的 Jacobian 为：</p>
+$$
+J_j = \frac{\partial f}{\partial x_j^{(t+1)}} \in \mathbb{R}^{k \times d}.
+$$<p>这个建模方式的直观含义是：我们想知道某个 token 在层间发生变化后，会对最终输出带来多大影响。</p>
+<h4 id="342-variation-impact-theorem">3.4.2. Variation-Impact Theorem</h4>
+<p><strong>Theorem 1.</strong> 在 $f$ 满足温和光滑性条件下，token $j$ 引起的输出变化满足：</p>
+$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$<p>这里 $|\cdot|_{\text{op}}$ 是 operator norm，$\Delta f_j$ 表示仅 token $j$ 从第 $t$ 层变化到第 $t+1$ 层时引起的输出变化。</p>
+<p>证明思路是对 $f$ 在 $x_j^{(t)}$ 附近作一阶 Taylor 展开：</p>
+$$
+f(\ldots, x_j^{(t+1)}, \ldots)
+= f_j^{(t)} + J_j \Delta x_j^{(t)} + O(|\Delta x_j^{(t)}|^2)
+= f_j^{(t)} + J_j \Delta x_j^{(t)} + R_j,
+$$<p>其中 $R_j$ 是高阶余项。再利用三角不等式与 operator norm 的定义：</p>
+$$
+|\Delta f_j| \le |J_j \Delta x_j^{(t)}| + |R_j|
+\le |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}| + |R_j|.
+$$<p>当 $|\Delta x_j^{(t)}|$ 足够小时，二阶项可忽略，于是得到近似关系：</p>
+$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$<p>这说明：token 在层间变化越大，其对输出的影响通常越大。</p>
+<h4 id="343-implications">3.4.3. Implications</h4>
+<p>基于上述定理，作者得到一个 corollary：若 token 的 Jacobian operator norm 具有下界 $|J_j|_{\text{op}} \ge \mu &gt; 0$，则更大的 variation 意味着更大的 output influence，因此 variation 可以作为计算高效的 token importance proxy。形式上有：</p>
+$$
+|\Delta f_j| \gtrsim \mu \cdot |\Delta x_j^{(t)}|.
+$$<p>这意味着，只要 token 的梯度影响不退化，选择 variation 小的 token 进行 dropping，就近似等价于选择对输出扰动最小的一组 token 删除。作者进一步在附录中说明，这一假设在 Transformer 结构中是合理的：残差连接、layer normalization 以及 softmax attention 都有助于维持稳定的梯度传播。</p>
+<hr>
+<h2 id="4-experiments">4. Experiments</h2>
+<p>作者在多个 LVLM 和 VideoLLM 上进行了全面实验，涵盖 10 个多模态理解 benchmark，并在附录中给出了实现细节。实验结论总体上支持两个核心主张：第一，variation-aware token dropping 在性能上优于 attention-guided baselines；第二，它在效率上与 efficient operators 高度兼容，尤其适合视频场景和高分辨率输入。</p>
+<h3 id="computational-overhead">Computational Overhead</h3>
+<p>作者首先评估了 V2Drop 的计算开销。由于只在三层进行 pruning，因此计算成本极低。对 $M$ 个、维度为 $D&rsquo;$ 的 token 计算 L2 distance 的代价约为 $3MD&rsquo;$ FLOPs；以 LLaVA-1.5 中 $M=576, D&rsquo;=4096$ 为例，单层约为 7M FLOPs，仅占单个 attention layer（约 32B FLOPs）的 0.022%。三层总开销约 21M FLOPs，仅占完整 forward pass 的 0.002%。Table 5 也验证了这一点：V2Drop 和 random dropping 的 throughput 几乎一致，说明 variation 计算几乎不构成额外瓶颈。</p>
+<hr>
+<h3 id="41-main-comparisons">4.1. Main Comparisons</h3>
+<h4 id="image-understanding">Image Understanding</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/table2&3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/table9.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure6.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure7.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure8.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/V2drop/figure9.png"></p>
+<p>Table 1 比较了 V2Drop 与多种 token compression 方法在 LLaVA-1.5-7B 上的图像理解性能，分别在保留 192、128、64 个 token 的情况下进行对比。作者重点强调了三个结论：</p>
+<ol>
+<li><strong>State-of-the-art performance</strong>：在保留 192 tokens（即减少 66.7%）时，V2Drop 的平均性能达到 <strong>97.6%</strong>，比第二名 PDrop 高 <strong>1.6%</strong>；即使压缩更激进，V2Drop 依旧保持稳定。</li>
+<li><strong>Efficient operator compatibility</strong>：V2Drop 不需要显式 attention score 计算，因此可以无缝接入 FlashAttention，且在峰值显存和总时延上接近 random dropping。</li>
+<li><strong>Scalability</strong>：在 Qwen2-VL-7B 上，V2Drop 在高分辨率和 variable-resolution 输入下也保持领先，说明方法对先进模型具有良好迁移性。</li>
+</ol>
+<p><strong>Table 1. Comparison with other token compression methods on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">SQA</th>
+          <th style="text-align: right">TextVQA</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">Average</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, 576 Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 192 Tokens (↓66.7%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">65.2</td>
+          <td style="text-align: right">52.1</td>
+          <td style="text-align: right">72.4</td>
+          <td style="text-align: right">1563</td>
+          <td style="text-align: right">60.5</td>
+          <td style="text-align: right">88.8%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">64.8</td>
+          <td style="text-align: right">1612</td>
+          <td style="text-align: right">61.2</td>
+          <td style="text-align: right">88.2%</td>
+      </tr>
+      <tr>
+          <td>HiRED</td>
+          <td style="text-align: right">58.7</td>
+          <td style="text-align: right">68.4</td>
+          <td style="text-align: right">47.4</td>
+          <td style="text-align: right">82.8</td>
+          <td style="text-align: right">1737</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">93.6%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">67.9</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">71.3</td>
+          <td style="text-align: right">1632</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">90.3%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">57.6</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">83.6</td>
+          <td style="text-align: right">1721</td>
+          <td style="text-align: right">62.5</td>
+          <td style="text-align: right">95.9%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">1766</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>58.5</strong></td>
+          <td style="text-align: right"><strong>69.3</strong></td>
+          <td style="text-align: right">55.6</td>
+          <td style="text-align: right"><strong>85.1</strong></td>
+          <td style="text-align: right"><strong>1826</strong></td>
+          <td style="text-align: right"><strong>63.7</strong></td>
+          <td style="text-align: right"><strong>97.6%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 128 Tokens (↓77.8%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">52.4</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">49.1</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">1343</td>
+          <td style="text-align: right">53.3</td>
+          <td style="text-align: right">80.4%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">49.6</td>
+          <td style="text-align: right">60.2</td>
+          <td style="text-align: right">50.6</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">1490</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">81.7%</td>
+      </tr>
+      <tr>
+          <td>HiRED</td>
+          <td style="text-align: right">57.2</td>
+          <td style="text-align: right">68.1</td>
+          <td style="text-align: right">46.1</td>
+          <td style="text-align: right">79.8</td>
+          <td style="text-align: right">1710</td>
+          <td style="text-align: right">61.5</td>
+          <td style="text-align: right">91.6%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">53.3</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.3</td>
+          <td style="text-align: right">67.2</td>
+          <td style="text-align: right">1554</td>
+          <td style="text-align: right">58.1</td>
+          <td style="text-align: right">87.9%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">56.0</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.9</td>
+          <td style="text-align: right">80.5</td>
+          <td style="text-align: right">1696</td>
+          <td style="text-align: right">60.0</td>
+          <td style="text-align: right">93.2%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">56.0</td>
+          <td style="text-align: right">68.3</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">1644</td>
+          <td style="text-align: right">61.1</td>
+          <td style="text-align: right">93.6%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>56.3</strong></td>
+          <td style="text-align: right"><strong>68.8</strong></td>
+          <td style="text-align: right">53.8</td>
+          <td style="text-align: right">80.9</td>
+          <td style="text-align: right"><strong>1712</strong></td>
+          <td style="text-align: right"><strong>61.8</strong></td>
+          <td style="text-align: right"><strong>94.0%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retain 64 Tokens (↓88.9%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>ToMe</td>
+          <td style="text-align: right">48.6</td>
+          <td style="text-align: right">50.0</td>
+          <td style="text-align: right">45.3</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">1138</td>
+          <td style="text-align: right">43.7</td>
+          <td style="text-align: right">69.7%</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">46.1</td>
+          <td style="text-align: right">51.1</td>
+          <td style="text-align: right">47.8</td>
+          <td style="text-align: right">48.0</td>
+          <td style="text-align: right">1256</td>
+          <td style="text-align: right">48.0</td>
+          <td style="text-align: right">71.3%</td>
+      </tr>
+      <tr>
+          <td>LLaVA-PruMerge</td>
+          <td style="text-align: right">51.9</td>
+          <td style="text-align: right">68.1</td>
+          <td style="text-align: right">54.0</td>
+          <td style="text-align: right">65.3</td>
+          <td style="text-align: right">1549</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">62.2</td>
+          <td style="text-align: right">51.8</td>
+          <td style="text-align: right">75.1</td>
+          <td style="text-align: right">1505</td>
+          <td style="text-align: right">56.2</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">41.9</td>
+          <td style="text-align: right">68.6</td>
+          <td style="text-align: right">45.9</td>
+          <td style="text-align: right">55.9</td>
+          <td style="text-align: right">1092</td>
+          <td style="text-align: right">33.3</td>
+          <td style="text-align: right">70.1%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right">50.5</td>
+          <td style="text-align: right"><strong>68.9</strong></td>
+          <td style="text-align: right"><strong>51.8</strong></td>
+          <td style="text-align: right"><strong>75.1</strong></td>
+          <td style="text-align: right"><strong>1470</strong></td>
+          <td style="text-align: right"><strong>55.2</strong></td>
+          <td style="text-align: right"><strong>86.9%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>表格说明：在 192 tokens 时，V2Drop 在 GQA、POPE、MME、MMBench 上都很强；在 128 tokens 时总体依旧稳；在极限 64 tokens 时，平均表现明显优于传统压缩方法，说明 variation-based selection 在更强压缩下仍能保留关键语义。</p>
+<h4 id="qwen2-vl-7b-image-understanding">Qwen2-VL-7B Image Understanding</h4>
+<p>Table 2 将方法推广到 Qwen2-VL-7B，实验覆盖 AI2D、MMStar、SQA、POPE、MME、MMBench。V2Drop 在 66.7% token reduction 和 77.8% token reduction 下都优于 FastV 与 DART，说明该方法对更强大的 native-resolution LVLM 仍然有效。尤其值得注意的是，V2Drop 在 POPE 上的表现非常稳定，说明它不仅能保留语义信息，也能减少 object hallucination 风险。</p>
+<p><strong>Table 2. Comparison with Qwen2-VL-7B across multiple image understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">AI2D</th>
+          <th style="text-align: right">MMStar</th>
+          <th style="text-align: right">SQA</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">MMB</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>Qwen2-VL-7B</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">84.7</td>
+          <td style="text-align: right">86.1</td>
+          <td style="text-align: right">2317</td>
+          <td style="text-align: right">80.5</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Token Reduction (↓66.7%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">76.1</td>
+          <td style="text-align: right">52.8</td>
+          <td style="text-align: right">80.0</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">2130</td>
+          <td style="text-align: right">76.1</td>
+          <td style="text-align: right">92.9%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">78.0</td>
+          <td style="text-align: right">53.4</td>
+          <td style="text-align: right">81.4</td>
+          <td style="text-align: right">83.9</td>
+          <td style="text-align: right">2245</td>
+          <td style="text-align: right">78.9</td>
+          <td style="text-align: right">95.5%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>78.0</strong></td>
+          <td style="text-align: right"><strong>53.5</strong></td>
+          <td style="text-align: right"><strong>81.6</strong></td>
+          <td style="text-align: right"><strong>87.2</strong></td>
+          <td style="text-align: right"><strong>2224</strong></td>
+          <td style="text-align: right"><strong>78.7</strong></td>
+          <td style="text-align: right"><strong>96.0%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Token Reduction (↓77.8%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">73.8</td>
+          <td style="text-align: right">49.3</td>
+          <td style="text-align: right">78.3</td>
+          <td style="text-align: right">79.2</td>
+          <td style="text-align: right">2031</td>
+          <td style="text-align: right">74.1</td>
+          <td style="text-align: right">89.5%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">74.4</td>
+          <td style="text-align: right">48.5</td>
+          <td style="text-align: right">79.6</td>
+          <td style="text-align: right">82.1</td>
+          <td style="text-align: right">2175</td>
+          <td style="text-align: right">77.3</td>
+          <td style="text-align: right">91.8%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>75.6</strong></td>
+          <td style="text-align: right"><strong>48.7</strong></td>
+          <td style="text-align: right"><strong>78.9</strong></td>
+          <td style="text-align: right"><strong>85.1</strong></td>
+          <td style="text-align: right"><strong>2173</strong></td>
+          <td style="text-align: right"><strong>75.8</strong></td>
+          <td style="text-align: right"><strong>92.3%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h4 id="video-understanding">Video Understanding</h4>
+<p>作者将 V2Drop 扩展到视频理解任务，并使用 LLaVA-OV-7B 与 Qwen2-VL-7B 进行评估。Table 3 和 Table 4 给出整体性能，Table 5 给出效率指标。结论非常明确：V2Drop 在视频场景下比图像场景更有优势，因为视频 token 更长、更冗余，而 variation-based dropping 更适合在长序列中识别那些真正影响推理的 token。</p>
+<p>在 Qwen2-VL-7B 上，V2Drop 在 20% average retention ratio 下取得 <strong>93.3%</strong> 的平均性能，显著优于 FastV 的 <strong>81.3%</strong> 和 DART 的 <strong>90.5%</strong>。在 LLaVA-OV-7B 上，V2Drop 在 25% retention 下达到 <strong>98.6%</strong>，在 15% retention 下也仍达到 <strong>93.9%</strong>，并且明显优于 FastV、SparseVLM、PDrop 和 DyCoke。尤其在 <strong>VideoMME (Long)</strong> 上，V2Drop 的优势更明显，因为它缓解了 VideoLLM 对后期帧 token 的偏置，避免把注意力过度集中在后续 token。</p>
+<p><strong>Table 3. Performance comparison with Qwen2-VL-7B across video understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MVBench Overall</th>
+          <th style="text-align: right">VideoMME Short</th>
+          <th style="text-align: right">VideoMME Medium</th>
+          <th style="text-align: right">VideoMME Long</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>Qwen2-VL-7B</td>
+          <td style="text-align: right">66.1</td>
+          <td style="text-align: right">57.7</td>
+          <td style="text-align: right">70.4</td>
+          <td style="text-align: right">54.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 20%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">50.9</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">45.7</td>
+          <td style="text-align: right">81.3%</td>
+      </tr>
+      <tr>
+          <td>DART</td>
+          <td style="text-align: right">58.9</td>
+          <td style="text-align: right">53.0</td>
+          <td style="text-align: right">64.1</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">90.5%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>62.1</strong></td>
+          <td style="text-align: right"><strong>53.5</strong></td>
+          <td style="text-align: right"><strong>63.7</strong></td>
+          <td style="text-align: right"><strong>51.0</strong></td>
+          <td style="text-align: right"><strong>93.3%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Table 4. Performance comparison with LLaVA-OV-7B across video understanding benchmarks.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MVBench Overall</th>
+          <th style="text-align: right">VideoMME Short</th>
+          <th style="text-align: right">VideoMME Medium</th>
+          <th style="text-align: right">VideoMME Long</th>
+          <th style="text-align: right">Avg.</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-OV-7B</td>
+          <td style="text-align: right">56.9</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">70.0</td>
+          <td style="text-align: right">56.6</td>
+          <td style="text-align: right">100.0%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 30%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">56.6</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">67.1</td>
+          <td style="text-align: right">54.6</td>
+          <td style="text-align: right">97.7%</td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 25%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">55.5</td>
+          <td style="text-align: right">55.3</td>
+          <td style="text-align: right">65.0</td>
+          <td style="text-align: right">53.8</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">56.3</td>
+          <td style="text-align: right">57.3</td>
+          <td style="text-align: right">68.4</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">98.4%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">55.3</td>
+          <td style="text-align: right">55.5</td>
+          <td style="text-align: right">64.7</td>
+          <td style="text-align: right">53.1</td>
+          <td style="text-align: right">96.0%</td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">49.5</td>
+          <td style="text-align: right">51.0</td>
+          <td style="text-align: right">61.1</td>
+          <td style="text-align: right">48.6</td>
+          <td style="text-align: right">87.1%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>56.4</strong></td>
+          <td style="text-align: right"><strong>57.4</strong></td>
+          <td style="text-align: right"><strong>68.2</strong></td>
+          <td style="text-align: right"><strong>54.6</strong></td>
+          <td style="text-align: right"><strong>98.6%</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Average Retention Ratio = 15%</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">51.6</td>
+          <td style="text-align: right">48.1</td>
+          <td style="text-align: right">51.4</td>
+          <td style="text-align: right">49.4</td>
+          <td style="text-align: right">86.5%</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">52.9</td>
+          <td style="text-align: right">53.4</td>
+          <td style="text-align: right">61.0</td>
+          <td style="text-align: right">52.1</td>
+          <td style="text-align: right">92.1%</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">53.2</td>
+          <td style="text-align: right">50.1</td>
+          <td style="text-align: right">58.7</td>
+          <td style="text-align: right">48.7</td>
+          <td style="text-align: right">89.6%</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>53.9</strong></td>
+          <td style="text-align: right"><strong>54.4</strong></td>
+          <td style="text-align: right"><strong>64.1</strong></td>
+          <td style="text-align: right"><strong>51.4</strong></td>
+          <td style="text-align: right"><strong>93.9%</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h4 id="efficiency-comparison">Efficiency Comparison</h4>
+<p>Table 5 从效率角度展示了 V2Drop 的收益，包括 LLM generation latency、model generation latency、total latency、GPU peak memory 和 throughput。这里最值得强调的是：V2Drop 在降低时延的同时，并没有引入明显额外显存开销，说明 variation 计算是“低成本、高收益”的。</p>
+<ul>
+<li>在 <strong>LLaVA-1.5-7B</strong> 上，V2Drop 将 LLM generation latency 从 400s 降到 <strong>273.9s</strong>，减少 <strong>31.5%</strong>；总时延从 10:14 降到 <strong>8:06</strong>；throughput 从 7.13 提升到 <strong>9.01 item/s</strong>。</li>
+<li>在 <strong>LLaVA-OV-7B</strong> 上，V2Drop 将 LLM generation latency 从 752.2s 降到 <strong>193.8s</strong>，减少 <strong>74.2%</strong>；throughput 提升到 <strong>0.72 item/s</strong>。</li>
+<li>与 SparseVLM 相比，V2Drop 避免了显著的 peak memory 增长；作者特别指出 SparseVLM 在 MVBench 上会因 merging 策略和显式 attention computation 导致峰值显存上升 <strong>54.8%</strong>。</li>
+</ul>
+<p><strong>Table 5. Efficiency comparison on image/video understanding.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">LLM Generation↓</th>
+          <th style="text-align: right">Model Generation↓</th>
+          <th style="text-align: right">Total Latency↓</th>
+          <th style="text-align: right">GPU Peak Memory↓</th>
+          <th style="text-align: right">Throughput↑</th>
+          <th style="text-align: right">Performance↑</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Upper Bound, 576 Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">400</td>
+          <td style="text-align: right">558</td>
+          <td style="text-align: right">10:14</td>
+          <td style="text-align: right">15566</td>
+          <td style="text-align: right">7.13</td>
+          <td style="text-align: right">64.6</td>
+      </tr>
+      <tr>
+          <td>Random</td>
+          <td style="text-align: right">270.4 (↓32.4%)</td>
+          <td style="text-align: right">425.9 (↓23.7%)</td>
+          <td style="text-align: right">8:02 (↓21.5%)</td>
+          <td style="text-align: right">15045 (↓3.3%)</td>
+          <td style="text-align: right">9.08 (↑1.27×)</td>
+          <td style="text-align: right">59.1 (91.5%)</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">294.0 (↓26.5%)</td>
+          <td style="text-align: right">449.7 (↓19.4%)</td>
+          <td style="text-align: right">8:26 (↓17.6%)</td>
+          <td style="text-align: right">16139 (↑3.7%)</td>
+          <td style="text-align: right">8.65 (↑1.21×)</td>
+          <td style="text-align: right">56.1 (86.8%)</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">288.2 (↓28.0%)</td>
+          <td style="text-align: right">443.5 (↓20.5%)</td>
+          <td style="text-align: right">8:20 (↓18.6%)</td>
+          <td style="text-align: right">19229 (↑23.5%)</td>
+          <td style="text-align: right">8.75 (↑1.23×)</td>
+          <td style="text-align: right">60.0 (92.9%)</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">279.6 (↓30.1%)</td>
+          <td style="text-align: right">429.7 (↓23.0%)</td>
+          <td style="text-align: right">8:09 (↓20.3%)</td>
+          <td style="text-align: right">15197 (↓2.3%)</td>
+          <td style="text-align: right">8.95 (↑1.25×)</td>
+          <td style="text-align: right">61.1 (94.6%)</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>273.9 (↓31.5%)</strong></td>
+          <td style="text-align: right"><strong>429.3 (↓23.1%)</strong></td>
+          <td style="text-align: right"><strong>8:06 (↓20.8%)</strong></td>
+          <td style="text-align: right"><strong>15046 (↓3.3%)</strong></td>
+          <td style="text-align: right"><strong>9.01 (↑1.26×)</strong></td>
+          <td style="text-align: right"><strong>61.8 (95.7%)</strong></td>
+      </tr>
+      <tr>
+          <td><strong>Upper Bound, All Tokens (100%)</strong></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+          <td style="text-align: right"></td>
+      </tr>
+      <tr>
+          <td>LLaVA-OV-7B</td>
+          <td style="text-align: right">752.2</td>
+          <td style="text-align: right">1201.6</td>
+          <td style="text-align: right">32:02</td>
+          <td style="text-align: right">17686</td>
+          <td style="text-align: right">0.52</td>
+          <td style="text-align: right">56.9</td>
+      </tr>
+      <tr>
+          <td>Random</td>
+          <td style="text-align: right">190.9 (↓74.6%)</td>
+          <td style="text-align: right">639.0 (↓46.8%)</td>
+          <td style="text-align: right">23:09 (↓27.7%)</td>
+          <td style="text-align: right">16298 (↓7.8%)</td>
+          <td style="text-align: right">0.72 (↑1.38×)</td>
+          <td style="text-align: right">54.6 (96.0%)</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">315.9 (↓58.0%)</td>
+          <td style="text-align: right">781.1 (↓35.0%)</td>
+          <td style="text-align: right">25:05 (↓21.7%)</td>
+          <td style="text-align: right">24619 (↑39.2%)</td>
+          <td style="text-align: right">0.67 (↑1.29×)</td>
+          <td style="text-align: right">55.5 (97.5%)</td>
+      </tr>
+      <tr>
+          <td>SparseVLM</td>
+          <td style="text-align: right">493.8 (↓34.4%)</td>
+          <td style="text-align: right">960.9 (↓20.0%)</td>
+          <td style="text-align: right">30:12 (↓5.7%)</td>
+          <td style="text-align: right">27378 (↑54.8%)</td>
+          <td style="text-align: right">0.55 (↑1.06×)</td>
+          <td style="text-align: right">56.4 (99.1%)</td>
+      </tr>
+      <tr>
+          <td>PDrop</td>
+          <td style="text-align: right">256.3 (↓65.9%)</td>
+          <td style="text-align: right">719.0 (↓40.2%)</td>
+          <td style="text-align: right">23:18 (↓27.3%)</td>
+          <td style="text-align: right">24371 (↑37.8%)</td>
+          <td style="text-align: right">0.71 (↑1.36×)</td>
+          <td style="text-align: right">55.3 (97.2%)</td>
+      </tr>
+      <tr>
+          <td>DyCoke</td>
+          <td style="text-align: right">249.2 (↓66.7%)</td>
+          <td style="text-align: right">713.5 (↓40.6%)</td>
+          <td style="text-align: right">23:25 (↓26.9%)</td>
+          <td style="text-align: right">16298 (↓7.8%)</td>
+          <td style="text-align: right">0.71 (↑1.36×)</td>
+          <td style="text-align: right">49.5 (87.0%)</td>
+      </tr>
+      <tr>
+          <td><strong>V2Drop</strong></td>
+          <td style="text-align: right"><strong>193.8 (↓74.2%)</strong></td>
+          <td style="text-align: right"><strong>642.4 (↓46.5%)</strong></td>
+          <td style="text-align: right"><strong>23:13 (↓27.5%)</strong></td>
+          <td style="text-align: right"><strong>16298 (↓7.8%)</strong></td>
+          <td style="text-align: right"><strong>0.72 (↑1.38×)</strong></td>
+          <td style="text-align: right"><strong>56.4 (99.1%)</strong></td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h3 id="42-ablation-study">4.2. Ablation Study</h3>
+<h4 id="effects-of-variation-metric">Effects of Variation Metric</h4>
+<p>Figure 6 比较了三种 variation metric：Cosine Similarity、L1 Norm、L2 Norm，并与 FastV 对照。结论是三种 variation-based pruning 都能在平均性能上超过 FastV，说明这种“看 token 变化而不是看 attention 分数”的思路本身就更稳健。进一步看 throughput，L2 Norm 在性能与效率之间最均衡，因此被设为默认配置。</p>
+<p><strong>Table 7. Supplementary results on variation metric selection. Throughput with 128 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">SQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">8.02</td>
+          <td style="text-align: right">7.5</td>
+          <td style="text-align: right">7.13</td>
+          <td style="text-align: right">6.9</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">9.46 (1.18×)</td>
+          <td style="text-align: right">8.68 (1.16×)</td>
+          <td style="text-align: right">8.65 (1.21×)</td>
+          <td style="text-align: right">8.14 (1.18×)</td>
+      </tr>
+      <tr>
+          <td>Cosine Similarity</td>
+          <td style="text-align: right">9.95 (1.24×)</td>
+          <td style="text-align: right">9.13 (1.21×)</td>
+          <td style="text-align: right">8.90 (1.25×)</td>
+          <td style="text-align: right">8.14 (1.18×)</td>
+      </tr>
+      <tr>
+          <td>L1 Norm</td>
+          <td style="text-align: right">10.16 (1.27×)</td>
+          <td style="text-align: right">9.23 (1.23×)</td>
+          <td style="text-align: right">9.01 (1.26×)</td>
+          <td style="text-align: right">8.49 (1.23×)</td>
+      </tr>
+      <tr>
+          <td>L2 Norm</td>
+          <td style="text-align: right">10.11 (1.26×)</td>
+          <td style="text-align: right">9.18 (1.22×)</td>
+          <td style="text-align: right">9.01 (1.26×)</td>
+          <td style="text-align: right">8.42 (1.22×)</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>Table 9. Supplementary results on variation metric selection.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">TextVQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">58.2</td>
+      </tr>
+      <tr>
+          <td>FastV</td>
+          <td style="text-align: right">1490</td>
+          <td style="text-align: right">49.6</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">67.3</td>
+      </tr>
+      <tr>
+          <td>Cosine Similarity</td>
+          <td style="text-align: right">1718</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">61.8</td>
+          <td style="text-align: right">69.2</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td>L1 Norm</td>
+          <td style="text-align: right">1698</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">60.9</td>
+          <td style="text-align: right">68.7</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td>L2 Norm</td>
+          <td style="text-align: right">1712</td>
+          <td style="text-align: right">56.3</td>
+          <td style="text-align: right">61.8</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">—</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里的核心信息是：三种 variation metric 的差别并不大，说明 V2Drop 的主要收益来自“variation 视角”本身，而不是某个特殊指标；其中 L1/L2 的 throughput 较好，L2 是默认选择。</p>
+<h4 id="effects-of-token-dropping-across-different-layers">Effects of Token Dropping across Different Layers</h4>
+<p>Figure 8 研究了在不同 LLM transformer layers 上执行 token dropping 的效果。作者采用了多个 pruning layer 组合进行测试，发现 V2Drop 在不同层组合下都较为鲁棒，且在 192 retained tokens 的设置下平均性能能达到 vanilla 的 <strong>97.3%</strong>。相比之下，FastV 和 SparseVLM 对层选择更敏感，而且 SparseVLM 的 peak memory 明显更高。</p>
+<p><strong>Table 6. Supplementary results on pruned layers selection. Performance with 192 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Benchmark</th>
+          <th style="text-align: right">Vanilla</th>
+          <th style="text-align: right">Pruned Layers (4,14,30)</th>
+          <th style="text-align: right">(3,14,29)</th>
+          <th style="text-align: right">(3,15,27)</th>
+          <th style="text-align: right">(3,16,24)</th>
+          <th style="text-align: right">(3,17,22)</th>
+          <th style="text-align: right">(2,16,21)</th>
+          <th style="text-align: right">FastV</th>
+          <th style="text-align: right">SparseVLM</th>
+          <th style="text-align: right">PDrop</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>GQA</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">57.8</td>
+          <td style="text-align: right">58.6</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">58.8</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">57.9</td>
+          <td style="text-align: right">52.7</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">57.6</td>
+      </tr>
+      <tr>
+          <td>SQA</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">68.9</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">69.3</td>
+          <td style="text-align: right">69.1</td>
+          <td style="text-align: right">69.3</td>
+          <td style="text-align: right">69.5</td>
+          <td style="text-align: right">67.3</td>
+          <td style="text-align: right">68.8</td>
+          <td style="text-align: right">68.7</td>
+      </tr>
+      <tr>
+          <td>POPE</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">86.3</td>
+          <td style="text-align: right">85.0</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">85.0</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">83.9</td>
+          <td style="text-align: right">64.8</td>
+          <td style="text-align: right">82.3</td>
+          <td style="text-align: right">83.6</td>
+      </tr>
+      <tr>
+          <td>MME</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">1753</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">1847</td>
+          <td style="text-align: right">1813</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">1759</td>
+          <td style="text-align: right">1612</td>
+          <td style="text-align: right">1766</td>
+          <td style="text-align: right">1721</td>
+      </tr>
+      <tr>
+          <td>MMB</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">63.4</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">63.5</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">62.8</td>
+          <td style="text-align: right">61.2</td>
+          <td style="text-align: right">63.2</td>
+          <td style="text-align: right">62.5</td>
+      </tr>
+      <tr>
+          <td>TextVQA</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">53.1</td>
+          <td style="text-align: right">54.0</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">55.2</td>
+          <td style="text-align: right">55.6</td>
+          <td style="text-align: right">54.8</td>
+          <td style="text-align: right">52.5</td>
+          <td style="text-align: right">56.1</td>
+          <td style="text-align: right">56.1</td>
+      </tr>
+      <tr>
+          <td>Avg. (%)</td>
+          <td style="text-align: right">100.0%</td>
+          <td style="text-align: right">96.0%</td>
+          <td style="text-align: right">97.0%</td>
+          <td style="text-align: right">97.5%</td>
+          <td style="text-align: right">97.3%</td>
+          <td style="text-align: right"><strong>97.6%</strong></td>
+          <td style="text-align: right">96.2%</td>
+          <td style="text-align: right">88.2%</td>
+          <td style="text-align: right">96.0%</td>
+          <td style="text-align: right">95.8%</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里可以看出，V2Drop 在不同 pruning layer 组合上波动很小，最优配置（3,17,22）达到 97.6%，说明“在哪几层剪”不会严重影响整体效果。</p>
+<h4 id="effects-of-progressive-token-dropping">Effects of Progressive Token Dropping</h4>
+<p>Figure 9 对比了 progressive dropping 与 one-time dropping。结果显示 progressive dropping 明显更优，尤其在 MME 和 POPE 上分别提升 <strong>5.9%</strong> 和 <strong>9.3%</strong>。其原因在于：逐步丢弃能让模型在多个层次上重新筛选 token，避免一次性删除过多关键信息，从而更稳妥地保留视觉语义。</p>
+<p><strong>Table 8. Supplementary results on effects of progressive token dropping. Performance with 192 retained tokens on LLaVA-1.5-7B.</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th>Methods</th>
+          <th style="text-align: right">MME</th>
+          <th style="text-align: right">POPE</th>
+          <th style="text-align: right">MMBench</th>
+          <th style="text-align: right">GQA</th>
+          <th style="text-align: right">TextVQA</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>LLaVA-1.5-7B</td>
+          <td style="text-align: right">1862</td>
+          <td style="text-align: right">85.9</td>
+          <td style="text-align: right">64.6</td>
+          <td style="text-align: right">61.9</td>
+          <td style="text-align: right">58.2</td>
+      </tr>
+      <tr>
+          <td>One-time dropping</td>
+          <td style="text-align: right">1717</td>
+          <td style="text-align: right">77.1</td>
+          <td style="text-align: right">60.6</td>
+          <td style="text-align: right">57.1</td>
+          <td style="text-align: right">55.2</td>
+      </tr>
+      <tr>
+          <td>Progressive dropping</td>
+          <td style="text-align: right">1826</td>
+          <td style="text-align: right">85.1</td>
+          <td style="text-align: right">63.7</td>
+          <td style="text-align: right">58.5</td>
+          <td style="text-align: right">55.9</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h3 id="43-visualizations">4.3. Visualizations</h3>
+<p>Figure 7 展示了 TextVQA 上的 token compression 可视化结果。作者从左到右展示不同层剪枝后的图像压缩效果：FastV 使用 one-time dropping，会在后续层保留一些冗余 token；SparseVLM 虽然采用 progressive dropping，但仍然存在 positional bias，倾向于保留后序 token，因而会丢失一些前部重要信息；而 V2Drop 则依据 variation 逐步保留关键区域，能更稳定地锁定语义核心。</p>
+<p>Figure 10 提供了更多真实场景下的可视化案例，覆盖诸如品牌识别、文本阅读、动作理解等多种 TextVQA 场景。灰色 mask 表示被丢弃的 token。作者特别指出，在关键区域位于左下、右上、左上等不同位置的情况下，V2Drop 仍能准确保留对应区域，说明 token importance 与 semantic relevance 的对应关系能够通过 variation metric 被稳定识别。</p>
+<hr>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>LVLM 在推理阶段会消耗大量计算资源，核心原因是视觉 token 过多。现有 token compression 方法往往依赖 attention weights，或者引入 positional bias，从而限制了实际效果与对 efficient operators 的兼容性。本文提出 V2Drop，从 token variation 的角度重构 token importance 的定义，证明视觉 token variation 具有 task-agnostic 特性，因此可以在不依赖 attention weights 的情况下进行压缩，也不容易受到位置偏置影响。V2Drop 通过 progressively removing minimal-variation tokens 实现 LVLM inference acceleration，并在多种 benchmark 上证明了它能有效平衡性能与效率。</p>
+<hr>
+<h1 id="supplementary-material">Supplementary Material</h1>
+<p>作者在附录中提供了更详细的实验设置、额外实验结果、算法细节、对 content-agnostic positional bias 的进一步讨论，以及更完整的理论分析。</p>
+<h2 id="a-detailed-experimental-settings">A. Detailed Experimental Settings</h2>
+<h3 id="benchmark-details">Benchmark Details</h3>
+<p>作者在多个多模态理解 benchmark 上评估 V2Drop，具体如下：</p>
+<ul>
+<li><strong>GQA</strong>：包含 scene graphs、questions 和 images，用于测试视觉场景理解与组合推理能力。</li>
+<li><strong>MMBench</strong>：采用三层层次结构与 20 个能力维度，综合评估 perception 和 reasoning。</li>
+<li><strong>MME</strong>：包含 14 个子任务，通过人工构造 instruction-answer pairs 评估 perceptual 与 cognitive 能力，并尽量减少数据泄露问题。</li>
+<li><strong>POPE</strong>：以 object presence 二分类问题评估 hallucination，使用 accuracy、recall、precision 和 F1。</li>
+<li><strong>ScienceQA</strong>：覆盖自然、语言和社会科学，强调多步推理与多模态理解。</li>
+<li><strong>TextVQA</strong>：测试模型识别图像中文字并进行推理的能力。</li>
+<li><strong>AI2D</strong>：科学图表与问答数据集，重点考察视觉空间推理。</li>
+<li><strong>MMStar</strong>：高分辨率图像集，强调空间、时间与 commonsense reasoning。</li>
+<li><strong>MVBench</strong>：20 项视频理解任务，要求深度 temporal understanding。</li>
+<li><strong>VideoMME</strong>：900 个视频、2700 个多选题，持续时间从 11 秒到 1 小时，并划分为 short / medium / long 子集。</li>
+</ul>
+<h3 id="baseline-models">Baseline Models</h3>
+<ul>
+<li><strong>LLaVA-1.5</strong>：通过视觉指令微调和两阶段训练提升多模态理解能力，在视觉推理、OCR 和 multimodal dialogue 上表现强劲。</li>
+<li><strong>Qwen2-VL</strong>：强调任意分辨率输入与 scaling laws，在文档解析、OCR、视觉推理和视频理解上具有很强表现。</li>
+<li><strong>LLaVA-OneVision</strong>：统一单图、多图与视频任务，把视频视为长视觉 token 序列，以支持 image-video task transfer。</li>
+</ul>
+<h3 id="comparison-methods">Comparison Methods</h3>
+<ul>
+<li><strong>ToMe</strong>：在 ViT 层通过轻量 matching 合并相似 token。</li>
+<li><strong>LLaVA-PruMerge</strong>：结合 pruning 和 merging，基于 CLS-patch attention 和聚类来压缩 token。</li>
+<li><strong>FastV</strong>：利用 attention maps 在早期层执行 token pruning。</li>
+<li><strong>DART</strong>：基于 duplication-aware 机制，按冗余程度而非传统 importance score 选择 token。</li>
+<li><strong>HiRED</strong>：基于 CLS token attention 给不同图像区域分配预算。</li>
+<li><strong>PDrop</strong>：采用 pyramid-like progressive token dropping。</li>
+<li><strong>SparseVLM</strong>：通过 cross-modal attention 与 adaptive sparsity ratio 进行 token sparsification，并引入 token recycling。</li>
+<li><strong>DyCoke</strong>：面向视频的大模型方法，先按时间维度 prune 相似 token，再利用 attention weights 压缩 KV cache，但其依赖显式 attention 权重，因此不兼容更高效的 attention operator。</li>
+</ul>
+<h3 id="implementation-details">Implementation Details</h3>
+<p>实验在 <strong>NVIDIA A100-PCIe-80GB</strong> 上完成，使用 <strong>Python 3.10、PyTorch 2.1.2、CUDA 12.1</strong>。所有 baseline 设定都遵循原论文配置。</p>
+<h3 id="experimental-parameter-details-for-v2drop">Experimental Parameter Details for V2Drop</h3>
+<p>在 <strong>LLaVA-1.5-7B</strong> 上，作者采用三阶段 pruning，位于 <strong>layer 3、17、22</strong>。具体压缩比例为：</p>
+<ul>
+<li>维持 <strong>192 tokens</strong> 时，在三处层分别剪去 <strong>50% / 70% / 100%</strong> 的视觉 token；</li>
+<li>维持 <strong>128 tokens</strong> 时，剪去 <strong>72% / 75% / 100%</strong>；</li>
+<li>维持 <strong>64 tokens</strong> 时，剪去 <strong>95% / 95% / 100%</strong>。</li>
+</ul>
+<p>这说明作者并不是均匀剪枝，而是按层深和剩余 token 数制定不同压缩强度，以兼顾浅层信息保留与深层冗余去除。</p>
+<hr>
+<h2 id="b-additional-experimental-results">B. Additional Experimental Results</h2>
+<h3 id="supplementary-results-on-variation-metric-selection">Supplementary Results on Variation Metric Selection</h3>
+<p>Table 7 和 Table 9 进一步给出了三种 variation metric 在多个数据集上的 throughput 与 performance。结果表明，variation-based pruning 相比 FastV 这类 attention-score-based pruning，不但性能更好，而且吞吐也更高，进一步说明 V2Drop 的稳健性。作者还指出，L2 Norm 是默认选择，因为它兼顾了效果和实现简洁性。</p>
+<h3 id="supplementary-results-on-pruned-layers-selection">Supplementary Results on Pruned Layers Selection</h3>
+<p>Table 6 的结果说明，不同 pruning layer 组合都会带来相近的效果，尤其在 192 retained tokens 下，V2Drop 的平均表现维持在 96%~97.6% 之间，证明它对 layer scheduling 不敏感。换句话说，V2Drop 的效果不是建立在某个“神奇层号”上，而是来自 variation 作为 token importance 信号的有效性。</p>
+<h3 id="supplementary-results-on-effects-of-progressive-token-dropping">Supplementary Results on Effects of Progressive Token Dropping</h3>
+<p>Table 8 清晰表明 progressive dropping 优于 one-time dropping，说明“先粗后细”的逐步筛选比一次性硬删更稳健。这也是 V2Drop 设计 multi-stage progressive dropping 的直接经验依据。</p>
+<h3 id="more-visualizations-of-token-compression">More Visualizations of Token Compression</h3>
+<p>Figure 10 提供了更多样化场景：例如摄像机品牌、酒类品牌、事件识别、食物识别、书籍是否为 reference book、书名、国家队、角色生存、午餐盒偏好、专辑名等。作者用这些案例说明，V2Drop 在不同空间位置、不同语义类型的关键区域上都能较好地定位重要 token，并且与 semantic relevance 保持一致。</p>
+<hr>
+<h2 id="c-algorithm-details-of-v2drop">C. Algorithm Details of V2Drop</h2>
+<p>作者在附录中给出了算法 1 的完整流程。V2Drop 的输入包括：视觉 tokens $F_v \in \mathbb{R}^{M \times D&rsquo;}$、dropping layers $L={l_1,l_2,\ldots,l_K}$ 以及各层对应的 compression targets ${K_{l_1},K_{l_2},\ldots,K_{l_K}}$；输出是压缩后的视觉 tokens。算法的基本流程如下：</p>
+<ol>
+<li>
+<p>初始化当前 token 数量 $M_{\text{curr}} \leftarrow M$。</p>
+</li>
+<li>
+<p>遍历 LLM 的每一层 $l$。</p>
+</li>
+<li>
+<p>若当前层属于预设 pruning layers，则：</p>
+<ul>
+<li>计算每个 token 的 variation score：
+$$
+     s_i^{(l)} \leftarrow |f_i^{(l)} - f_i^{(l-1)}|_2
+     $$</li>
+<li>汇总得到 $S^{(l)}={s_1^{(l)},s_2^{(l)},\ldots,s_{M_{\text{curr}}}^{(l)}}$；</li>
+<li>按 score 降序排序，取前 $K_l$ 个 token；</li>
+<li>将保留 token 作为新的 $F_{\text{curr}}^v$，并把 $M_{\text{curr}}$ 更新为 $K_l$。</li>
+</ul>
+</li>
+<li>
+<p>若当前层不属于 pruning layers，则直接把 $F_{\text{curr}}^v$ 输入当前 Transformer layer。</p>
+</li>
+<li>
+<p>最终返回压缩后的 $F_{\text{curr}}^v$。</p>
+</li>
+</ol>
+<p>更直白地说：V2Drop 就是在几个关键层里“看谁变化大就留下谁，变化小就删掉谁”，然后继续把这些保留下来的 token 送到后续层处理。</p>
+<hr>
+<h2 id="d-more-discussions-about-content-agnostic-positional-bias">D. More Discussions about Content-agnostic Positional Bias</h2>
+<p>作者进一步分析了 attention-guided 方法为何会产生 content-agnostic positional bias。Figure 2 和 Figure 3 的结果说明：即使某些重要区域确实获得较高 attention score，这些方法仍然会过度偏向序列末端 token，导致前面真正有用的信息被误删，最终造成 multimodal hallucination。作者在 TextVQA、POPE 和 MME 上按 token index 分段统计保留概率，发现 FastV、SparseVLM 等方法呈现明显的 end-of-sequence bias。</p>
+<p>与之相反，variation-aware evaluation 更接近自然的空间分布：它不是问“这个 token 在序列里靠前还是靠后”，而是问“这个 token 在 LLM 内部变化得是否足够明显”。因此它更容易保留真正与语义相关的区域，并且不会因为绝对位置而系统性偏置。作者由此强调，V2Drop 的优势不仅在于压缩本身，更在于它改变了“重要性”的评估范式。</p>
+<hr>
+<h2 id="e-suppleymentary-theoretical-analysis">E. Suppleymentary Theoretical Analysis</h2>
+<h3 id="e1-smoothness-assumption">E.1. Smoothness Assumption</h3>
+<p>作者假设模型 $f$ 在表示空间中具有足够的局部光滑性，使得 Taylor 展开中的二阶余项满足：</p>
+$$
+|R_j| = O(|\Delta x_j^{(t)}|^2).
+$$<p>这一假设在 Transformer-based LVLM 中是合理的，原因包括：</p>
+<ul>
+<li>residual connections 限制层间变化，使 $|\Delta x_j^{(t)}|$ 相对稳定；</li>
+<li>layer normalization 限制 token 表示范围，从而约束高阶导数；</li>
+<li>GELU、SiLU 等平滑激活函数保证二阶连续性。</li>
+</ul>
+<p>因此，在足够小的局部扰动下，二阶项可忽略，从而得到：</p>
+$$
+|\Delta f_j| \approx |J_j|_{\text{op}} \cdot |\Delta x_j^{(t)}|.
+$$<p>这一步是理论主线的关键，因为它把“token 表示变化量”直接连接到了“输出变化量”。</p>
+<h3 id="e2-justification-of-bounded-jacobian-assumption">E.2. Justification of Bounded Jacobian Assumption</h3>
+<p>作者在 corollary 中进一步假设 Jacobian operator norm 有下界 $|J_j|_{\text{op}} \ge \mu &gt; 0$。其合理性主要来自三点：</p>
+<ol>
+<li><strong>Information flow in Transformers</strong>：注意力机制使每个 token 通过多头 attention 与 FFN 参与输出形成，softmax 归一化保证 token 的贡献一般不会完全消失；</li>
+<li><strong>Residual connections preserve gradients</strong>：残差结构 $x^{(t+1)} = x^{(t)} + \text{Block}(x^{(t)})$ 使梯度可沿 identity path 传播，不易消失；</li>
+<li><strong>Layer normalization stabilizes gradients</strong>：layer norm 把梯度规模控制在有限范围内。</li>
+</ol>
+<p>如果某些 token 的 $|J_j|_{\text{op}} \approx 0$，说明这些 token 对输出本就几乎没有影响，那么无论其 variation 多大，删除它们也不会带来显著性能损失；因此这并不会破坏 V2Drop 的基本逻辑。</p>
+<h3 id="e3-connection-to-v2drop-algorithm">E.3. Connection to V2Drop Algorithm</h3>
+<p>作者给出了一个更强的优化视角：在有 $n$ 个 token 的情况下，希望选择要删除的 token 集合 $S_{\text{drop}}$，使得删除后总输出扰动最小：</p>
+$$
+S^{\ast}_{\text{drop}} = \arg\min_{S \subseteq [n],\, |S|=\alpha n} \sum_{j \in S} |\Delta f_j|.
+$$<p>结合 Theorem 1 和 Jacobian 下界假设，有：</p>
+$$
+\sum_{j \in S}|\Delta f_j| \approx \sum_{j \in S}\lVert J_j\rVert_{\text{op}} \cdot |\Delta x_j^{(t)}|
+\in
+\left[\mu \sum_{j \in S}|\Delta x_j^{(t)}|,\;
+M \sum_{j \in S}|\Delta x_j^{(t)}|\right].
+$$<p>因此，最小化输出扰动可以近似转化为最小化 variation 之和：</p>
+$$
+S^{\ast}_{\text{drop}} \approx \arg\min_{S \subseteq [n],\, |S|=\alpha n} \sum_{j \in S}|\Delta x_j^{(t)}|.
+$$<p>这正好解释了 V2Drop 的策略为何合理：<strong>丢弃 variation 最小的 token，近似等价于丢弃对输出影响最小的 token。</strong> 而且这种选择只需要简单的 L2 norm 计算，计算成本极低。</p>
+<h3 id="e4-connection-to-information-flow">E.4. Connection to information flow</h3>
+<p>在 Transformer 的 residual 结构中：</p>
+$$
+x_j^{(t+1)} = x_j^{(t)} + \text{Attn}(x_j^{(t)}) + \text{FFN}(x_j^{(t)}),
+$$<p>因此：</p>
+$$
+\Delta x_j^{(t)} = \text{Attn}(x_j^{(t)}) + \text{FFN}(x_j^{(t)}).
+$$<p>这意味着 variation 实际上对应每层对 token 的“有效更新量”。变化大的 token，说明它正在被网络积极 refinement，携带并传播任务相关信息；变化小的 token 则更像是被网络“忽略”的部分，因此可以安全丢弃。这个解释把 variation 与 Transformer 中的信息流动机制直接对应起来，也进一步说明了为什么 V2Drop 会比 attention-guided pruning 更符合模型内部计算过程。</p>
+
+    </section>
+  
+    <section data-source="posts\PRUNE REDUNDANCY, PRESERVE ESSENCE - VISION TOKEN COMPRESSION IN VLMS VIA SYNER GISTIC IMPORTANCE-DIVERSITY - ICLR&#39;26.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/title.png"></p>
+<p><strong>Conference</strong>: <strong>ICLR'26</strong></p>
+<p><strong>Github</strong>: <a href="https://github.com/ZhengyaoFang/PruneSID">https://github.com/ZhengyaoFang/PruneSID</a></p>
+<hr>
+<h2 id="1-abstract">1. Abstract</h2>
+<p>视觉-语言模型（VLMs）因产生大量视觉 token 导致计算效率低下。先前研究指出大比例 visual tokens 存在冗余，但现有压缩方法难以在“重要性（importance）保存”和“信息多样性（diversity）保留”之间取得良好平衡。为了解决该问题，论文提出 <strong>PRUNESID</strong>：一种<strong>无训练（training-free）</strong>、<strong>协同重要性—多样性（Synergistic Importance–Diversity）</strong> 的 two-stage 框架，包含：</p>
+<ol>
+<li><strong>PSCA（Principal Semantic Components Analysis）</strong>：将 tokens 按语义主方向聚类成多个语义相干组（semantic groups），确保概念覆盖。</li>
+<li><strong>组内 NMS（Intra-group Non-Maximum Suppression）</strong>：在每组内按相似度动态阈值去重，保留最具代表性的 token。</li>
+</ol>
+<p>此外，PRUNESID 引入 <strong>信息感知动态压缩率（information-aware dynamic compression ratio）</strong>，根据图像复杂度动态分配 token 预算，从而在多样化场景上实现更优的平均信息保留。大量实验表明：在 LLaVA-1.5 上仅保留 $11.1%$ token（64 tokens）时可达 $96.3%$ 精度；在极端压缩（$5.6%$）下在 LLaVA-NeXT 仍达 $92.8%$，相较此前方法有显著提升，并在 prefilling 时间上有 $7.8\times$ 的加速。</p>
+<hr>
+<h2 id="2-introduction">2. Introduction</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/figure1.png"></p>
+<ul>
+<li>
+<p>现状：主流 VLM（如 LLaVA-1.5 与 LLaVA-NeXT）通常为每张图像产生数百到几千 visual tokens（例如 576 或 2880），远超捕捉图像语义所需。相关研究表明约 $70%$ tokens 可丢弃而对准确率影响甚微。</p>
+</li>
+<li>
+<p>两类现有方案：</p>
+<ul>
+<li><strong>Attention-guided selection</strong>：依据 attention score 保留高 attention token（优点：保留局部显著性；缺点：忽视背景与多样性，可能重保重复区域）。</li>
+<li><strong>Duplication-aware（相似性/去重）方法</strong>：依据相似性去重，提升多样性，但可能丢弃语义重要但相似的高 attention token。</li>
+</ul>
+</li>
+<li>
+<p>本文关键观点：设计一个 <strong>组引导（group-guided）</strong> 的训练免费方法，使得“重要性”和“多样性”得到协同优化。通过 PSCA 先将 tokens 按语义方向分组，再在组内用 NMS 去冗余，同时用信息感知机制在图像间自动分配 token 预算，从而在极端压缩下仍保留丰富语义。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/figure2.png"></p>
+<ul>
+<li>提出一种<strong>无训练</strong>的视觉 token 压缩框架 PRUNESID，通过 PSCA（语义聚类）+ 组内 NMS（冗余剪枝）解决 importance–diversity 的折衷问题。</li>
+<li>引入信息感知动态压缩率：基于全局 token 相似性分布计算图像信息得分 $\phi$，按其分配保留 token 数 $N&rsquo;$，从而在数据集上提高平均信息保留。</li>
+<li>在多个 VLM 与图像 / 视频基准上进行大规模评估，展示在极端压缩下仍能达到 SOTA，并同时保持高效的 prefilling latency。</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<h3 id="41-overview">4.1 Overview</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/figure3.png"></p>
+<p>输入：视觉编码器（如 CLIP 或 ConvNeXt-L）输出的 token embedding 矩阵 $X=[x_1,\dots,x_T]\in\mathbb{R}^{T\times D}$（$T$ tokens，$D$ 维）。目标：压缩为 $ \tilde X\in\mathbb R^{N\times D},\ N\ll T$，同时尽量保持语义重要性与信息多样性，以便交给 LLM 做下游推理。</p>
+<p>整体两阶段流程（见 Fig.3）：</p>
+<ol>
+<li><strong>PSCA（Principal Semantic Components Analysis）</strong>：把 token 维度作为语义轴，做低秩分解并计算 token 在 K 个主语义分量上的贡献，依据最大投影值将 token 指派到语义组 $G_k$（$k=1..K$）。</li>
+<li><strong>组内 NMS（Intra-group NMS）</strong>：组内按选择分数 $s_i$ 排序，贪心地使用相似度阈值 $\tau$ 做去重（若与已选 token 最大相似度 &lt; $\tau$ 才保留），最后按组内配额取 top-$n_k$ 并拼接为最终 $\tilde X$。阈值 $\tau$ 由图像级冗余度 $\rho$ 调整。</li>
+</ol>
+<hr>
+<h3 id="42-semantic-aware-token-grouping-via-psca">4.2 SEMANTIC-AWARE TOKEN GROUPING VIA PSCA</h3>
+<p><strong>论文公式与核心步骤</strong>：</p>
+<p>先对 token 矩阵做逐 token 的 sigmoid 重缩放并跨 token 中心化：</p>
+$$
+X_{ctr} = \sigma(X) - \mu,\quad \mu = \frac{1}{T}\sum_{i=1}^{T}\sigma(x_i),
+$$<p>其中 $\sigma(\cdot)$ 是逐元素 sigmoid，用于将 feature 缩放到 $[0,1]$，并使特征尺度可比。随后对 $X_{ctr}^\top$ 做低秩 PCA（SVD）分解：</p>
+$$
+X_{ctr}^\top \approx U S V^\top,
+$$<p>$V\in\mathbb R^{T\times K}$ 是对 token 维度的右奇异向量矩阵，列向量 ${v_1,\dots,v_K}$ 表示 token 空间上的主语义方向。令 token 对第 $j$ 个分量的贡献为 $|V_{i,j}|$，token 指派为：</p>
+$$
+g(i)=\arg\max_j |V_{i,j}|.
+$$<p>这样 $T$ 个 token 被划分为 $K$ 个语义相干组 ${G_1,\dots,G_K}$。</p>
+<p><strong>设计动机解析（为什么这样行得通）</strong>：</p>
+<ul>
+<li>传统 PCA 沿 feature 维度寻找方差大方向以做降维；PSCA 把“token 维”当作变量维度去分解，意在发现“哪些 token 在同一语义主方向上具有类似贡献”——本质是用线性代数在 token 间建立语义相似性（而不是直接用 spatial 相似），这对捕获全局概念（object / background / texture）有效。</li>
+</ul>
+<hr>
+<h3 id="43-intra-group-redundancy-removal-via-nms">4.3 INTRA-GROUP REDUNDANCY REMOVAL VIA NMS</h3>
+<p><strong>核心要点（论文定义）</strong>：</p>
+<ul>
+<li>每个 token $x_i$ 被赋予选择分数 $s_i = |V_{i,g(i)}|$（即其在所属组主方向的绝对投影强度）。在组 $G_k$ 内按 $s_i$ 从大到小排序，然后按贪心 NMS 保留 token：若当前 token 与已保留 token 的最大相似度小于阈值 $\tau$，则保留。相似度定义为 $L_2$ 归一化后的内积：</li>
+</ul>
+$$
+\text{sim}(x_i,x_j) = \frac{x_i^\top x_j}{|x_i||x_j|}.
+$$<ul>
+<li>全图冗余度 $\rho$ 定义为平均两两相似度：</li>
+</ul>
+$$
+\rho = \frac{2}{T(T-1)}\sum_{i=1}^T \sum_{j=i+1}^T \text{sim}(x_i,x_j).
+$$<ul>
+<li>阈值设为 $\tau = \lambda\cdot \rho$, 其中经验设定 $\lambda = \frac{N}{32}$。</li>
+</ul>
+<p><strong>为什么要按组做 NMS</strong>：</p>
+<ul>
+<li>按组 NMS 可以保证每个语义方向（组）都有代表 token 被保留，从而兼顾概念覆盖；在组内再进行去重可防止多个 token 重复表达同一语义细节（例如同一物体的相邻 patch），提升每个保留 token 的信息增益。</li>
+</ul>
+<hr>
+<h3 id="44-information-aware-dynamic-compression-ratio-across-images">4.4 INFORMATION-AWARE DYNAMIC COMPRESSION RATIO ACROSS IMAGES</h3>
+<p><strong>核心公式</strong>：</p>
+<ul>
+<li>冗余度 $\rho$ 已由 Eq.(4) 定义（见上）；定义图像信息得分为</li>
+</ul>
+$$
+\phi = 1 - \rho,
+$$<p>$\phi$ 越大说明图像 token 间相似度越低（语义多样性高）。论文按 $\phi$ 为权重线性或比例地分配每张图片的保留 token 数 $N&rsquo;$（写成 $N&rsquo; \propto \phi$）。</p>
+<p><strong>为什么有效</strong>：对于复杂（多物体/密集）场景，固定小 N 会造成信息丢失；dynamic 分配能把有限预算更合理地分配给信息量大的图像，从而提升总体表现。论文的分析（Fig.5）表明 benchmark 间 $\phi$ 分布差异会影响动态策略的收益。</p>
+<hr>
+<h3 id="45-theoretical-overview-of-pscanms-pruning">4.5 THEORETICAL OVERVIEW OF PSCA–NMS PRUNING</h3>
+<ul>
+<li>定义 token 的语义信息 $I(s_i)$ 与冗余 $R(s_i,s_j)$，目标是寻找大小为 $N$ 的子集 $S&rsquo;$ 使得：</li>
+</ul>
+$$
+\max_{|S'|=N} \sum_{s_i\in S'} I(s_i) \quad \text{s.t.}\quad R(s_i,s_j)\le \varepsilon.
+$$<ul>
+<li>通过 Inclusion–Exclusion，可得信息的下界（论文 Eq.(9)-(15)）解释：PSCA 增强第一项 $\sum I(s_i)$，NMS 通过约束相似度最小化 $\sum R(s_i,s_j)$，两者合力近似解原优化问题并保证冗余上界。</li>
+</ul>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-main-results-on-image-understanding-tasks">5.1 MAIN RESULTS ON IMAGE UNDERSTANDING TASKS</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table11&12.png"></p>
+<hr>
+<h3 id="52-main-results-on-video-understanding-tasks">5.2 MAIN RESULTS ON VIDEO UNDERSTANDING TASKS</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table4.png"></p>
+<hr>
+<h3 id="53-ablation-study">5.3 ABLATION STUDY</h3>
+<ol>
+<li><strong>Token Grouping Strategy（PSCA vs random vs kmeans）</strong>：</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table5.png"></p>
+<ul>
+<li>PSCA 优于 random grouping 与直接在 token features 上做 KMeans（Table 5），解释是 PSCA 能发现 token 维上的主语义方向，比浅层聚类更能保持语义连续性。</li>
+</ul>
+<ol start="2">
+<li><strong>Group Count $K$ 的影响</strong>：</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table4.png"></p>
+<ul>
+<li>性能随 $K$ 呈钟形：$K$ 太小导致组过粗，无法区分细粒度语义；$K$ 太大导致组内样本过少且 pruning 不稳定。论文经验值 $K\approx N/4$ 在多种 N 下表现良好（Table 6）。</li>
+</ul>
+<ol start="3">
+<li><strong>使用哪层 ViT 特征</strong>：</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/figure4.png"></p>
+<ul>
+<li>中后层（例如 layer 16/22）最好；最终层（23）表现在某些配置下会小幅下降（可能被 fine-tuned 或 specialized）。因此建议提取中后层作为 PSCA 的输入。</li>
+</ul>
+<ol start="4">
+<li><strong>Dynamic Compression Ratio 的消融</strong>：</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table7.png"></p>
+<ul>
+<li>Dynamic（PRUNESID-Dyn）在多 benchmark（尤其是信息得分变异大的如 MMMU）上带来最多到 1.0% 的提升（Table 7）。这验证了在跨图像信息分布不均时动态分配的价值。</li>
+</ul>
+<ol start="5">
+<li>
+<p><strong>组件贡献（w/o PSCA / w/o NMS）</strong>：</p>
+<ul>
+<li>移除 PSCA 或 NMS 都会使性能显著下降，表明两部分在重要性/多样性平衡上是互补的（A.3.1）。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="54-efficiency-analysis">5.4 EFFICIENCY ANALYSIS</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/table8.png"></p>
+<ul>
+<li>
+<p><strong>总体观察</strong>：PRUNESID 的目标不仅是维持高性能，也要在实际延迟上有显著收益。论文在 LLaVA-NeXT/POPE 上的效率测量如下（Table 8）：</p>
+<ul>
+<li>原始 LLaVA-NeXT（2880 tokens）prefilling 占总延迟 86%（254 ms/sample 总延迟，prefilling 218 ms）。</li>
+<li>在 5.6% 压缩（保留 160 tokens）下，PRUNESID 将 prefilling 从 218ms 降到 <strong>27.8ms</strong>（$7.8\times$ 加速），总体 inference time 降到 <strong>89ms</strong>/sample（与 VisionZip 相似），同时在 POPE 上 F1 从 86.6% 提升到 89.0%。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="55-visualization-about-limitation">5.5 VISUALIZATION ABOUT LIMITATION</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/PruneSID/figure6.png"></p>
+<p>论文给出 Fig.6 的典型 failure case：当问题要求<strong>极细粒度</strong>信息（例如图片中某人的全名或白板上非常小的文本）时，在极端压缩率下（例如只保留 11.1%）方法可能把相关小区域 token 视为冗余而被删掉，导致 VLM 回答不完整或错误。论文建议未来引入<strong>任务/指令感知过滤</strong>来针对这类情形补偿（例如在存在 OCR/细粒度 query 时优先保留 OCR 相关 token）。</p>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>PRUNESID 提供了一个<strong>训练免费、任务不可知</strong>的视觉 token 压缩方法：通过 PSCA 做语义分组、通过组内 NMS 去冗余，并配合信息感知动态压缩率实现图像间自适应 token 分配。大量实证证明该方法在多 VLM、图像与视频任务上能在极端压缩下仍接近全精度并保持显著 prefilling 加速。论文同时指出方法在极细粒度任务上的局限与未来可扩展方向（加入任务/指令提示，使压缩带“感知”性）。</p>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\MMTok - Multimodal Coverage Maximization for Efficient Inference of VLMs.md">
+      <p><strong>Conference:</strong> <strong>ICLR 2026</strong></p>
+<p><strong>Note:</strong> <a href="https://zhuanlan.zhihu.com/p/1944299907109348831">https://zhuanlan.zhihu.com/p/1944299907109348831</a></p>
+<p><strong>Github:</strong> <a href="https://github.com/Ironieser/MMTok">https://github.com/Ironieser/MMTok</a></p>
+
+    </section>
+  
+    <section data-source="posts\ONE PATCH DOESN’T FIT ALL -  ADAPTIVE PATCHING FOR NATIVE-RESOLUTION MULTIMODAL LARGE LANGUAGE MODELS - ICLR&#39;26.md">
+      <p><strong>Conference:</strong> ICLR'26</p>
+<hr>
+<h2 id="1-abstract">1. Abstract</h2>
+<p>现实世界中的视觉信号在分辨率上天然具有高度的多样性，因此，让多模态大语言模型（Multimodal Large Language Models, MLLMs）具备<strong>原生分辨率（native-resolution）感知能力</strong>是一个自然且必要的目标。原则上，对于一般且直观的多模态理解任务，低分辨率图像往往已经足够；但对于包含大量细节的信息密集型图像（如文档、表格、图表等），则必须保留高分辨率输入，否则简单的缩放操作会不可避免地导致关键信息丢失。</p>
+<p>近期的研究通过 <strong>sequence packing</strong> 技术，使模型能够处理任意分辨率和任意宽高比的图像。然而，尽管这些方法在形式上支持 Any-Resolution（AnyRes）输入，模型在低分辨率和高分辨率下的性能仍然明显下降，同时高分辨率输入还会带来显著的计算开销。</p>
+<p>本文提出一个核心观点：<strong>“单一固定 patch size”是导致上述问题的根本原因</strong>。当图像分辨率或信息密度发生变化时，固定 patch size 在建模上天然是次优的。</p>
+<p>为此，论文提出 <strong>Adaptive Patching（AdaPatch）</strong>：一种<strong>无需额外训练</strong>、可直接插入到现有固定 patch MLLMs 中的策略。AdaPatch 根据图像的<strong>原生分辨率</strong>和<strong>信息密度</strong>动态调整 patch size，从而在不同类型、不同分辨率的图像上取得更稳定、更优的性能。实验表明，该方法在不增加训练成本的前提下，显著提升了 AnyRes 场景下的准确率和稳定性；此外，论文还提出了一种<strong>训练版方法</strong>，进一步增强模型对动态 patch size 的适应能力。</p>
+<hr>
+<h2 id="2-introduction">2. Introduction</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure1.png"></p>
+<p>早期的多模态大模型（如 LLaVA、InternVL 系列）通常依赖<strong>固定分辨率的视觉编码器</strong>：要么将输入图像统一 resize 到某个标准尺寸，要么先切分成多个 tile 再分别处理。这类预处理不可避免地会改变原始视觉内容，对于需要保留细粒度细节或整体结构的任务（例如图表、示意图）尤其不利。</p>
+<p>受 NaViT 启发，近期工作开始直接保留图像的<strong>原生分辨率</strong>，并将图像划分为固定大小的 non-overlapping patches，使 token 数量随分辨率线性增长。随后通过 <strong>sequence packing</strong> 将多张图像的 token 序列拼接为一个长序列，并通过 block-diagonal attention mask 保证不同图像之间不互相注意。Qwen2.5-VL、Ovis2.5、Kimi-VL 等 SOTA 模型均采用了这一范式，并宣称支持任意分辨率输入。</p>
+<p>然而，本文通过系统性实验指出：<strong>当前 AnyRes 设计并未真正实现“原生分辨率鲁棒性”</strong>。在跨越大范围像素预算的测试中，模型性能在不同分辨率区间显著波动，且在极低或极高分辨率下普遍退化。</p>
+<p>论文进一步分析发现，问题的根源在于：</p>
+<ul>
+<li>在<strong>低分辨率或高信息密度图像</strong>中，大 patch 会过于粗糙，无法捕获细节；</li>
+<li>在<strong>高分辨率或低信息密度图像</strong>中，小 patch 过于局部，导致全局上下文建模能力不足。</li>
+</ul>
+<p>因此，<strong>patch size 与分辨率、信息密度之间的失配</strong>，是 AnyRes 性能不稳定的主要架构性原因。</p>
+<p>为解决该问题，论文提出 <strong>Adaptive Patching</strong>，其核心思想是：</p>
+<blockquote>
+<p>根据图像的分辨率 $r$ 和信息密度 $\rho$，自适应地选择 patch size $s$。</p>
+</blockquote>
+<p>并进一步提出一种 <strong>weight-preserving conversion</strong>，使得<strong>预训练的固定-patch MLLMs 无需重新训练即可支持任意 patch size</strong>，同时完全兼容 sequence packing。实验结果显示，该方法在多个基准上显著提升了准确率与稳定性，并在高分辨率场景下降低了 token 数量，加速推理。</p>
+<p>本文贡献总结如下：</p>
+<ul>
+<li>从 pixel-range 视角，系统评估了 SOTA AnyRes MLLMs 的性能，揭示其在不同分辨率下的显著退化现象；</li>
+<li>从架构层面指出 fixed patch size 是 AnyRes 不稳定性的主要原因；</li>
+<li>提出 Adaptive Patching（训练免费 + 训练版），在不破坏现有模型结构的前提下显著提升性能与效率。</li>
+</ul>
+<hr>
+<h2 id="3-background-and-motivation">3. Background and Motivation</h2>
+<h3 id="31-mllm-推理流程anyres-setting">3.1 MLLM 推理流程（AnyRes Setting）</h3>
+<p>考虑一个因果式 MLLM，其目标是建模条件概率：
+</p>
+$$
+p(y_t \mid y_{\lt t}, x)
+$$<p>
+其中 $x$ 为输入图像，$y_{1:T}$ 为文本 token 序列。</p>
+<p>整个流程可拆解为以下关键步骤：</p>
+<h4 id="1anyres-预处理">（1）AnyRes 预处理</h4>
+<p>输入图像 $x \in \mathbb{R}^{h \times w \times c}$，其原生分辨率为 $r=(h,w)$。AnyRes 预处理模块输出图像 $\tilde{x} \in \mathbb{R}^{\tilde{h} \times \tilde{w} \times c}$，目标分辨率 $\tilde{r}=(\tilde{h},\tilde{w})$ 满足：</p>
+<ul>
+<li>$\tilde{h}, \tilde{w}$ 可被 patch size $s$ 整除；</li>
+<li>总像素数位于 $[P_{min}, P_{max}]$ 区间；</li>
+<li>尽量保持宽高比与原始分辨率一致。</li>
+</ul>
+<p>其选择通过如下优化问题给出：
+</p>
+$$
+\min_{\tilde{h}, \tilde{w}, \gamma}
+(h\tilde{w}-w\tilde{h})^2 + \varepsilon[(\tilde{h}-\gamma h)^2+(\tilde{w}-\gamma w)^2] + \varepsilon^2(\gamma-1)^2
+$$<p>随后采用双线性插值等方式进行 resize，可视为一个线性算子：
+</p>
+$$
+\tilde{x}_i = B^{\tilde{r}}_r \cdot \text{vec}(x_i)
+$$<h4 id="2patch-embedding">（2）Patch Embedding</h4>
+<p>将 $\tilde{x}$ 划分为 $s \times s$ 的 non-overlapping patches，总数为：
+</p>
+$$
+n = \left\lfloor \frac{\tilde{h}}{s} \right\rfloor \left\lfloor \frac{\tilde{w}}{s} \right\rfloor
+$$<p>Patch embedding 层 $g_\theta$ 本质是一个 stride=$s$ 的卷积：
+</p>
+$$
+g_\theta(\tilde{x}) = \text{Conv}_\theta(\tilde{x}; s)
+$$<p>
+输出 $n$ 个 $d_v$ 维视觉 token。</p>
+<h4 id="3vision-encoder--projector--llm">（3）Vision Encoder + Projector + LLM</h4>
+<p>Patch tokens 经 Vision Encoder $E_\phi$ 编码，再通过 Projector $\Pi_\psi$ 映射到语言空间，最终与文本 token 一起送入 LLM $L_\xi$。</p>
+<hr>
+<h3 id="32-anyres-性能评估动机">3.2 AnyRes 性能评估动机</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure2.png"></p>
+<p>论文首次从 <strong>pixel-range</strong> 角度系统评估 AnyRes MLLMs：通过改变 $[P_{min},P_{max}]$，观察模型在不同像素预算下的性能变化。实验表明：</p>
+<ul>
+<li>不同模型、不同任务存在明显的“偏好分辨率区间”；</li>
+<li>在低像素预算下，信息密集型图像（文档、图表）性能急剧下降；</li>
+<li>在高像素预算下，即使模型宣称支持高分辨率，性能仍然明显退化。</li>
+</ul>
+<p>这说明：<strong>AnyRes ≠ Robust AnyRes</strong>。</p>
+<hr>
+<h3 id="33-固定-patch-size-导致的不稳定性">3.3 固定 Patch Size 导致的不稳定性</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure3.png"></p>
+<p>通过将 Qwen2.5-VL（$s=14$）转换为多种 patch size（$s \in {7,14,21,28,35,42}$），并在 MME 上跨分辨率评估，论文发现：</p>
+<ul>
+<li>低分辨率更偏好小 patch；</li>
+<li>高分辨率更偏好大 patch；</li>
+<li>且最优 patch size 与信息密度强相关（文档 &gt; 图表 &gt; 自然图像）。</li>
+</ul>
+<p>经验趋势：
+</p>
+$$
+s^* \propto \frac{r}{\rho}
+$$<hr>
+<h2 id="4-method">4. Method</h2>
+<h2 id="adaptive-patching">ADAPTIVE PATCHING</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure4.png"></p>
+<p>本节是全文最核心部分，提出 <strong>Adaptive Patching（AdaPatch）</strong>，包括：
+1）信息密度的定义与估计；
+2）自适应 patch size 的计算规则；
+3）如何将固定 patch 模型转换为 any-patch 模型。</p>
+<hr>
+<h3 id="41-信息密度估计information-density-estimation">4.1 信息密度估计（Information Density Estimation）</h3>
+<p>直觉：<strong>如果一张图像在下采样后，其高层语义特征变化很大，则说明该图像信息密度高</strong>。</p>
+<p>论文形式化定义信息密度为：</p>
+$$
+\rho_{info}(x) = 1 - \frac{1}{n} \sum_{i=1}^n \frac{\langle E^{[k,i]} \ast \phi(\text{conv} \ast \theta(\tilde{x}; s)), E^{[k,i]} \ast \phi(\text{conv}^* \ast \theta(B^{r/2} \text{vec}(\tilde{x}); s/2)) \rangle}{\| E^{[k,i]} \ast \phi(\text{conv} \ast \theta(\tilde{x}; s)) \| \cdot \| E^{[k,i]} \ast \phi(\text{conv}^* \ast \theta(B^{r/2} \text{vec}(\tilde{x}); s/2)) \|}
+$$<p>解释：</p>
+<ul>
+<li>同一图像，分别在原分辨率与 $r/2$ 分辨率下提取特征；</li>
+<li>比较对应 token 在 vision encoder 第 $k$ 层的 cosine similarity；</li>
+<li>相似度越低，说明下采样损失越大，信息密度越高。</li>
+</ul>
+<p>$\rho(x) \in [0,1]$，值越大表示越“细节密集”。</p>
+<hr>
+<h3 id="42-自适应-patch-size-法则adaptive-patching-law">4.2 自适应 Patch Size 法则（Adaptive Patching Law）</h3>
+<p>基于经验规律 $s^* \propto r/\rho$，论文提出如下 power-law 映射：
+</p>
+$$
+s^*(x) = \operatorname{Quantize}\Bigl(\operatorname{clip}\bigl(\tilde{s} \cdot (\kappa(r_x)/r_0)^\alpha \cdot (\tilde{\rho}/(\rho(x)+\varepsilon))^\beta;\, s_{\min}, s_{\max}\bigr)\Bigr)
+$$<p>各参数含义：</p>
+<ul>
+<li>$\kappa(r)$：分辨率标量（如 $\min(h,w)$）；</li>
+<li>$r_0=896$、$\tilde{s}=14$、$\tilde{\rho}=0.2$：预训练模型基准值；</li>
+<li>$\alpha, \beta$：控制分辨率 / 密度敏感度；</li>
+<li>Quantize：映射到离散 patch size 集合；</li>
+<li>clip：限制 patch size 范围。</li>
+</ul>
+<p>该规则同时满足：</p>
+<ul>
+<li>分辨率越高，patch 越大；</li>
+<li>信息密度越高，patch 越小。</li>
+</ul>
+<hr>
+<h3 id="43-固定-patch--any-patch-转换">4.3 固定 Patch → Any-Patch 转换</h3>
+<h4 id="1pseudo-inverse-resize训练免费">（1）Pseudo-Inverse Resize（训练免费）</h4>
+<p><strong>目标：</strong> 为每个 patch size $s_i$ 构造对应的卷积核 $\theta_i$，使得：</p>
+$$
+conv_{\theta_i}(x_{r_i}; s_i)
+\approx
+conv_{\theta}(x_r; s)
+$$<p><strong>核心思想：</strong></p>
+<ul>
+<li><strong>Resize 是线性算子 $B$</strong>：图像的缩放过程可以看作矩阵运算。</li>
+<li><strong>卷积也是线性算子</strong>：通过线性代数的性质，可以将两者的变换对齐。</li>
+<li><strong>伪逆对齐</strong>：通过伪逆（Pseudo-inverse）运算，在不改变原始卷积权重 $\theta$ 的情况下，推导出适应新尺寸 $s_i$ 的权重 $\theta_i$。</li>
+</ul>
+<p>该方法<strong>无需重新训练 Vision Encoder 和 LLM</strong>，仅需在推理前通过数学计算调整 patch embedding 的权重。</p>
+<hr>
+<h4 id="2multi-scale-patch-embedding训练版">（2）Multi-Scale Patch Embedding（训练版）</h4>
+<p>直接维护多尺度 patch embedding，在训练过程中随机采样不同的 $s_i$，并进行联合优化：</p>
+$$
+\min_{\theta_i, \phi, \psi, \xi}
+\;
+E_{(x,y), s_i}
+\,
+L_\xi(x, y; s_i)
+$$<p><strong>对比分析：</strong>
+相比于“训练免费”方案，该方法通过端到端的学习，能够让模型更好地适应多尺度特征，进一步提升性能，但需要投入额外的计算资源进行训练。</p>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-main-results">5.1 Main Results</h3>
+<p>实验覆盖：</p>
+<ul>
+<li>多种 MLLMs（Qwen2.5-VL, Ovis2.5, Kimi-VL 等）；</li>
+<li>多个任务（MME、Doc、Chart 等）；</li>
+<li>大范围像素预算。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure6.png"></p>
+<p>结论：</p>
+<ul>
+<li>AdaPatch 在几乎所有分辨率区间都优于 fixed-patch；</li>
+<li>显著降低性能波动；</li>
+<li>在高分辨率下减少 token 数量，加速推理。</li>
+</ul>
+<h3 id="52-ablation-study-and-analysis">5.2 Ablation Study and Analysis</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/AdaPatch/figure7.png"></p>
+<ul>
+<li>不同 $\alpha,\beta$ 的影响；</li>
+<li>仅使用分辨率 / 仅使用密度的对比；</li>
+<li>PI-resize vs MSPE；</li>
+<li>信息密度估计层数 $k$ 的影响。</li>
+</ul>
+<p>所有实验均验证：<strong>patch size 自适应是性能提升的关键因素</strong>。</p>
+<hr>
+<h2 id="6-conclusion">6 Conclusion</h2>
+<p>论文系统性地揭示了 AnyRes MLLMs 的核心瓶颈：固定 patch size。通过提出 Adaptive Patching，作者给出了一种简单、通用、可插拔的解决方案，在不破坏现有模型结构的前提下，实现了真正意义上的原生分辨率鲁棒性。</p>
+<p>该工作强调：<strong>patch size 是视觉-语言建模中一个被长期忽视、但极其关键的自由度</strong>。</p>
+<hr>
+<h2 id="limitations-and-future-work">Limitations and Future Work</h2>
+<ul>
+<li>当前方法仍依赖启发式密度估计；</li>
+<li>未来可引入更高质量多分辨率数据；</li>
+<li>AdaPatch 有潜力增强 thinking-with-images 模型的多尺度推理能力。</li>
+</ul>
+
+    </section>
+  
+    <section data-source="posts\Matryoshka Multimodal Models - ICLR&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/M3/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICLR'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/mu-cai/matryoshka-mm">https://github.com/mu-cai/matryoshka-mm</a></p>
+<hr>
+<h2 id="1-introduction">1. Introduction</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/figure1.png"></p>
+<p>Large Multimodal Models (LMMs) such as LLaVA have shown strong performance in visual-linguistic reasoning. These models first embed images into a fixed large number of visual tokens and then feed them into a Large Language Model (LLM). However, this design causes an excessive number of tokens for dense visual scenarios such as high-resolution images and videos, leading to great inefficiency.</p>
+<p>While token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 <strong>Matryoshka Multimodal Models (M³)</strong>。该模型学习将视觉内容表示为<strong>嵌套的视觉 Token 集合</strong>（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。</p>
+<p><strong>为 LMM 带来了几个独特的优势：</strong></p>
+<ol>
+<li>
+<p><strong>显式粒度控制 (Explicit Granularity Control)：</strong> 推理时可以根据任务复杂度或计算预算，动态调整代表图像的 Token 数量。例如，简单场景用少量 Token，复杂场景用多量 Token。</p>
+</li>
+<li>
+<p><strong>数据集粒度分析框架：</strong> 研究发现 COCO 风格的基准测试仅需约 9 个视觉 Token 即可达到与使用全部 576 个 Token 相当的准确率。</p>
+</li>
+<li>
+<p><strong>性能与效率的最佳权衡：</strong> 揭示了当前固定尺度表示与“神谕（Oracle）”上限（即针对每个样本自动选择最佳尺度）之间存在巨大差距。</p>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/figure2.png"></p>
+<hr>
+<h2 id="2-m3-matryoshka-multimodal-models">2. M3: Matryoshka Multimodal Models</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/figure3.png"></p>
+<p>本节详细介绍如何构建和训练具有“套娃”结构的视觉 Token 序列。</p>
+<h3 id="21-嵌套视觉表示的设计-nested-visual-representation">2.1 嵌套视觉表示的设计 (Nested Visual Representation)</h3>
+<p>M³ 的核心目标是学习一组<strong>嵌套的视觉 Token 集合</strong>
+</p>
+$$
+\mathcal{V}^{(1)} \subset \mathcal{V}^{(2)} \subset \cdots \subset \mathcal{V}^{(S)}
+$$<p>
+并满足
+</p>
+$$
+|\mathcal{V}^{(1)}| < |\mathcal{V}^{(2)}| < \cdots < |\mathcal{V}^{(S)}|
+$$<p>与传统的 Matryoshka Representation Learning (MRL) 不同（MRL 侧重于特征维度的嵌套），M³ 侧重于 <strong>Token 序列长度维度</strong> 的嵌套。</p>
+<hr>
+<p><strong>具体的池化层次结构 (Pooling Hierarchy)：</strong></p>
+<p>模型采用预训练的视觉编码器（如 CLIP-ViT-L-336）将输入图像 $I$ 投影为一个二维视觉 Token 网格：
+</p>
+$$
+\mathbf{X}^{(0)} = f_{\text{vision}}(I) \in \mathbb{R}^{H \times W \times d}
+$$<p>
+其中 $H=W=24$，因此初始 Token 数为 $24 \times 24 = 576$。</p>
+<ol>
+<li>
+<p><strong>基础分辨率：</strong>
+初始输入为
+</p>
+$$
+   |\mathcal{V}^{(0)}| = 576
+   $$<p>
+个 Token。</p>
+</li>
+<li>
+<p><strong>多尺度下采样：</strong>
+为了构建嵌套结构且不引入新的参数，模型在原始视觉 Token 上序列化地应用 <strong>平均池化 (Average Pooling)</strong>：</p>
+</li>
+</ol>
+<ul>
+<li>
+<p>应用 $2 \times 2$ 的平均池化（stride = 2）：
+</p>
+$$
+  \mathbf{X}^{(1)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(0)}) \Rightarrow |\mathcal{V}^{(1)}| = 12 \times 12 = 144
+  $$</li>
+<li>
+<p>再次应用 $2 \times 2$ 池化：
+</p>
+$$
+  \mathbf{X}^{(2)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(1)}) \Rightarrow |\mathcal{V}^{(2)}| = 6 \times 6 = 36
+  $$</li>
+<li>
+<p>再次应用 $2 \times 2$ 池化：
+</p>
+$$
+  \mathbf{X}^{(3)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(2)}) \Rightarrow |\mathcal{V}^{(3)}| = 3 \times 3 = 9
+  $$</li>
+<li>
+<p>最后应用全局平均池化：
+</p>
+$$
+  \mathbf{X}^{(4)} = \text{AvgPool}_{3 \times 3}(\mathbf{X}^{(3)}) \Rightarrow |\mathcal{V}^{(4)}| = 1
+  $$</li>
+</ul>
+<p>最终形成的 5 个 Token 尺度为：
+</p>
+$$
+|\mathcal{V}| \in {576,\ 144,\ 36,\ 9,\ 1}
+$$<p>这种方法不仅保留了空间结构，还确保了粗粒度 Token 直接由细粒度 Token 计算而来，实现了真正的“嵌套”。</p>
+<p><em>Refer to Figure 3: Architecture of M³. CLIP 特征被表示为多组由粗到精的 Token。</em></p>
+<hr>
+<h3 id="22-训练目标-training-objective">2.2 训练目标 (Training Objective)</h3>
+<p>M³ 的训练通过在每个尺度 $s$ 上平均自回归下一个 Token 预测损失（next token prediction loss）来实现。</p>
+<p>对于特定尺度 $s$，给定视觉表示 $\mathcal{V}^{(s)}$ 和文本问题 $Q$，模型最大化生成正确答案 $A = {a_1, \dots, a_T}$ 的似然函数：
+</p>
+$$
+\log p(A \mid Q, \mathcal{V}^{(s)}; \theta)
+= \sum_{t=1}^{T} \log p(a_t \mid a_{\lt t}, Q, \mathcal{V}^{(s)}; \theta)
+$$<p>
+其中 $\theta$ 表示模型的所有可训练参数（包括视觉编码器和 LLM）。</p>
+<p>最终的总损失函数定义为所有 $S=5$ 个尺度的平均负对数似然：</p>
+$$
+\mathcal{L}
+= \frac{1}{S} \sum_{s=1}^{S}
+\left(- \sum_{t=1}^{T}
+\log p(a_t \mid a_{\lt t}, Q, \mathcal{V}^{(s)}; \theta)
+\right)
+$$<p>通过这一目标函数，M³ 能够在<strong>同一套权重</strong>下，学习让 LLM 同时适应从极简（$1$ token）到极细（$576$ tokens）的各种视觉输入。</p>
+<hr>
+<h2 id="3-experiments">3. Experiments</h2>
+<h3 id="31-experiment-settings">3.1 Experiment Settings</h3>
+<ul>
+<li>
+<p><strong>模型基座：</strong> 使用 LLaVA-1.5 和 LLaVA-NeXT 作为基础，LLM 骨干网络均为 Vicuna-7B。</p>
+</li>
+<li>
+<p><strong>训练细节：</strong></p>
+<ul>
+<li>LLM 学习率：$\eta_{\text{LLM}} = 2 \times 10^{-5}$</li>
+<li>视觉编码器学习率：$\eta_{\text{vision}} = 2 \times 10^{-6}$</li>
+</ul>
+</li>
+<li>
+<p><strong>硬件：</strong> 在 8 张 NVIDIA H100 GPU 上训练 1 个 epoch。</p>
+</li>
+<li>
+<p><strong>初始化：</strong> 从预训练好的 LLaVA 权重初始化，效果显著优于从零训练。</p>
+</li>
+<li>
+<p><strong>评价指标：</strong></p>
+<ul>
+<li><strong>图像理解：</strong> POPE, GQA, MMBench, VizWiz, SEEDBench, ScienceQA, MMMU</li>
+<li><strong>OCR：</strong> DocVQA, ChartQA, AI2D, TextVQA</li>
+</ul>
+</li>
+<li>
+<p><strong>视频理解：</strong></p>
+<ul>
+<li>开放式：MSVD-QA, MSRVTT-QA, ActivityNet-QA</li>
+<li>多选题：NEXT-QA, IntentQA, EgoSchema</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="32-image-understanding">3.2 Image Understanding</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table2.png">
+在图像理解任务中，LLaVA-1.5-M³ 展示了极强的灵活性和性能：</p>
+<ul>
+<li>
+<p><strong>极简 Token 的强大性能：</strong>
+在 MMBench 上，仅使用
+</p>
+$$
+  |\mathcal{V}| = 9
+  $$<p>
+个 Token 的 LLaVA-1.5-M³ 即超过使用 $256$ Token 的 Qwen-VL-Chat；甚至在
+</p>
+$$
+  |\mathcal{V}| = 1
+  $$<p>
+时也能达到相当性能。</p>
+</li>
+<li>
+<p><strong>全尺度覆盖：</strong>
+如 Table 1 所示，在所有测试尺度上，M³ 均优于 InstructBLIP。</p>
+</li>
+</ul>
+<hr>
+<h3 id="33-video-understanding">3.3 Video Understanding</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table3.png">
+对于视频任务，Token 数量通常是效率瓶颈。M³ 能显著减少视频帧的 Token 需求：</p>
+<ul>
+<li>
+<p>在多个视频 QA 基准测试中，使用较少 Token 的 M³ 达到了与全量模型相当的准确率。</p>
+</li>
+<li>
+<p>在相同 Token 预算 $B$ 下：
+</p>
+$$
+  \text{frames} \propto \frac{B}{|\mathcal{V}_{\text{per-frame}}|}
+  $$<p>
+例如：</p>
+</li>
+</ul>
+<ul>
+<li>$1$ token / frame $\Rightarrow 2880$ frames</li>
+<li>$576$ tokens / frame $\Rightarrow 5$ frames</li>
+</ul>
+<p>极大提升了长视频理解能力。</p>
+<hr>
+<h3 id="34-in-depth-analysis">3.4 In-depth Analysis</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/figure5.png"></p>
+<ul>
+<li>
+<p><strong>与启发式采样（Heuristics）对比：</strong>
+M³ 显著优于测试时直接进行平均池化、空间采样（Spatial Sampling）或序列采样（Sequential Sampling）。当 Token 数减少时，M³ 的性能退化非常缓慢。</p>
+</li>
+<li>
+<p><strong>上限 (Oracle Performance)：</strong>
+定义 Oracle 为：
+</p>
+$$
+  s^\star = \arg\min_s {|\mathcal{V}^{(s)}| \mid \text{answer correct}}
+  $$</li>
+<li>
+<p><strong>惊人的发现：</strong>
+Oracle 模型平均仅使用
+</p>
+$$
+  \mathbb{E}[|\mathcal{V}|] = 8.9
+  $$<p>
+个 Token，其性能比 $576$ Token 的 LLaVA-NeXT 高 <strong>8 个百分点</strong>。</p>
+</li>
+<li>
+<p><strong>零样本泛化 (Zero-shot generalization)：</strong>
+训练于 $24 \times 24$ 网格，推理扩展至 $48 \times 48$ 网格：
+</p>
+$$
+  \mathbf{X} \in \mathbb{R}^{48 \times 48 \times d}
+  $$</li>
+<li>
+<p><strong>OCR 性能提升：</strong>
+TextVQA、ChartQA、DocVQA 分别提升 $+2.12,\ +1.80,\ +4.11$。</p>
+</li>
+</ul>
+<hr>
+<h3 id="35-ablation-studies">3.5 Ablation Studies</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/M3/table6.png"></p>
+<p>消融实验验证了：</p>
+<ol>
+<li>
+<p><strong>训练尺度的影响：</strong>
+联合训练所有尺度
+</p>
+$$
+   {\mathcal{V}^{(s)}}_{s=1}^{S}
+   $$<p>
+优于仅训练特定尺度（SS）。</p>
+</li>
+<li>
+<p><strong>池化策略：</strong>
+空间平均池化保留二维位置先验
+</p>
+$$
+   (i,j) \in \mathbb{Z}^2
+   $$<p>
+显著优于序列重排方案。</p>
+</li>
+</ol>
+<hr>
+<h2 id="4-conclusion-and-future-work">4. Conclusion and Future Work</h2>
+<p>我们提出了 <strong>Matryoshka Multimodal Models (M³)</strong>，学习将视觉内容表示为嵌套的视觉 Token 集合，实现推理时对视觉粒度的显式控制。</p>
+<p><strong>核心贡献总结：</strong></p>
+<ul>
+<li>
+<p><strong>效率提升：</strong>
+通过减少 Token 数 $|\mathcal{V}|$，显著降低 FLOPs 与 KV-cache 内存开销。</p>
+</li>
+<li>
+<p><strong>复杂度度量：</strong>
+M³ 可作为评估数据集视觉复杂度的框架：
+COCO 类自然场景 $\Rightarrow |\mathcal{V}| \approx 9$
+OCR / 文档任务 $\Rightarrow |\mathcal{V}| \in [144, 576]$</p>
+</li>
+<li>
+<p><strong>揭示瓶颈：</strong>
+Oracle 上限与固定尺度模型之间存在巨大性能鸿沟。</p>
+</li>
+</ul>
+<p><strong>未来工作：</strong></p>
+<ol>
+<li>
+<p><strong>自动尺度预测器：</strong> 学习函数
+</p>
+$$
+   g(I, Q) \rightarrow s^\star
+   $$<p>
+自动选择最优 Token 尺度。</p>
+</li>
+<li>
+<p><strong>多模态扩展：</strong> 将嵌套思想推广至纯文本 LLM 的长上下文建模与其他高密度感知任务。</p>
+</li>
+</ol>
+
+    </section>
+  
+    <section data-source="posts\Video Compression Commander - Plug-and-Play Inference Acceleration for Video Large Language Models - EMNLP&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/title.png"></p>
+<p><strong>Conference:</strong> <strong>EMNLP'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/xuyang-liu16/VidCom2">https://github.com/xuyang-liu16/VidCom2</a></p>
+<hr>
+<h2 id="1-introduction">1. Introduction</h2>
+<p>视频大语言模型（VideoLLMs）在视频理解任务（如视频问答、视频推理、时序理解等）上表现出色，但其推理效率受到<strong>视觉 token 数量过多</strong>的严重制约。具体而言，当前主流 VideoLLM 通常将视频拆解为多帧图像，每一帧再由 ViT 等视觉编码器转化为大量 patch-level tokens，这些视觉 tokens 会与文本 tokens 一同送入 LLM 进行跨模态建模。</p>
+<p>由于 Transformer 自注意力的复杂度为 $O(N^2)$，当视频帧数 $T$ 和每帧 token 数 $M$ 较大时，总 token 数 $N = T \times M$ 会迅速膨胀，导致推理延迟和显存消耗急剧上升。这一问题在<strong>长视频理解</strong>和<strong>高分辨率视频</strong>场景中尤为突出。</p>
+<p>作者系统性地分析了现有 VideoLLM token compression 方法，发现其普遍存在两个关键问题：</p>
+<ol>
+<li>
+<p><strong>忽视帧间差异性（Frame-level Distinctiveness）</strong>
+多数方法对所有帧采用统一的压缩比例，默认每一帧“信息密度相同”，从而容易在关键帧上丢失重要视觉线索。</p>
+</li>
+<li>
+<p><strong>工程实现受限（Implementation Constraints）</strong>
+一些方法依赖特定模型结构（如 ViT 的 [CLS] token）或显式 attention 权重，导致难以兼容现代视觉编码器（如 SigLIP）或高效注意力算子（如 FlashAttention）。</p>
+</li>
+</ol>
+<p>为此，作者总结出 <strong>三条 VideoLLM token compression 的设计原则</strong>，并提出一种**即插即用（plug-and-play）**的推理加速框架 <strong>Video Compression Commander（VidCom2）</strong>。</p>
+<p>VidCom2 的核心思想是：<strong>量化每一帧在整个视频中的“独特性（uniqueness）”</strong>，并据此动态调整不同帧的压缩强度，从而在保证信息保真的前提下最大化冗余削减。</p>
+<p>大量实验表明，VidCom2 在多种 VideoLLM 架构和 benchmark 上均取得了更优的性能-效率权衡。</p>
+<p>在仅保留 <strong>25% 视觉 tokens</strong> 的情况下，VidCom2 在 LLaVA-OneVision 上仍能保持 <strong>99.6% 的原始性能</strong>，同时将 <strong>LLM 生成延迟降低 70.8%</strong>，显示出极高的性价比。</p>
+<p>此外，VidCom2 提出的 <strong>Frame Compression Adjustment（帧级压缩调度）</strong> 机制具备良好的通用性，可作为一个外部模块，与现有 token compression 方法叠加使用，进一步提升整体性能。</p>
+<hr>
+<h2 id="2-motivation">2. Motivation</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/figure1.png"></p>
+<p>To mitigate this computational burden, researchers have turned to token compression methods (Chen et al., 2024a; Yang et al., 2025), considering the inherent visual redundancy and aiming to minimize redundant visual information.</p>
+<p>为缓解 VideoLLM 的计算开销，研究者提出了多种 <strong>token compression</strong> 方法，基于一个核心观察：<strong>视频中存在大量时序与空间冗余</strong>，并非所有视觉 tokens 都同等重要。</p>
+<p>These approaches can be categorized as pre-LLM (Zhang et al., 2024b) or intra-LLM (Chen et al., 2024a) methods, based on whether compression occurs before or within the LLM.</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table1.png"></p>
+<p>现有方法大致可分为两类：</p>
+<ul>
+<li><strong>Pre-LLM compression</strong>：在视觉 encoder 输出后、送入 LLM 前进行 token 压缩；</li>
+<li><strong>Intra-LLM compression</strong>：在 LLM 内部（如特定层）动态丢弃或合并 tokens。</li>
+</ul>
+<p>Most of these methods are training-free, enabling plug-and-play inference acceleration for existing VideoLLMs.</p>
+<p>多数方法无需额外训练，具备即插即用特性，理论上适合部署到已有 VideoLLM 系统中。</p>
+<p>However, despite these efforts, existing token compression methods suffer from two critical issues:</p>
+<h3 id="i-design-myopia">(I) Design Myopia</h3>
+<p>In human video perception we naturally focus on distinctive frames (e.g., those with significant spatio-temporal changes) while ignoring repetitive and redundant visual information (Ma et al., 2025).</p>
+<p>人类在观看视频时，天然会聚焦于<strong>发生显著变化的关键帧</strong>，而对高度重复的画面自动忽略。</p>
+<p>By contrast, most existing token compression methods apply a uniform compression strategy across all frames, treating each one as equally informative.</p>
+<p>然而，大多数方法对所有帧使用统一压缩比例，默认每一帧的信息价值相同。</p>
+<p>Even recent VideoLLM-specific method DyCoke (Tao et al., 2025) exhibits this limitation by grouping every four consecutive frames into a fixed window and compressing them identically.</p>
+<p>即便是针对 VideoLLM 设计的 DyCoke，也采用固定窗口（如每 4 帧）进行一致压缩，忽略了帧间差异。</p>
+<p>Figure 1 further illustrates the critical nature of this issue: removing 24 redundant frames does not affect the accurate response of the LLaVA-OneVision, whereas dropping just 8 unique frames causes it to fail.</p>
+<p>Figure 1 直观展示了这一问题：删除 24 个冗余帧对模型预测几乎无影响，而仅删除 8 个关键帧就会导致模型失败，尽管数量更少。</p>
+<p>This contrast shows that uniform compression risks discarding critical information in unique frames.</p>
+<p>这表明<strong>均匀压缩极易误伤关键信息帧</strong>。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table2.png"></p>
+<p>Notably, Table 2 indicates that some methods even underperform random token dropping.</p>
+<p>Table 2 中甚至显示，部分方法的效果不如随机丢 token，说明其压缩策略存在明显缺陷。</p>
+<h3 id="ii-implementation-constraints">(II) Implementation Constraints</h3>
+<p>Beyond design limitations, existing methods face practical constraints.</p>
+<p>除设计层面问题外，现有方法在工程实现上也存在严重限制。</p>
+<p>Some token compression works rely on [CLS] attention weights in ViT, yet modern VideoLLMs adopt SigLIP without [CLS] token.</p>
+<p>一些方法依赖 ViT 的 [CLS] token attention，但现代 VideoLLM 通常采用 SigLIP 等无 [CLS] 架构，导致方法失效。</p>
+<p>Meanwhile, certain methods require explicit attention weights in specific LLM layers, making them incompatible with efficient attention operators (Dao et al., 2022).</p>
+<p>另一些方法需要访问显式 attention weights，无法与 FlashAttention 等高效算子兼容，反而增加显存峰值（Table 4）。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table4.png"></p>
+<p>We identify three key principles:</p>
+<ol>
+<li><strong>Model Adaptability</strong></li>
+<li><strong>Frame Uniqueness</strong></li>
+<li><strong>Operator Compatibility</strong></li>
+</ol>
+<p>VidCom2 的设计正是围绕这三条原则展开。</p>
+<hr>
+<h2 id="3-method">3. Method</h2>
+<h3 id="video-compression-commander">Video Compression Commander</h3>
+<p>VidCom2 是一个<strong>训练无关、模型无关、算子友好</strong>的视频 token 压缩框架。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/figure2.png"></p>
+<p>Figure 2 展示了 VidCom2 的整体流程，其核心由两个阶段构成：</p>
+<ol>
+<li><strong>Stage 1: Frame Compression Adjustment（帧级压缩调度）</strong></li>
+<li><strong>Stage 2: Adaptive Token Compression（自适应 token 压缩）</strong></li>
+</ol>
+<p>该两阶段设计体现了 VidCom2 的核心思想：
+<strong>先在“帧级”决定资源分配，再在“token 级”执行精细压缩</strong>。</p>
+<hr>
+<h3 id="33-stage-1-frame-compression-adjustment">3.3 Stage 1: Frame Compression Adjustment</h3>
+<h4 id="设计目标">设计目标</h4>
+<p>该阶段的目标是：
+<strong>根据每一帧在整个视频中的独特性，动态调整其 token 保留比例</strong>。</p>
+<h4 id="数学建模">数学建模</h4>
+<p>设视频共有 $T$ 帧，每帧包含 $M$ 个视觉 tokens：</p>
+$$
+x^v_{t,m} \in \mathbb{R}^{D'}
+$$<h5 id="全局视频表示">全局视频表示</h5>
+<p>通过对所有帧、所有 token 求平均，得到视频级表示：</p>
+$$
+g_v = \frac{1}{T \cdot M} \sum_{t=1}^{T} \sum_{m=1}^{M} x^v_{t,m}
+$$<p>该向量 $g_v$ 作为整个视频的<strong>粗粒度语义中心</strong>。</p>
+<h5 id="token-级视频相似度">Token 级视频相似度</h5>
+<p>计算每个 token 与视频全局表示的余弦相似度：</p>
+$$
+s^{\text{video}}_{t,m} =
+\frac{x^v_{t,m} \cdot g_v}{\lVert x^v_{t,m}\rVert\,\lVert g_v\rVert}
+$$<p>相似度越低，说明该 token 与“视频整体”差异越大，信息越独特。</p>
+<p>定义 token 的视频级独特性：</p>
+$$
+u^{\text{video}}_{t,m} = -s^{\text{video}}_{t,m}
+$$<h5 id="帧级独特性评分">帧级独特性评分</h5>
+<p>对每一帧的 token 独特性求平均：</p>
+$$
+u_t = \frac{1}{M} \sum_{m=1}^{M} u^{video}_{t,m}
+$$<p>$u_t$ 越大，说明该帧包含的 token 越“非冗余”。</p>
+<p>Figure 3 展示了 $u_t$ 在真实视频中的分布情况，可有效区分关键帧与冗余帧。</p>
+<h5 id="稳定化与归一化">稳定化与归一化</h5>
+<p>为避免数值不稳定，作者进行 softmax 调度：</p>
+$$
+\tilde{u}_t = \frac{u_t - \max(u_t)}{\tau}, \quad \tau = 0.01
+$$$$
+\sigma_t = \frac{\exp(\tilde{u}_t)}{\sum_{l=1}^{T} \exp(\tilde{u}_l) + \epsilon}
+$$<h5 id="帧级保留比例调整">帧级保留比例调整</h5>
+<p>给定全局平均保留率 $R$，每帧的实际保留率为：</p>
+$$
+r_t = R \times \left(1 + \sigma_t - \frac{1}{T}\right)
+$$<p>该公式保证：</p>
+<ul>
+<li>平均保留率仍为 $R$</li>
+<li>独特帧 $r_t &gt; R$</li>
+<li>冗余帧 $r_t &lt; R$</li>
+</ul>
+<hr>
+<h3 id="34-stage-2-adaptive-token-compression">3.4 Stage 2: Adaptive Token Compression</h3>
+<h4 id="设计目标-1">设计目标</h4>
+<p>在已确定每帧 token 预算 $r_t \times M$ 后，选择<strong>最有信息量的 tokens</strong>。</p>
+<h4 id="token-独特性建模">Token 独特性建模</h4>
+<h5 id="帧级表示">帧级表示</h5>
+$$
+g_{f,t} = \frac{1}{M} \sum_{m=1}^{M} x^v_{t,m}
+$$<h5 id="帧内相似度">帧内相似度</h5>
+$$
+s^{\text{frame}}_{t,m} =
+\frac{x^v_{t,m} \cdot g_{f,t}}{\lVert x^v_{t,m}\rVert\,\lVert g_{f,t}\rVert}
+$$<p>定义帧内独特性：</p>
+$$
+u^{\text{frame}}_{t,m} = -s^{\text{frame}}_{t,m}
+$$<h5 id="综合独特性评分">综合独特性评分</h5>
+<p>结合帧内与视频级信息：</p>
+$$
+u_{t,m} = u^{\text{frame}}_{t,m} + u^{\text{video}}_{t,m}
+$$<p>该设计使 token 同时满足：</p>
+<ul>
+<li>在当前帧中是“非中心”的</li>
+<li>在整个视频中是“非冗余”的</li>
+</ul>
+<h5 id="top-k-压缩">Top-K 压缩</h5>
+$$
+\hat{X}^v_t = \text{TopK}(X^v_t, {u_{t,m}}, r_t \times M)
+$$<p>最终得到压缩后的视频 token 序列。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/figure3.png"></p>
+<p>完整算法流程见 Appendix E。</p>
+<hr>
+<h2 id="4-evaluation">4. Evaluation</h2>
+<h3 id="41-experimental-setting">4.1 Experimental Setting</h3>
+<p>实验在多种 VideoLLM 架构上进行，包括 LLaVA-OneVision 等主流模型，覆盖多种视频理解 benchmark（如视频问答、推理任务等）。</p>
+<p>VidCom2 作为 <strong>inference-time 插件</strong>，无需微调模型参数。</p>
+<h3 id="42-main-comparisons">4.2 Main Comparisons</h3>
+<p>主要对比方法包括：</p>
+<ul>
+<li>Random token dropping</li>
+<li>Uniform token compression</li>
+<li>DyCoke</li>
+<li>其他 pre-LLM / intra-LLM 方法（Table 1）</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table1.png"></p>
+<p>结果显示：</p>
+<ul>
+<li>在相同 token 保留率下，VidCom2 性能最高</li>
+<li>在相同性能下，VidCom2 延迟最低</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table2.png"></p>
+<p>Table 2 表明，VidCom2 在 25% tokens 下仍保持 99.6% 精度。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table4.png"></p>
+<p>Table 4 显示，VidCom2 显著降低 LLM 生成延迟（70.8%），且显存占用低于部分压缩方法。</p>
+<h3 id="43-ablation-study-and-analysis">4.3 Ablation Study and Analysis</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/figure5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table6.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VidCom2/table7.png"></p>
+<p>消融实验验证了：</p>
+<ol>
+<li>Frame Compression Adjustment 的必要性</li>
+<li>双重独特性（frame + video）优于单一标准</li>
+<li>VidCom2 可与其他方法叠加，进一步提升性能</li>
+</ol>
+<hr>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>本文系统分析了 VideoLLM token compression 的设计与工程瓶颈，提出三条设计原则，并据此提出 VidCom2 框架。</p>
+<p>VidCom2 通过<strong>帧级调度 + token 级选择</strong>，在不牺牲模型性能的前提下显著降低推理成本。</p>
+<p>尽管当前未在 72B 级模型上评估，但作者合理推断该方法在大模型场景下收益更大。</p>
+<p>未来方向包括：</p>
+<ul>
+<li>更大规模模型验证</li>
+<li>实时流式视频理解适配</li>
+</ul>
+
+    </section>
+  
+    <section data-source="posts\TALON - Confidence-Aware Speculative Decoding with Adaptive Token Trees.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/title.png"></p>
+<h2 id="1-introduction">1. Introduction</h2>
+<p>投机采样（Speculative decoding, SD）已成为在不牺牲输出质量的前提下加速大语言模型（LLM）推理的标准技术。最近的进展已从序列链式草稿（chain-based drafting）转向树状结构生成（tree-structured generation），即草稿模型（draft model）构建候选标记树，以并行探索多种可能的草稿。</p>
+<p>然而，现有的基于树的 SD 方法（如 EAGLE, Sequoia）通常构建<strong>固定宽度、固定深度</strong>的草稿树，无法适应标记和上下文不断变化的难度。这导致草稿模型无法动态调整树结构，无法在遇到困难标记（difficult tokens）时及早停止，也无法在简单标记上扩展生成。</p>
+<p>为了解决这些挑战，作者提出了 <strong>TALON</strong>：一种<strong>无需训练（training-free）</strong>、<strong>预算驱动（budget-driven）</strong> 的自适应树扩展框架，可以无缝集成到现有的基于树的方法中。与静态方法不同，TALON 迭代构建草稿树，直到达到预设的标记预算（Token Budget），并采用混合扩展策略，根据各层节点动态分配预算。</p>
+<ul>
+<li><strong>核心理念</strong>：将草稿树塑造成“<strong>深而窄</strong>”（deep-and-narrow）的形式以应对确定性上下文，以及“<strong>浅而宽</strong>”（shallow-and-wide）的形式以应对不确定的分支，从而在给定预算下优化探索宽度与生成深度之间的权衡。</li>
+<li><strong>实验表现</strong>：在 5 个模型和 6 个数据集上的广泛实验表明，TALON 一致优于最先进的 <strong>EAGLE-3</strong>，相比于自回归解码（auto-regressive decoding）实现了高达 <strong>5.16×</strong> 的端到端加速。</li>
+</ul>
+<hr>
+<h2 id="2-motivated-experiments">2. Motivated Experiments</h2>
+<p>为了从经验上调查静态树结构的局限性，作者使用 EAGLE 作为代表性基线进行了试点分析。作者在 MT-Bench 上使用 Qwen3-8B，设置固定树拓扑为宽度 、深度 。</p>
+<hr>
+<h3 id="41-the-acceptance-funnel-phenomenon-接受漏斗现象">4.1 The &ldquo;Acceptance Funnel&rdquo; Phenomenon (接受漏斗现象)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/figure3.png"></p>
+<p>作者首先研究了草稿树中每个位置的接受频率。Figure 3 展示了静态树结构中各层各位置标记的接受频率分布。关于有效投机的分布，出现了两个关键观察结果：</p>
+<ul>
+<li><strong>深层宽度的边际收益递减</strong>：如图 3 所示，接受分布呈现出<strong>漏斗状模式</strong>。在初始层（），接受概率在 Top-K 候选者中相对均匀，这表明由于草稿模型  与目标模型  之间的初始随机性和分布差异，需要较宽的搜索宽度。</li>
+<li><strong>误差累积放大</strong>：随着树的加深（），接受质量迅速集中在高置信度区域（如 top-1 和 top-2）。对于深层节点，草稿模型要么（1）与目标模型自信地对齐（预测正确），要么（2）由于自回归草拟过程中的误差累积，产生即便 top-K 候选也无法覆盖的幻觉路径。</li>
+<li><strong>结论</strong>：在深层维持  的固定宽度会产生巨大的冗余。当模型自信时，极小的  即可；当模型高度不确定时，应当停止生成以避免浪费计算资源。</li>
+</ul>
+<hr>
+<h3 id="42-variance-in-real-world-accepted-length-实际接受长度的方差">4.2 Variance in Real-World Accepted Length (实际接受长度的方差)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/figure4.png"></p>
+<p>虽然 4.1 揭示了固定宽度的结构冗余，作者进一步研究了<strong>固定深度</strong>的弱点。</p>
+<ul>
+<li><strong>The Static Depth Dilemma (静态深度困境)</strong>：如图 4 所示，即使在同一任务类别（如数学或代码）中，平均接受标记（MAT）也会剧烈波动。</li>
+<li><strong>低熵（简单）上下文</strong>：草稿模型与目标模型高度一致，潜在接受长度往往超过预定义的深度 。静态深度限制了  生成更多标记的能力，限制了加速上限。</li>
+<li><strong>高熵（复杂）上下文</strong>：预测变得模糊，草稿模型倾向于在注定被拒绝的分支上生成深度幻觉。固定深度强迫计算资源分配给这些无效标记，增加了延迟开销，边际效用为零。</li>
+</ul>
+<hr>
+<h2 id="3-method">3. Method</h2>
+<p>作者引入 TALON，这是一个预算驱动的框架，通过根据实时模型置信度动态分配资源来优化草稿树的构建。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/figure5.png"></p>
+<hr>
+<h3 id="51-from-static-grids-to-dynamic-budgets">5.1 From Static Grids to Dynamic Budgets</h3>
+<p>为了克服静态拓扑与标记难度不匹配导致的效率低下，TALON 将约束从“形状”转变为“容量”。</p>
+<ul>
+<li>
+<p><strong>全局标记预算 (Global Token Budget, $B$)</strong>：定义为草稿树 $\mathcal{T}$ 中允许的最大节点数。</p>
+</li>
+<li>
+<p><strong>目标</strong>：迭代地“投资”此预算以生长草稿树。</p>
+</li>
+<li>
+<p><strong>确定性上下文</strong>：分配为深而窄的链。</p>
+</li>
+<li>
+<p><strong>不确定性分支</strong>：分配为浅而宽的层。</p>
+</li>
+</ul>
+<hr>
+<h3 id="52-hybrid-tree-expansion-strategy-混合树扩展策略">5.2 Hybrid Tree Expansion Strategy (混合树扩展策略)</h3>
+<p>TALON 逐层构建树，采用混合策略：在根节点（第 0 层）进行鲁棒初始化，随后在后续层（）进行置信度门控扩展。</p>
+<hr>
+<h4 id="521-confidence-gated-expansion-置信度门控扩展">5.2.1 Confidence-Gated Expansion (置信度门控扩展)</h4>
+<p>对于深度 ，作者采用全局过滤机制，根据候选者的相对置信度进行门控。
+设  为父节点集合，候选池  为所有子节点扩展的并集：</p>
+$$
+\mathcal{C}_l = \bigcup_{v \in \mathcal{P}_{l-1}} \operatorname{Expand}(v)
+$$<p>每个候选节点  被分配一个<strong>路径累计概率</strong>：</p>
+$$
+s(c) = \prod_{t=1}^{l} p_d(x_t \mid x_{\lt t})
+$$<p>为了识别当前层的“最优潜力”，作者首先找到<strong>锚点置信度</strong> (anchor confidence) ：</p>
+$$
+s_{\text{anchor}} = \max_{c \in \mathcal{C}_l} s(c)
+$$<p>然后，作者仅保留置信度落在锚点动态裕度  范围内的候选者：</p>
+$$
+\mathcal{C}_l' = \left\{\, c \in \mathcal{C}_l \;\middle|\; s(c) \ge \alpha \cdot s_{\text{anchor}} \,\right\}
+$$<p>其中  是超参数（TALON 默认取 ）。</p>
+<ul>
+<li><strong>预算尊重机制</strong>：如果  超过剩余预算 ，作者仅保留路径分数最高的 top 候选者。</li>
+<li><strong>直觉原理</strong>：</li>
+<li>在<strong>确定性上下文</strong>中（如“The capital of France is&hellip;”），锚点 ，会施加严苛阈值，自动剪枝形成深层单链。</li>
+<li>在<strong>高熵上下文</strong>中（如“Quantum computing can&hellip;”）， 较低，阈值随之放松，允许更多样化的候选者进入下一层，形成浅宽结构以提高覆盖率。</li>
+</ul>
+<hr>
+<h4 id="522-robust-tree-initialization-鲁棒树初始化">5.2.2 Robust Tree Initialization (鲁棒树初始化)</h4>
+<p>虽然置信度门控在深层有效，但在根节点（）直接应用会因为<strong>草稿模型过度自信（Over-confidence）</strong> 而损害鲁棒性。</p>
+<ul>
+<li><strong>过度自信陷阱</strong>：小草稿模型往往校准不准，可能在错误的分支上给出  的概率。如果此时使用相对门控，树会过早塌缩为单一的错误分支。</li>
+<li><strong>灾难性后果</strong>：根节点的失败会导致整个草稿序列被拒绝。</li>
+<li><strong>解决方案</strong>：在第一层采用标准的 <strong>Top-K 初始化</strong>。无论置信度分布如何，显式扩展 Top-K 个标记：</li>
+</ul>
+$$
+\mathcal{C}_1 = \text{TopK}\left(p_d(x_1 \mid x_0), K\right)
+$$<p>这确保了在切换到预算高效的门控策略之前，在最关键的连接处覆盖了多样化的方向。</p>
+<hr>
+<h3 id="53-evaluating-talon-with-draft-efficiency-草稿效率评估">5.3 Evaluating TALON with Draft Efficiency (草稿效率评估)</h3>
+<p>为了量化 TALON 的成本效益，作者通过分解质量和成本因子来分析墙钟时间加速比（wall-time speedup）。</p>
+<ul>
+<li>
+<p><strong>$N_v$</strong>：目标模型执行的正向传播总次数（验证步骤）。</p>
+</li>
+<li>
+<p><strong>$N_d$</strong>：草稿模型生成的总步数。</p>
+</li>
+<li>
+<p><strong>$L$</strong>：输出序列长度。</p>
+</li>
+<li>
+<p><strong>$\gamma$</strong>：草稿模型相对于目标模型的计算成本比例。</p>
+</li>
+</ul>
+<p>作者引入新指标 <strong>草稿效率 (Draft Efficiency, )</strong>：</p>
+$$
+\eta = \frac{N_d}{N_v}
+$$<p>代表系统为了获得一次验证机会所投入的平均草稿步数。墙钟加速比  可以表示为平均接受标记数  和  的函数：</p>
+$$
+\text{Speedup} \approx \frac{\mathbb{E}[A]}{1 + \gamma \cdot \eta}
+$$<p><strong>理论解释 TALON 的优越性</strong>：</p>
+<ol>
+<li><strong>高熵上下文（难例）</strong>：接受奖励  下降。EAGLE 等静态方法仍支付固定高昂成本 ，导致  骤降。TALON 通过及早停止减少投资（），补偿了低奖励。</li>
+<li><strong>低熵上下文（易例）</strong>：静态方法将奖励  限制在深度 。TALON 允许树向深处无限延伸，显著增加 。由于 ， 的增长远慢于  的增长，确保了总加速比  的持续提升。</li>
+</ol>
+<hr>
+<h2 id="4-evaluation">4. Evaluation</h2>
+<h3 id="41-experimental-setup">4.1 Experimental Setup</h3>
+<ul>
+<li>
+<p><strong>基础模型 (Target Models)</strong>：涵盖不同规模和架构，包括 Llama-3-8B-Instruct, Llama-2-7B/13B/70B-Chat, Vicuna-7B/13B, 以及 Qwen2-7B。</p>
+</li>
+<li>
+<p><strong>草稿模型 (Draft Models)</strong>：采用 EAGLE 结构的轻量级回归头（EAGLE-style）。</p>
+</li>
+<li>
+<p><strong>数据集</strong>：</p>
+</li>
+<li>
+<p><strong>MT-Bench</strong>：通用多轮对话。</p>
+</li>
+<li>
+<p><strong>GSM8K</strong>：数学推理。</p>
+</li>
+<li>
+<p><strong>HumanEval</strong>：代码生成。</p>
+</li>
+<li>
+<p><strong>MBPP</strong>：入门级 Python 编程。</p>
+</li>
+<li>
+<p><strong>Spider</strong>：文本转 SQL。</p>
+</li>
+<li>
+<p><strong>ShareGPT</strong>：真实用户指令。</p>
+</li>
+<li>
+<p><strong>超参数设置</strong>：全局预算 ，门控阈值 ，根节点初始化 （对应 EAGLE-2 默认设置）。</p>
+</li>
+</ul>
+<hr>
+<h3 id="42-main-results-主要实验结果">4.2 Main Results (主要实验结果)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/table1.png"></p>
+<p>TALON 在所有测试场景中均表现出显著优势：</p>
+<ul>
+<li><strong>超越 SOTA</strong>：TALON 在所有模型上均超过了 EAGLE-3（尽管 EAGLE-3 宣称通过更复杂的离线策略优化了静态树结构）。</li>
+<li><strong>加速比峰值</strong>：在 Llama-3-8B 结合 GSM8K 数据集上，TALON 实现了 <strong>5.16×</strong> 的端到端加速，而 EAGLE-2 为 4.11×，EAGLE-3 为 4.35×。</li>
+<li><strong>各任务表现</strong>：</li>
+<li>在 <strong>数学和代码任务</strong>（如 GSM8K, HumanEval）中，由于逻辑推导具有很强的确定性路径，TALON 生成了极深的树， 显著提高。</li>
+<li>在 <strong>对话任务</strong>（MT-Bench）中，TALON 通过在不确定处变宽，提高了接受率的稳定性。</li>
+</ul>
+<hr>
+<h3 id="43-evaluating-talon-with-draft-efficiency-草稿效率分析">4.3 Evaluating TALON with Draft Efficiency (草稿效率分析)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/figure6.png"></p>
+<p>实验验证了 Section 5.3 的理论模型：</p>
+<ul>
+<li><strong>动态</strong>：观察到 TALON 的草稿效率  会根据任务难度自动调整。在 MT-Bench 上  较低（约 15-20），而在 GSM8K 上  会为了追求高奖励  而增加到 30 以上。</li>
+<li><strong>收益曲线</strong>：加速比  与  呈正相关，且 TALON 总是能找到比固定树更好的  平衡点。</li>
+</ul>
+<hr>
+<h3 id="44-ablation-study-消融研究">4.4 Ablation Study (消融研究)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TALON/figure7.png"></p>
+<ul>
+<li>
+<p><strong>预算  的影响</strong>：随着预算  从 20 增加到 120，加速比呈现先快速上升后平缓的趋势。 被证明是性能与 GPU 显存限制之间的良好折中点。</p>
+</li>
+<li>
+<p><strong>阈值  的敏感性</strong>：</p>
+</li>
+<li>
+<p>太小（如 0.001）：树变得太宽，浪费资源在无效分支。</p>
+</li>
+<li>
+<p>太大（如 0.5）：树变得太窄，容易因草稿模型微小偏离而导致整条路径失败。</p>
+</li>
+<li>
+<p><strong>结论</strong>： 范围内性能稳定。</p>
+</li>
+<li>
+<p><strong>初始化策略</strong>：对比实验显示，去掉第一层的 Top-K 初始化会导致在某些任务上性能下降 10% 以上，验证了处理草稿模型过度自信的重要性。</p>
+</li>
+</ul>
+<hr>
+<h2 id="5-limitations">5. Limitations</h2>
+<p>尽管 TALON 表现优异，但仍存在以下局限：</p>
+<ul>
+<li><strong>大 Batch Size 的可扩展性</strong>：目前主要针对 Batch Size = 1（延迟敏感型交互）进行了优化。在高吞吐量场景下，为每个请求维护不同的动态树结构会带来非平凡的 GPU 计算饱和及内存管理开销。</li>
+<li><strong>超参数泛化</strong>：虽然默认值  表现健壮，但在极端专业领域可能需要微调。开发根据接受历史实时自动调节  和  的机制是未来方向。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>本文提出了 <strong>TALON</strong>，一个将投机解码从僵化的几何约束转向灵活的、预算驱动范式的训练免框架。通过结合<strong>鲁棒初始化</strong>与<strong>置信度门控</strong>的混合扩展策略，TALON 动态调整草稿树形状：在确定性上下文中进化为深窄链，在不确定分支中演化为浅宽结构。
+在 5 个 LLM 和 6 个基准测试中的广泛评估证明，TALON 持续优于 EAGLE-3 等最先进方法，实现了高达 <strong>5.16×</strong> 的加速，为自适应推理优化提供了新的视角。</p>
+
+    </section>
+  
+    <section data-source="posts\2026-01-16-HM.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/Running/Training/2026-01-16.jpg"></p>
+
+    </section>
+  
+</body>
+</html>

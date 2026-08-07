@@ -6,8 +6,176 @@
     <description>Recent content in Tags on JJ&#39;s Blog</description>
     <generator>Hugo -- 0.152.2</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sat, 20 Jun 2026 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 06 Aug 2026 00:00:00 +0000</lastBuildDate>
     <atom:link href="https://jjl357.github.io/blog/tags/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Agent</title>
+      <link>https://jjl357.github.io/blog/tags/agent/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/agent/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>ASE</title>
+      <link>https://jjl357.github.io/blog/tags/ase/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/ase/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Code Generation</title>
+      <link>https://jjl357.github.io/blog/tags/code-generation/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/code-generation/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Code LLM</title>
+      <link>https://jjl357.github.io/blog/tags/code-llm/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/code-llm/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Coding Agent</title>
+      <link>https://jjl357.github.io/blog/tags/coding-agent/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/coding-agent/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Confidence Estimation</title>
+      <link>https://jjl357.github.io/blog/tags/confidence-estimation/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/confidence-estimation/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Context Compression</title>
+      <link>https://jjl357.github.io/blog/tags/context-compression/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/context-compression/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Context Pruning</title>
+      <link>https://jjl357.github.io/blog/tags/context-pruning/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/context-pruning/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Efficient Inference</title>
+      <link>https://jjl357.github.io/blog/tags/efficient-inference/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/efficient-inference/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>ICLR</title>
+      <link>https://jjl357.github.io/blog/tags/iclr/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/iclr/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>LLM Reasoning</title>
+      <link>https://jjl357.github.io/blog/tags/llm-reasoning/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/llm-reasoning/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Long Context</title>
+      <link>https://jjl357.github.io/blog/tags/long-context/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/long-context/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Paper Note</title>
+      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Self-Consistency</title>
+      <link>https://jjl357.github.io/blog/tags/self-consistency/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/self-consistency/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>SWE-Bench</title>
+      <link>https://jjl357.github.io/blog/tags/swe-bench/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/swe-bench/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Test-Time Scaling</title>
+      <link>https://jjl357.github.io/blog/tags/test-time-scaling/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/test-time-scaling/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Asynchronous Inference</title>
+      <link>https://jjl357.github.io/blog/tags/asynchronous-inference/</link>
+      <pubDate>Wed, 05 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/asynchronous-inference/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Real-Time Inference</title>
+      <link>https://jjl357.github.io/blog/tags/real-time-inference/</link>
+      <pubDate>Wed, 05 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/real-time-inference/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Robotics</title>
+      <link>https://jjl357.github.io/blog/tags/robotics/</link>
+      <pubDate>Wed, 05 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/robotics/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>VLA</title>
+      <link>https://jjl357.github.io/blog/tags/vla/</link>
+      <pubDate>Wed, 05 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/vla/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>ICML</title>
+      <link>https://jjl357.github.io/blog/tags/icml/</link>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/icml/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>KV Cache</title>
+      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>LLM Inference</title>
+      <link>https://jjl357.github.io/blog/tags/llm-inference/</link>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/llm-inference/</guid>
+      <description></description>
+    </item>
+    <item>
+      <title>Sparse Attention</title>
+      <link>https://jjl357.github.io/blog/tags/sparse-attention/</link>
+      <pubDate>Fri, 10 Jul 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/tags/sparse-attention/</guid>
+      <description></description>
+    </item>
     <item>
       <title>Agentic Workflow</title>
       <link>https://jjl357.github.io/blog/tags/agentic-workflow/</link>
@@ -16,31 +184,10 @@
       <description></description>
     </item>
     <item>
-      <title>KV Cache</title>
-      <link>https://jjl357.github.io/blog/tags/kv-cache/</link>
-      <pubDate>Sat, 20 Jun 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/kv-cache/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Paper Note</title>
-      <link>https://jjl357.github.io/blog/tags/paper-note/</link>
-      <pubDate>Sat, 20 Jun 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/paper-note/</guid>
-      <description></description>
-    </item>
-    <item>
       <title>Prefix Caching</title>
       <link>https://jjl357.github.io/blog/tags/prefix-caching/</link>
       <pubDate>Sat, 20 Jun 2026 00:00:00 +0000</pubDate>
       <guid>https://jjl357.github.io/blog/tags/prefix-caching/</guid>
-      <description></description>
-    </item>
-    <item>
-      <title>Agent</title>
-      <link>https://jjl357.github.io/blog/tags/agent/</link>
-      <pubDate>Thu, 18 Jun 2026 00:00:00 +0000</pubDate>
-      <guid>https://jjl357.github.io/blog/tags/agent/</guid>
       <description></description>
     </item>
     <item>

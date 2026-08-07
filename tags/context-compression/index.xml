@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Context Compression on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/context-compression/</link>
+    <description>Recent content in Context Compression on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 06 Aug 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/context-compression/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 LongCodeZip: Compress Long Context for Code Language Models - ASE&#39;25</title>
+      <link>https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/</guid>
+      <description>&lt;h1 id=&#34;longcodezip-compress-long-context-for-code-language-models&#34;&gt;LongCodeZip: Compress Long Context for Code Language Models&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ASE 2025&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2510.00446&#34;&gt;https://arxiv.org/abs/2510.00446&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/YerbaPage/LongCodeZip&#34;&gt;https://github.com/YerbaPage/LongCodeZip&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Authors:&lt;/strong&gt; Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu&lt;/p&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 &lt;strong&gt;lost-in-the-middle&lt;/strong&gt; 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。&lt;/p&gt;
+&lt;p&gt;LongCodeZip 是一个 &lt;strong&gt;training-free、model-agnostic、plug-and-play&lt;/strong&gt; 的长代码上下文压缩框架。它把压缩拆成两个层次：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Coarse-grained compression&lt;/strong&gt;：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Fine-grained compression&lt;/strong&gt;：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 &lt;strong&gt;5.6× 有效压缩率&lt;/strong&gt;下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。&lt;/p&gt;
+&lt;h2 id=&#34;1-motivation&#34;&gt;1. Motivation&lt;/h2&gt;
+&lt;h3 id=&#34;11-long-code-context-的实际代价&#34;&gt;1.1 Long Code Context 的实际代价&lt;/h3&gt;
+&lt;p&gt;仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;计算代价增加&lt;/strong&gt;：标准全注意力的计算量随序列长度近似二次增长；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;部署成本增加&lt;/strong&gt;：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;有效性下降&lt;/strong&gt;：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;窗口截断&lt;/strong&gt;：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：&lt;strong&gt;哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？&lt;/strong&gt;&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

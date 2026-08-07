@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 LongCodeZip: Compress Long Context for Code Language Models - ASE&#39;25 | JJ&#39;s Blog</title>
+<meta name="keywords" content="Code LLM, Long Context, Context Compression, Code Generation, ASE, Paper Note">
+<meta name="description" content="LongCodeZip: Compress Long Context for Code Language Models
+Conference: ASE 2025
+Paper: https://arxiv.org/abs/2510.00446
+Github: https://github.com/YerbaPage/LongCodeZip
+Authors: Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu
+Abstract
+代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 lost-in-the-middle 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。
+LongCodeZip 是一个 training-free、model-agnostic、plug-and-play 的长代码上下文压缩框架。它把压缩拆成两个层次：
+
+Coarse-grained compression：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体；
+Fine-grained compression：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。
+
+这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 5.6× 有效压缩率下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。
+1. Motivation
+1.1 Long Code Context 的实际代价
+仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：
+
+计算代价增加：标准全注意力的计算量随序列长度近似二次增长；
+部署成本增加：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费；
+有效性下降：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文；
+窗口截断：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。
+
+因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 LongCodeZip: Compress Long Context for Code Language Models - ASE&#39;25">
+  <meta property="og:description" content="LongCodeZip: Compress Long Context for Code Language Models Conference: ASE 2025
+Paper: https://arxiv.org/abs/2510.00446
+Github: https://github.com/YerbaPage/LongCodeZip
+Authors: Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu
+Abstract 代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 lost-in-the-middle 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。
+LongCodeZip 是一个 training-free、model-agnostic、plug-and-play 的长代码上下文压缩框架。它把压缩拆成两个层次：
+Coarse-grained compression：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体； Fine-grained compression：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。 这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 5.6× 有效压缩率下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。
+1. Motivation 1.1 Long Code Context 的实际代价 仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：
+计算代价增加：标准全注意力的计算量随序列长度近似二次增长； 部署成本增加：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费； 有效性下降：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文； 窗口截断：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。 因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-08-06T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-08-06T00:00:00+00:00">
+    <meta property="article:tag" content="Code LLM">
+    <meta property="article:tag" content="Long Context">
+    <meta property="article:tag" content="Context Compression">
+    <meta property="article:tag" content="Code Generation">
+    <meta property="article:tag" content="ASE">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 LongCodeZip: Compress Long Context for Code Language Models - ASE&#39;25">
+<meta name="twitter:description" content="LongCodeZip: Compress Long Context for Code Language Models
+Conference: ASE 2025
+Paper: https://arxiv.org/abs/2510.00446
+Github: https://github.com/YerbaPage/LongCodeZip
+Authors: Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu
+Abstract
+代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 lost-in-the-middle 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。
+LongCodeZip 是一个 training-free、model-agnostic、plug-and-play 的长代码上下文压缩框架。它把压缩拆成两个层次：
+
+Coarse-grained compression：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体；
+Fine-grained compression：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。
+
+这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 5.6× 有效压缩率下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。
+1. Motivation
+1.1 Long Code Context 的实际代价
+仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：
+
+计算代价增加：标准全注意力的计算量随序列长度近似二次增长；
+部署成本增加：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费；
+有效性下降：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文；
+窗口截断：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。
+
+因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 LongCodeZip: Compress Long Context for Code Language Models - ASE'25",
+      "item": "https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 LongCodeZip: Compress Long Context for Code Language Models - ASE'25",
+  "name": "📝 LongCodeZip: Compress Long Context for Code Language Models - ASE\u002725",
+  "description": "LongCodeZip: Compress Long Context for Code Language Models Conference: ASE 2025\nPaper: https://arxiv.org/abs/2510.00446\nGithub: https://github.com/YerbaPage/LongCodeZip\nAuthors: Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu\nAbstract 代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 lost-in-the-middle 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。\nLongCodeZip 是一个 training-free、model-agnostic、plug-and-play 的长代码上下文压缩框架。它把压缩拆成两个层次：\nCoarse-grained compression：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体； Fine-grained compression：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。 这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 5.6× 有效压缩率下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。\n1. Motivation 1.1 Long Code Context 的实际代价 仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：\n计算代价增加：标准全注意力的计算量随序列长度近似二次增长； 部署成本增加：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费； 有效性下降：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文； 窗口截断：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。 因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？\n",
+  "keywords": [
+    "Code LLM", "Long Context", "Context Compression", "Code Generation", "ASE", "Paper Note"
+  ],
+  "articleBody": "LongCodeZip: Compress Long Context for Code Language Models Conference: ASE 2025\nPaper: https://arxiv.org/abs/2510.00446\nGithub: https://github.com/YerbaPage/LongCodeZip\nAuthors: Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu\nAbstract 代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 lost-in-the-middle 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。\nLongCodeZip 是一个 training-free、model-agnostic、plug-and-play 的长代码上下文压缩框架。它把压缩拆成两个层次：\nCoarse-grained compression：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体； Fine-grained compression：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。 这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 5.6× 有效压缩率下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。\n1. Motivation 1.1 Long Code Context 的实际代价 仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：\n计算代价增加：标准全注意力的计算量随序列长度近似二次增长； 部署成本增加：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费； 有效性下降：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文； 窗口截断：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。 因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？\n1.2 Why Similarity-based RAG Is Not Enough 上图给出了论文的核心动机。对于 get_email_by_id 之类的局部补全，目标代码与 get_account_by_id 在函数名和词汇上高度相似，向量检索很容易找对参考函数。但在 train_model 的例子中，真正需要的是负责配置学习率、训练轮数等参数的 Config 类。它与目标函数几乎没有词汇重叠，基于相似度的检索只把它排在第 9 位；基于 AMI 的任务相关性衡量则把它排到第 1 位。\n这里揭示了代码检索与普通文本检索的区别：\n词汇相似不等于功能依赖； 隐式依赖可能通过数据流、配置对象、继承或调用约定建立； 只看 query 与代码块的嵌入距离，无法直接衡量“把这段代码交给生成模型后，它是否更容易完成任务”。 另一方面，面向自然语言的 prompt compressor 通常以 token 或短句为单位删除内容，容易破坏缩进、控制流、定义—使用关系和代码块边界。因此 LongCodeZip 选择以 函数/类—代码块—代码行三级结构组织压缩。\n1.3 Main Contributions 论文的主要贡献可以概括为：\n提出面向长代码上下文的两阶段层次化压缩框架； 使用指令条件下的 Approximated Mutual Information（AMI），替代纯词汇或嵌入相似度进行重要性排序； 提出基于逐行困惑度突变的细粒度分块、自适应函数预算和 0/1 背包选择； 在开源与闭源代码模型、三类长代码任务上验证方法的压缩效果、迁移性和效率。 2. Problem Formulation 设长代码上下文为\n$$ c=\\{c_1,c_2,\\ldots,c_n\\}, $$用户指令为\n$$ q=\\{q_1,q_2,\\ldots,q_m\\}. $$压缩器需要在 token 预算 \\(B\\) 下构造子上下文 \\(c'\\)：\n$$ c'\\subseteq c,\\qquad \\lvert c'\\rvert\\le B, $$并尽可能保持下游模型在任务 \\(q\\) 上的生成能力。困难在于：压缩器没有真实答案，也不能为每个目标模型重新训练，因此必须从语言模型对“指令可预测性”的变化中估计代码价值。\n2.1 Conditional Perplexity 给定上下文 \\(c\\) 后，指令 \\(q\\) 的条件困惑度为：\n$$ \\operatorname{PPL}(q\\mid c)= \\exp\\left( -\\frac{1}{N}\\sum_{i=1}^{N} \\log P(q_i\\mid q_{\\lt i},c) \\right). $$不提供上下文时，指令自身的困惑度为：\n$$ \\operatorname{PPL}(q)= \\exp\\left( -\\frac{1}{N}\\sum_{i=1}^{N} \\log P(q_i\\mid q_{\\lt i}) \\right). $$如果一段代码包含完成指令所需要的信息，那么把它放到指令前面后，模型应该更容易预测指令中的 token，即 \\(\\operatorname{PPL}(q\\mid c)\\) 更低。\n2.2 Approximated Mutual Information LongCodeZip 将代码块 \\(c\\) 对任务 \\(q\\) 的相关性定义为：\n$$ \\operatorname{AMI}(c,q)= \\operatorname{PPL}(q)- \\operatorname{PPL}(q\\mid c). $$AMI 越大，说明加入该代码后，指令的困惑度下降越明显，也就越值得保留。这个度量有三个特点：\nInstruction-aware：同一段代码面对不同任务会获得不同分数； 超越词面相似度：只要代码能够解释指令，即使没有共同关键词也可能获得高分； 不依赖下游答案：评分时只需要代码和指令，适合实际推理阶段。 需要注意，论文中的 AMI 是一种定向、任务条件化的启发式量。它用“加入代码前后的指令困惑度差”近似信息增益，并不是严格意义上对称的互信息估计。\n3. Overall Framework LongCodeZip 的整体流程如下：\n使用语法解析或代码结构信息，把长上下文拆成函数、方法和类等代码实体； 计算每个实体相对于用户指令的 AMI； 按 AMI 从高到低执行函数级粗筛，未被保留的实体用占位符表示； 对粗筛后仍然较长的函数逐行计算困惑度，并在局部突变处切分代码块； 根据函数级 AMI 分配细粒度预算； 将块级 AMI 视为价值、token 数视为重量，用 0/1 背包选取代码块； 按原始顺序重组代码，得到最终压缩上下文，再交给任意目标代码模型。 两阶段设计的意义是：粗粒度阶段快速删除整个无关实体，负责主要压缩收益；细粒度阶段只处理已被判定为相关的长函数，避免把预算浪费在函数内部的样板代码、错误处理或与当前任务无关的分支上。\n4. Stage I: Coarse-grained Compression 4.1 Structure-aware Entity Splitting LongCodeZip 首先按照函数和类边界切分上下文。相比固定 token 窗口，这样做能保留：\n完整函数签名与局部作用域； 类成员之间的层次关系； 控制流和缩进结构； 便于回填的原始位置。 每个实体 \\(f_i\\) 都计算一个 \\(\\operatorname{AMI}(f_i,q)\\)。随后按照分数降序排列，在粗粒度预算内贪心选取实体。\n4.2 Budget Coupling Between Two Stages 最终预算为 \\(B\\)，细粒度阶段的预期保留比例为 \\(R_{\\mathrm{fine}}\\)。为了让第二阶段压缩后恰好接近最终预算，粗粒度预算设置为：\n$$ B_{\\mathrm{coarse}}=\\frac{B}{R_{\\mathrm{fine}}}. $$例如最终只允许 2,000 token，细粒度阶段预计保留粗筛结果的 80%，那么粗粒度阶段可以先保留约 2,500 token。这样细筛有足够候选内容可比较，而不是在第一阶段过早删除潜在有用代码。\n4.3 Preserving the Global Skeleton 没有入选的函数并非简单地从文本中完全消失，而是被注释或省略标记替代。这样做虽然不保留实现细节，但仍让下游模型知道：\n原文件在这个位置存在某个实体； 上下文的整体顺序和层级没有被打乱； 入选代码之间原本可能隔着其他定义。 最终所有保留实体仍按原始顺序拼接，避免按相关性重新排序造成跨函数语义和文件结构失真。\n5. Stage II: Fine-grained Compression 5.1 Perplexity-guided Block Segmentation 固定行数或固定 token 分块会把一个 if 分支、循环或异常处理从中间切断。LongCodeZip 因此把代码行作为最小原子，并观察模型逐行读取函数时的困惑度变化。\n在语义连贯的代码块中，前文不断提供变量和控制流信息，后续行通常越来越容易预测，困惑度整体下降；当进入新的逻辑单元时，新变量、分支或调用会引起局部困惑度上升。论文把满足“当前行困惑度相对相邻位置形成显著局部峰值，且提升至少达到全局行困惑度标准差的 \\(\\alpha\\) 倍”的位置视为块边界。\n这种分法有两个优点：\n不要求为不同编程语言手工定义所有语法块规则； 边界由代码模型感受到的语义变化决定，比等长切块更贴合实际逻辑。 对于少于 5 行的小函数，切分和筛选带来的收益有限，论文直接完整保留。\n5.2 Adaptive Budget Allocation 假设小函数集合为 \\(\\mathcal{F}_{\\mathrm{small}}\\)，长函数集合为 \\(\\mathcal{F}_{\\mathrm{large}}\\)，函数 \\(j\\) 的 token 数为 \\(T_j\\)。先扣除必须完整保留的小函数，长函数的基础保留比例为：\n$$ R_{\\mathrm{base}}= \\frac{ B-\\sum_{j\\in\\mathcal{F}_{\\mathrm{small}}}T_j }{ \\sum_{k\\in\\mathcal{F}_{\\mathrm{large}}}T_k }. $$如果所有长函数都使用同一比例，会让高相关函数与边缘函数获得相同待遇。LongCodeZip 将函数级 AMI 归一化为 \\(\\operatorname{AMI}_{\\mathrm{norm},i}\\in[0,1]\\)，再引入偏置系数 \\(\\beta\\)：\n$$ R_{\\mathrm{biased},i}= R_{\\mathrm{base}} \\left[ 1+\\beta\\left(2\\operatorname{AMI}_{\\mathrm{norm},i}-1\\right) \\right]. $$高 AMI 函数的保留比例被上调，低 AMI 函数则下调。各比例先截断到 \\([0,1]\\)，再进行全局缩放以满足总预算：\n$$ R_i= R_{\\mathrm{biased},i} \\frac{ B_{\\mathrm{large}} }{ \\sum_jR_{\\mathrm{biased},j}T_j }. $$最终函数 \\(i\\) 的预算约为 \\(B_i=R_iT_i\\)。这一步把“重要函数多保留、次要函数少保留”从直觉转化为可控的预算分配。\n5.3 Code Block Selection as 0/1 Knapsack 一个函数被切成 \\(M\\) 个候选块后，LongCodeZip 计算每块相对于指令的 AMI，并将其归一化为价值 \\(v_j\\)，token 数记为重量 \\(T_j\\)。选择问题写成：\n$$ \\max_{z_1,\\ldots,z_M} \\sum_{j=1}^{M}z_jv_j, $$$$ \\text{subject to}\\qquad \\sum_{j=1}^{M}z_jT_j\\le B_i, \\qquad z_j\\in\\{0,1\\}. $$这正是 0/1 背包：每个完整代码块只能保留或删除，不能像 token compressor 那样从中间切碎。动态规划能够在预算内找到总 AMI 最大的块集合，而简单按 \\(v_j/T_j\\) 贪心并不保证最优。\n框架还允许用户指定必须保留的块集合 \\(\\mathcal{P}\\)。这些块先无条件加入，剩余预算为：\n$$ B_{\\mathrm{remain}}= \\max\\left( 0, B_i-\\sum_{j\\in\\mathcal{P}}T_j \\right), $$背包算法只在剩余候选中运行。这为保留函数签名、安全检查、接口约束或用户关注区域提供了硬保证。\n6. End-to-end Algorithm 把整个方法压缩成一条执行链，可以写成：\nInput: long code context c, instruction q, final budget B 1. Parse c into functions/classes F. 2. Score every entity f in F with AMI(f, q). 3. Rank entities and keep them under B_coarse = B / R_fine. 4. Preserve placeholders for removed entities and the original order. 5. For each retained function: a. keep it directly if it has fewer than 5 lines; b. otherwise, locate block boundaries from line-PPL peaks; c. compute block-level AMI; d. assign a function budget according to normalized function AMI; e. solve a 0/1 knapsack to select whole blocks. 6. Reassemble selected blocks in their original positions. Output: compressed context c' with |c'| \u003c= B. 压缩器与最终生成模型是解耦的：评分可以使用较小的开源代码模型，压缩结果则可以交给更大的开源模型或 GPT-4o、Claude 等闭源 API。\n7. Experimental Setup 7.1 Benchmarks Task Samples Avg. Context Tokens Avg. Ground-truth Tokens Languages Long Code Completion 500 9,328.2 12.4 Python Long Module Summarization 139 10,809.6 1,758.1 Python RepoQA 600 11,524.6 156.0 Python, Java, JavaScript, Rust, Go, C++ Long Code Completion：从长文件中预测被隐藏的目标代码，过滤后每个样本上下文超过 5,000 token； Long Module Summarization：根据完整长模块生成模块级总结，原始数据来自 216 个样本、43 个仓库，实验保留上下文超过 2,000 token 的 139 个样本； RepoQA：根据自然语言描述在仓库上下文中定位目标函数，共覆盖 60 个仓库和 6 种语言。 7.2 Models and Baselines 开源目标模型包括：\nDeepSeek-Coder-6.7B； Qwen2.5-Coder-7B； Seed-Coder-8B。 闭源模型包括 GPT-4o 与 Claude-3.7-Sonnet。基线覆盖五类方法：\nNo Compression / No Context：完整输入和完全不输入代码； Random Token / Random Line：随机删除 token 或代码行； RAG：滑动窗口检索、函数级检索，编码器为 UniXCoder-base； Code-specific Compression：DietCode、SlimCode； General Prompt Compression：LLMLingua、LongLLMLingua、LLMLingua-2； Advanced Code RAG：A3-CodGen、cAST、RepoGenix、RLCoder。 7.3 Metrics Compression Ratio：原始 token 数除以压缩后 token 数，因此数值越大表示压缩越强； Completion：Edit Similarity（ES）与 Exact Match（EM）； Summarization：使用 GPT-4o-mini 比较压缩上下文总结 \\(\\hat{s}\\) 与完整上下文总结 \\(s_o\\)，交换候选顺序执行两次判断，以减轻位置偏差： $$ \\operatorname{CompScore}= \\frac{1}{2} \\left[ \\mathcal{P}(s_o\\succ\\hat{s}) +1-\\mathcal{P}(\\hat{s}\\succ s_o) \\right]. $$ RepoQA：生成函数与目标函数的 BLEU 高于 0.8 时判为正确。 7.4 Hyperparameters and Hardware Task Final Budget \\(B\\) \\(R_{\\mathrm{fine}}\\) \\(\\beta\\) Code Completion 2K 0.8 0.5 Module Summarization 5K 0.3 0.5 RepoQA 2K 1.0 — RepoQA 设置 \\(R_{\\mathrm{fine}}=1.0\\)，即保留检索到的完整函数，只使用粗粒度选择。实验运行在 Intel Xeon Gold 6254 CPU 和 NVIDIA A100 80GB GPU 上。\n8. Main Results 8.1 Long Code Completion Model Method ES EM Ratio DeepSeek-Coder-6.7B No Compression 57.14 34.40 1.0× DeepSeek-Coder-6.7B LongCodeZip 60.58 35.40 5.3× Qwen2.5-Coder-7B No Compression 56.36 31.80 1.0× Qwen2.5-Coder-7B RAG Function 52.79 26.00 3.1× Qwen2.5-Coder-7B LongCodeZip 57.55 32.40 4.3× Seed-Coder-8B No Compression 64.04 40.20 1.0× Seed-Coder-8B LongCodeZip 63.11 37.40 5.6× LongCodeZip 在 DeepSeek 与 Qwen 上压缩后反而超过完整上下文，说明删除无关代码能够缓解注意力稀释。Seed-Coder 上存在小幅下降，但在 5.6× 压缩率下仍保持接近完整上下文的表现。相比函数级 RAG，LongCodeZip 在 Qwen 上同时获得更高压缩率和更高 ES/EM，表明 AMI 与函数内筛选都在发挥作用。\n8.2 Long Module Summarization Model No Compression LongCodeZip Ratio DeepSeek-Coder-6.7B 19.09 28.01 2.5× Qwen2.5-Coder-7B 56.00 56.47 1.7× Seed-Coder-8B 44.95 55.07 3.5× 三个模型的 CompScore 都没有因压缩下降。尤其是 DeepSeek 与 Seed-Coder，压缩上下文的总结明显优于完整上下文。这说明模块总结不需要逐字保留所有实现细节；突出核心接口与主路径，反而更利于模型概括模块职责。\n8.3 RepoQA Model No Compression Avg. LongCodeZip Avg. Ratio DeepSeek-Coder-6.7B 38.3 75.3 5.3× Qwen2.5-Coder-7B 86.0 87.2 4.5× Seed-Coder-8B 69.0 80.7 5.3× RepoQA 的提升最明显。因为任务要求根据描述定位一个目标函数，完整仓库上下文中的干扰函数很多；AMI 粗筛能把与描述最相关、但不一定词面相似的函数集中到有限窗口中。DeepSeek 的平均正确率从 38.3 提升到 75.3，几乎翻倍。\n8.4 Closed-source Models Task Model No Compression LongCodeZip Ratio Completion ES / EM Claude-3.7-Sonnet 66.24 / 41.20 66.27 / 40.20 4.3× Completion ES / EM GPT-4o 65.13 / 40.80 64.72 / 38.80 4.3× Summarization Claude-3.7-Sonnet 60.72 61.47 1.7× Summarization GPT-4o 58.42 59.04 1.7× RepoQA Claude-3.7-Sonnet 89.7 88.9 5.1× RepoQA GPT-4o 87.8 88.9 5.1× 总体上，LongCodeZip 对闭源模型也能直接迁移。需要指出，论文正文在讨论 Claude RepoQA 时写成 90.7，但 Table V 中 LongCodeZip 的数值是 88.9；这里采用表格中的结果，并将正文数值视为可能的笔误。\n8.5 Comparison with Advanced RAG 在 Seed-Coder 补全任务中，LongCodeZip 达到 63.11 ES / 37.40 EM / 5.6×，而 RepoGenix 为 60.28 / 34.70 / 3.5×。在 Claude 上，LongCodeZip 为 66.27 / 40.20 / 4.3×，RLCoder 为 62.76 / 37.90 / 4.0×。\n这组结果说明，高级 RAG 即使引入 AST 或仓库结构，仍主要解决“选择哪些候选片段”；LongCodeZip 进一步在候选函数内部做任务感知压缩，因此能在更短上下文中保留更密集的有效信息。\n9. Ablation Study 论文在 Qwen2.5-Coder-7B 的长代码补全任务上逐项替换或移除组件：\nVariant ES EM ES Drop Full LongCodeZip 57.55 32.40 — Similarity Ranking 49.66 25.20 -7.89 Random Ranking 39.76 11.50 -17.79 Without Fine-grained Stage 56.10 31.20 -1.45 Without Adaptive Allocation 55.21 29.40 -2.34 Fixed Line Chunking 55.98 31.20 -1.57 Random Line Selection 55.07 29.00 -2.48 可以得到四个清晰结论：\nAMI 粗粒度排序是最关键组件。改成相似度排序损失 7.89 ES，随机排序损失 17.79 ES； 细粒度阶段提供稳定增益。完全移除后下降 1.45 ES，说明粗筛已经很强，但函数内部仍存在冗余； 预算必须按任务相关性分配。统一比例压缩会浪费高价值函数的预算； 语义块优于随机行或固定行块。保持完整逻辑单元能减少结构破坏。 10. Transferability and Efficiency 10.1 Small Compressor, Large Target Model 论文比较了不同规模的压缩器。使用 0.5B 模型计算相关性时，平均 ES 为 60.13；使用 7B 压缩器时为 60.58，差距很小。这说明 AMI 排序不要求压缩器与目标模型同等规模，可以采用“小模型负责压缩、大模型负责生成”的部署方式。\n10.2 Runtime and GPU Memory Method Compression Time Compression Memory Generation Time Generation Extra Memory Ratio ES No Compression — — 15.70 s 3.48 GB 1.0× 56.36 RAG Function 0.53 s 1.07 GB 7.57 s 1.13 GB 3.1× 52.79 LongCodeZip 2.58 s 0.69 GB 6.59 s 0.81 GB 4.3× 57.55 LongCodeZip 将输入 token 减少约 77%，生成时间从 15.70 秒下降到 6.59 秒，生成阶段缩短约 58%。若把 2.58 秒压缩开销也算入端到端时间，总时间为 9.17 秒，仍比 15.70 秒低约 41.6%。\n论文报告的显存是模型基础参数之外的额外占用，基础模型参数本身约占 28.37 GB。压缩过程比普通 RAG 慢，但换来了更高任务性能、更强压缩率，以及更低的生成阶段显存。对于按 token 收费的闭源 API，2.58 秒的本地预处理通常也比长期支付冗余输入费用更划算。\n11. Compression–Performance Trade-off 随着保留比例降低，大多数方法都会逐渐退化，但 LongCodeZip 在极端压缩区域的优势更加明显，尤其是在只保留原上下文不到 10% 时。原因是它并非均匀缩短每个函数，而是先跨函数集中预算，再在关键函数内部集中预算。\n这一现象也说明，评估压缩器不能只比较某一个固定 token 预算。更公平的比较应同时观察完整的 performance–compression curve：如果一种方法只在宽松预算下有效，而预算稍紧就快速崩溃，就很难适用于真正超出上下文窗口的仓库。\n12. Case Study 细粒度案例展示了 LongCodeZip 如何删除一个函数中的非关键行，同时保留与任务相关的初始化、核心计算和返回路径。与随机行删除相比，它尽量让保留区域对应连续的逻辑块，而不是留下语法正确但语义残缺的碎片。\n案例也体现了两类评分的分工：\n函数级 AMI 回答“这个函数是否值得进入候选集”； 块级 AMI 回答“在已经相关的函数里，哪部分最能解释当前指令”。 如果只做第一层，长函数会整体占用大量预算；如果只做第二层，则需要为仓库中的每个函数执行昂贵的逐行分析。层次化处理因此同时控制了压缩质量和计算成本。\n13. Limitations and Threats to Validity 13.1 Failure Cases 论文总结了两类主要失败场景：\n上下文本身不包含答案：压缩器只能筛选已有信息，无法补回仓库中缺失的依赖； 指令含糊或与代码难以对齐：AMI 依赖指令条件化评分，如果任务描述过于宽泛，重要性排序也会不稳定。 此外，AMI 计算需要额外的语言模型前向过程，细粒度逐行困惑度与块级背包也带来预处理开销。因此论文建议：高价闭源模型或极长上下文采用完整两阶段流程；便宜模型、延迟极敏感或预算较宽松时，可以只启用粗粒度阶段。\n13.2 Evaluation Threats LLM-as-a-Judge 偏差：模块总结使用 GPT-4o-mini 比较结果，论文通过交换候选顺序并取组合分数降低位置偏差，但不能完全消除模型偏好； 任务覆盖范围：虽然包括补全、总结、问答和 6 种语言，但仍不能代表所有仓库级软件工程任务； 模型覆盖范围：实验模型以 6.7B–8B 开源模型及两个闭源模型为主，更大或更新架构上的效果仍需验证； 数据泄漏风险：论文使用训练时间较早的 DeepSeek-Coder，并选择时间更晚的基准来降低泄漏可能，但闭源模型的训练数据不可知； 代理相关性偏差：AMI 衡量的是代码对“预测指令”的帮助，不是对“生成正确答案”的直接贡献，两者高度相关但并不等价。 14. Practical Deployment 官方仓库提供了 LongCodeZipCompressor 接口，典型调用方式如下：\nfrom longcodezip import LongCodeZipCompressor compressor = LongCodeZipCompressor( model_name=\"your-compressor-model\", device=\"cuda\", ) compressed_code = compressor.compress( code=long_code_context, instruction=user_instruction, target_token=2000, ) 在实际系统中，可以按以下方式接入：\n在 Agent 的文件搜索、仓库索引之后执行 LongCodeZip，而不是替代所有检索； 对安全检查、接口定义、用户明确指定的行设置强制保留； 根据任务调整预算：补全需要精确局部实现，总结需要覆盖更多模块结构，RepoQA 则优先保留完整候选函数； 缓存函数级 AMI 或代码解析结果，避免多轮 Agent 反复处理未变化文件； 同时记录压缩耗时和生成耗时，不要只报告生成阶段加速； 在进入目标模型前执行语法解析、名称引用或最小编译检查，及时发现压缩造成的结构缺口。 15. Conclusion LongCodeZip 的核心并不是“把代码变短”，而是把有限上下文预算分配给最能帮助当前任务的代码结构。它用 AMI 替代单纯相似度，用函数级选择解决跨实体冗余，再用困惑度分块、自适应预算和 0/1 背包解决实体内部冗余。\n实验表明，这套无训练、模型无关的流程在 1.7×–5.6× 的压缩范围内能够保持或改善补全、总结与仓库问答效果。消融实验进一步说明，函数级 AMI 排序贡献最大，细粒度阶段则在严格预算下提供额外收益。对于长上下文 Coding Agent，LongCodeZip 展示了一条实用路线：先用轻量模型完成任务感知的信息筛选，再让昂贵的大模型只处理高密度、结构完整的代码证据。\n",
+  "wordCount" : "1179",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-08-06T00:00:00Z",
+  "dateModified": "2026-08-06T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 LongCodeZip: Compress Long Context for Code Language Models - ASE&#39;25
+    </h1>
+    <div class="post-meta"><span title='2026-08-06 00:00:00 +0000 UTC'>August 6, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><h1 id="longcodezip-compress-long-context-for-code-language-models">LongCodeZip: Compress Long Context for Code Language Models<a hidden class="anchor" aria-hidden="true" href="#longcodezip-compress-long-context-for-code-language-models">#</a></h1>
+<p><strong>Conference:</strong> <strong>ASE 2025</strong></p>
+<p><strong>Paper:</strong> <a href="https://arxiv.org/abs/2510.00446">https://arxiv.org/abs/2510.00446</a></p>
+<p><strong>Github:</strong> <a href="https://github.com/YerbaPage/LongCodeZip">https://github.com/YerbaPage/LongCodeZip</a></p>
+<p><strong>Authors:</strong> Yuling Shi, Yichun Qian, Hongyu Zhang, Beijun Shen, Xiaodong Gu</p>
+<h2 id="abstract">Abstract<a hidden class="anchor" aria-hidden="true" href="#abstract">#</a></h2>
+<p>代码大模型在仓库级补全、模块总结和跨文件问答中，通常需要读取远超单个函数的上下文。直接把整个仓库送入模型不仅带来更高的推理延迟、显存和 API 费用，还可能因为 <strong>lost-in-the-middle</strong> 现象让真正有用的信息淹没在长上下文中。最直接的检索增强生成（RAG）虽然能够选取与问题相似的代码，却容易漏掉变量名和表面语义都不相似、但在执行逻辑上不可缺少的依赖。</p>
+<p>LongCodeZip 是一个 <strong>training-free、model-agnostic、plug-and-play</strong> 的长代码上下文压缩框架。它把压缩拆成两个层次：</p>
+<ol>
+<li><strong>Coarse-grained compression</strong>：以函数或类为单位，使用指令条件下的近似互信息 AMI 排序，优先保留能帮助模型理解当前任务的代码实体；</li>
+<li><strong>Fine-grained compression</strong>：在保留下来的长函数内部，根据逐行困惑度变化切分语义块，再通过自适应预算和 0/1 背包选择最有价值的代码块。</li>
+</ol>
+<p>这种设计同时利用了代码的层次结构和任务相关性。论文在 Long Code Completion、Long Module Summarization 与 RepoQA 三类任务上评估 LongCodeZip，在最高 <strong>5.6× 有效压缩率</strong>下仍能维持甚至提高任务性能，并显著降低生成阶段的时间与额外显存开销。</p>
+<h2 id="1-motivation">1. Motivation<a hidden class="anchor" aria-hidden="true" href="#1-motivation">#</a></h2>
+<h3 id="11-long-code-context-的实际代价">1.1 Long Code Context 的实际代价<a hidden class="anchor" aria-hidden="true" href="#11-long-code-context-的实际代价">#</a></h3>
+<p>仓库级任务所需要的信息往往分散在不同文件、类和函数中。随着上下文长度增加，会同时出现四类问题：</p>
+<ul>
+<li><strong>计算代价增加</strong>：标准全注意力的计算量随序列长度近似二次增长；</li>
+<li><strong>部署成本增加</strong>：更长的 KV Cache 占用更多显存，闭源 API 也按输入 token 计费；</li>
+<li><strong>有效性下降</strong>：无关代码会稀释模型注意力，长上下文并不必然优于经过筛选的上下文；</li>
+<li><strong>窗口截断</strong>：当仓库代码超过上下文窗口时，简单截断可能恰好删除关键依赖。</li>
+</ul>
+<p>因此，长代码压缩的目标不是机械地减少 token，而是回答两个问题：<strong>哪些函数与当前指令真正相关？一个相关函数内部又应该保留哪些连续代码块？</strong></p>
+<h3 id="12-why-similarity-based-rag-is-not-enough">1.2 Why Similarity-based RAG Is Not Enough<a hidden class="anchor" aria-hidden="true" href="#12-why-similarity-based-rag-is-not-enough">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LongCodeZip/motivation.png"></p>
+<p>上图给出了论文的核心动机。对于 <code>get_email_by_id</code> 之类的局部补全，目标代码与 <code>get_account_by_id</code> 在函数名和词汇上高度相似，向量检索很容易找对参考函数。但在 <code>train_model</code> 的例子中，真正需要的是负责配置学习率、训练轮数等参数的 <code>Config</code> 类。它与目标函数几乎没有词汇重叠，基于相似度的检索只把它排在第 9 位；基于 AMI 的任务相关性衡量则把它排到第 1 位。</p>
+<p>这里揭示了代码检索与普通文本检索的区别：</p>
+<ul>
+<li>词汇相似不等于功能依赖；</li>
+<li>隐式依赖可能通过数据流、配置对象、继承或调用约定建立；</li>
+<li>只看 query 与代码块的嵌入距离，无法直接衡量“把这段代码交给生成模型后，它是否更容易完成任务”。</li>
+</ul>
+<p>另一方面，面向自然语言的 prompt compressor 通常以 token 或短句为单位删除内容，容易破坏缩进、控制流、定义—使用关系和代码块边界。因此 LongCodeZip 选择以 <strong>函数/类—代码块—代码行</strong>三级结构组织压缩。</p>
+<h3 id="13-main-contributions">1.3 Main Contributions<a hidden class="anchor" aria-hidden="true" href="#13-main-contributions">#</a></h3>
+<p>论文的主要贡献可以概括为：</p>
+<ul>
+<li>提出面向长代码上下文的两阶段层次化压缩框架；</li>
+<li>使用指令条件下的 <strong>Approximated Mutual Information（AMI）</strong>，替代纯词汇或嵌入相似度进行重要性排序；</li>
+<li>提出基于逐行困惑度突变的细粒度分块、自适应函数预算和 0/1 背包选择；</li>
+<li>在开源与闭源代码模型、三类长代码任务上验证方法的压缩效果、迁移性和效率。</li>
+</ul>
+<h2 id="2-problem-formulation">2. Problem Formulation<a hidden class="anchor" aria-hidden="true" href="#2-problem-formulation">#</a></h2>
+<p>设长代码上下文为</p>
+$$
+c=\{c_1,c_2,\ldots,c_n\},
+$$<p>用户指令为</p>
+$$
+q=\{q_1,q_2,\ldots,q_m\}.
+$$<p>压缩器需要在 token 预算 \(B\) 下构造子上下文 \(c'\)：</p>
+$$
+c'\subseteq c,\qquad \lvert c'\rvert\le B,
+$$<p>并尽可能保持下游模型在任务 \(q\) 上的生成能力。困难在于：压缩器没有真实答案，也不能为每个目标模型重新训练，因此必须从语言模型对“指令可预测性”的变化中估计代码价值。</p>
+<h3 id="21-conditional-perplexity">2.1 Conditional Perplexity<a hidden class="anchor" aria-hidden="true" href="#21-conditional-perplexity">#</a></h3>
+<p>给定上下文 \(c\) 后，指令 \(q\) 的条件困惑度为：</p>
+$$
+\operatorname{PPL}(q\mid c)=
+\exp\left(
+-\frac{1}{N}\sum_{i=1}^{N}
+\log P(q_i\mid q_{\lt i},c)
+\right).
+$$<p>不提供上下文时，指令自身的困惑度为：</p>
+$$
+\operatorname{PPL}(q)=
+\exp\left(
+-\frac{1}{N}\sum_{i=1}^{N}
+\log P(q_i\mid q_{\lt i})
+\right).
+$$<p>如果一段代码包含完成指令所需要的信息，那么把它放到指令前面后，模型应该更容易预测指令中的 token，即 \(\operatorname{PPL}(q\mid c)\) 更低。</p>
+<h3 id="22-approximated-mutual-information">2.2 Approximated Mutual Information<a hidden class="anchor" aria-hidden="true" href="#22-approximated-mutual-information">#</a></h3>
+<p>LongCodeZip 将代码块 \(c\) 对任务 \(q\) 的相关性定义为：</p>
+$$
+\operatorname{AMI}(c,q)=
+\operatorname{PPL}(q)-
+\operatorname{PPL}(q\mid c).
+$$<p>AMI 越大，说明加入该代码后，指令的困惑度下降越明显，也就越值得保留。这个度量有三个特点：</p>
+<ol>
+<li><strong>Instruction-aware</strong>：同一段代码面对不同任务会获得不同分数；</li>
+<li><strong>超越词面相似度</strong>：只要代码能够解释指令，即使没有共同关键词也可能获得高分；</li>
+<li><strong>不依赖下游答案</strong>：评分时只需要代码和指令，适合实际推理阶段。</li>
+</ol>
+<p>需要注意，论文中的 AMI 是一种定向、任务条件化的启发式量。它用“加入代码前后的指令困惑度差”近似信息增益，并不是严格意义上对称的互信息估计。</p>
+<h2 id="3-overall-framework">3. Overall Framework<a hidden class="anchor" aria-hidden="true" href="#3-overall-framework">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LongCodeZip/overview.png"></p>
+<p>LongCodeZip 的整体流程如下：</p>
+<ol>
+<li>使用语法解析或代码结构信息，把长上下文拆成函数、方法和类等代码实体；</li>
+<li>计算每个实体相对于用户指令的 AMI；</li>
+<li>按 AMI 从高到低执行函数级粗筛，未被保留的实体用占位符表示；</li>
+<li>对粗筛后仍然较长的函数逐行计算困惑度，并在局部突变处切分代码块；</li>
+<li>根据函数级 AMI 分配细粒度预算；</li>
+<li>将块级 AMI 视为价值、token 数视为重量，用 0/1 背包选取代码块；</li>
+<li>按原始顺序重组代码，得到最终压缩上下文，再交给任意目标代码模型。</li>
+</ol>
+<p>两阶段设计的意义是：粗粒度阶段快速删除整个无关实体，负责主要压缩收益；细粒度阶段只处理已被判定为相关的长函数，避免把预算浪费在函数内部的样板代码、错误处理或与当前任务无关的分支上。</p>
+<h2 id="4-stage-i-coarse-grained-compression">4. Stage I: Coarse-grained Compression<a hidden class="anchor" aria-hidden="true" href="#4-stage-i-coarse-grained-compression">#</a></h2>
+<h3 id="41-structure-aware-entity-splitting">4.1 Structure-aware Entity Splitting<a hidden class="anchor" aria-hidden="true" href="#41-structure-aware-entity-splitting">#</a></h3>
+<p>LongCodeZip 首先按照函数和类边界切分上下文。相比固定 token 窗口，这样做能保留：</p>
+<ul>
+<li>完整函数签名与局部作用域；</li>
+<li>类成员之间的层次关系；</li>
+<li>控制流和缩进结构；</li>
+<li>便于回填的原始位置。</li>
+</ul>
+<p>每个实体 \(f_i\) 都计算一个 \(\operatorname{AMI}(f_i,q)\)。随后按照分数降序排列，在粗粒度预算内贪心选取实体。</p>
+<h3 id="42-budget-coupling-between-two-stages">4.2 Budget Coupling Between Two Stages<a hidden class="anchor" aria-hidden="true" href="#42-budget-coupling-between-two-stages">#</a></h3>
+<p>最终预算为 \(B\)，细粒度阶段的预期保留比例为 \(R_{\mathrm{fine}}\)。为了让第二阶段压缩后恰好接近最终预算，粗粒度预算设置为：</p>
+$$
+B_{\mathrm{coarse}}=\frac{B}{R_{\mathrm{fine}}}.
+$$<p>例如最终只允许 2,000 token，细粒度阶段预计保留粗筛结果的 80%，那么粗粒度阶段可以先保留约 2,500 token。这样细筛有足够候选内容可比较，而不是在第一阶段过早删除潜在有用代码。</p>
+<h3 id="43-preserving-the-global-skeleton">4.3 Preserving the Global Skeleton<a hidden class="anchor" aria-hidden="true" href="#43-preserving-the-global-skeleton">#</a></h3>
+<p>没有入选的函数并非简单地从文本中完全消失，而是被注释或省略标记替代。这样做虽然不保留实现细节，但仍让下游模型知道：</p>
+<ul>
+<li>原文件在这个位置存在某个实体；</li>
+<li>上下文的整体顺序和层级没有被打乱；</li>
+<li>入选代码之间原本可能隔着其他定义。</li>
+</ul>
+<p>最终所有保留实体仍按原始顺序拼接，避免按相关性重新排序造成跨函数语义和文件结构失真。</p>
+<h2 id="5-stage-ii-fine-grained-compression">5. Stage II: Fine-grained Compression<a hidden class="anchor" aria-hidden="true" href="#5-stage-ii-fine-grained-compression">#</a></h2>
+<h3 id="51-perplexity-guided-block-segmentation">5.1 Perplexity-guided Block Segmentation<a hidden class="anchor" aria-hidden="true" href="#51-perplexity-guided-block-segmentation">#</a></h3>
+<p>固定行数或固定 token 分块会把一个 <code>if</code> 分支、循环或异常处理从中间切断。LongCodeZip 因此把代码行作为最小原子，并观察模型逐行读取函数时的困惑度变化。</p>
+<p>在语义连贯的代码块中，前文不断提供变量和控制流信息，后续行通常越来越容易预测，困惑度整体下降；当进入新的逻辑单元时，新变量、分支或调用会引起局部困惑度上升。论文把满足“当前行困惑度相对相邻位置形成显著局部峰值，且提升至少达到全局行困惑度标准差的 \(\alpha\) 倍”的位置视为块边界。</p>
+<p>这种分法有两个优点：</p>
+<ul>
+<li>不要求为不同编程语言手工定义所有语法块规则；</li>
+<li>边界由代码模型感受到的语义变化决定，比等长切块更贴合实际逻辑。</li>
+</ul>
+<p>对于少于 5 行的小函数，切分和筛选带来的收益有限，论文直接完整保留。</p>
+<h3 id="52-adaptive-budget-allocation">5.2 Adaptive Budget Allocation<a hidden class="anchor" aria-hidden="true" href="#52-adaptive-budget-allocation">#</a></h3>
+<p>假设小函数集合为 \(\mathcal{F}_{\mathrm{small}}\)，长函数集合为 \(\mathcal{F}_{\mathrm{large}}\)，函数 \(j\) 的 token 数为 \(T_j\)。先扣除必须完整保留的小函数，长函数的基础保留比例为：</p>
+$$
+R_{\mathrm{base}}=
+\frac{
+B-\sum_{j\in\mathcal{F}_{\mathrm{small}}}T_j
+}{
+\sum_{k\in\mathcal{F}_{\mathrm{large}}}T_k
+}.
+$$<p>如果所有长函数都使用同一比例，会让高相关函数与边缘函数获得相同待遇。LongCodeZip 将函数级 AMI 归一化为 \(\operatorname{AMI}_{\mathrm{norm},i}\in[0,1]\)，再引入偏置系数 \(\beta\)：</p>
+$$
+R_{\mathrm{biased},i}=
+R_{\mathrm{base}}
+\left[
+1+\beta\left(2\operatorname{AMI}_{\mathrm{norm},i}-1\right)
+\right].
+$$<p>高 AMI 函数的保留比例被上调，低 AMI 函数则下调。各比例先截断到 \([0,1]\)，再进行全局缩放以满足总预算：</p>
+$$
+R_i=
+R_{\mathrm{biased},i}
+\frac{
+B_{\mathrm{large}}
+}{
+\sum_jR_{\mathrm{biased},j}T_j
+}.
+$$<p>最终函数 \(i\) 的预算约为 \(B_i=R_iT_i\)。这一步把“重要函数多保留、次要函数少保留”从直觉转化为可控的预算分配。</p>
+<h3 id="53-code-block-selection-as-01-knapsack">5.3 Code Block Selection as 0/1 Knapsack<a hidden class="anchor" aria-hidden="true" href="#53-code-block-selection-as-01-knapsack">#</a></h3>
+<p>一个函数被切成 \(M\) 个候选块后，LongCodeZip 计算每块相对于指令的 AMI，并将其归一化为价值 \(v_j\)，token 数记为重量 \(T_j\)。选择问题写成：</p>
+$$
+\max_{z_1,\ldots,z_M}
+\sum_{j=1}^{M}z_jv_j,
+$$$$
+\text{subject to}\qquad
+\sum_{j=1}^{M}z_jT_j\le B_i,
+\qquad z_j\in\{0,1\}.
+$$<p>这正是 0/1 背包：每个完整代码块只能保留或删除，不能像 token compressor 那样从中间切碎。动态规划能够在预算内找到总 AMI 最大的块集合，而简单按 \(v_j/T_j\) 贪心并不保证最优。</p>
+<p>框架还允许用户指定必须保留的块集合 \(\mathcal{P}\)。这些块先无条件加入，剩余预算为：</p>
+$$
+B_{\mathrm{remain}}=
+\max\left(
+0,
+B_i-\sum_{j\in\mathcal{P}}T_j
+\right),
+$$<p>背包算法只在剩余候选中运行。这为保留函数签名、安全检查、接口约束或用户关注区域提供了硬保证。</p>
+<h2 id="6-end-to-end-algorithm">6. End-to-end Algorithm<a hidden class="anchor" aria-hidden="true" href="#6-end-to-end-algorithm">#</a></h2>
+<p>把整个方法压缩成一条执行链，可以写成：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Input: long code context c, instruction q, final budget B
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>1. Parse c into functions/classes F.
+</span></span><span style="display:flex;"><span>2. Score every entity f in F with AMI(f, q).
+</span></span><span style="display:flex;"><span>3. Rank entities and keep them under B_coarse = B / R_fine.
+</span></span><span style="display:flex;"><span>4. Preserve placeholders for removed entities and the original order.
+</span></span><span style="display:flex;"><span>5. For each retained function:
+</span></span><span style="display:flex;"><span>   a. keep it directly if it has fewer than 5 lines;
+</span></span><span style="display:flex;"><span>   b. otherwise, locate block boundaries from line-PPL peaks;
+</span></span><span style="display:flex;"><span>   c. compute block-level AMI;
+</span></span><span style="display:flex;"><span>   d. assign a function budget according to normalized function AMI;
+</span></span><span style="display:flex;"><span>   e. solve a 0/1 knapsack to select whole blocks.
+</span></span><span style="display:flex;"><span>6. Reassemble selected blocks in their original positions.
+</span></span><span style="display:flex;"><span>Output: compressed context c&#39; with |c&#39;| &lt;= B.
+</span></span></code></pre></div><p>压缩器与最终生成模型是解耦的：评分可以使用较小的开源代码模型，压缩结果则可以交给更大的开源模型或 GPT-4o、Claude 等闭源 API。</p>
+<h2 id="7-experimental-setup">7. Experimental Setup<a hidden class="anchor" aria-hidden="true" href="#7-experimental-setup">#</a></h2>
+<h3 id="71-benchmarks">7.1 Benchmarks<a hidden class="anchor" aria-hidden="true" href="#71-benchmarks">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th style="text-align: right">Samples</th>
+          <th style="text-align: right">Avg. Context Tokens</th>
+          <th style="text-align: right">Avg. Ground-truth Tokens</th>
+          <th>Languages</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Long Code Completion</td>
+          <td style="text-align: right">500</td>
+          <td style="text-align: right">9,328.2</td>
+          <td style="text-align: right">12.4</td>
+          <td>Python</td>
+      </tr>
+      <tr>
+          <td>Long Module Summarization</td>
+          <td style="text-align: right">139</td>
+          <td style="text-align: right">10,809.6</td>
+          <td style="text-align: right">1,758.1</td>
+          <td>Python</td>
+      </tr>
+      <tr>
+          <td>RepoQA</td>
+          <td style="text-align: right">600</td>
+          <td style="text-align: right">11,524.6</td>
+          <td style="text-align: right">156.0</td>
+          <td>Python, Java, JavaScript, Rust, Go, C++</td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li><strong>Long Code Completion</strong>：从长文件中预测被隐藏的目标代码，过滤后每个样本上下文超过 5,000 token；</li>
+<li><strong>Long Module Summarization</strong>：根据完整长模块生成模块级总结，原始数据来自 216 个样本、43 个仓库，实验保留上下文超过 2,000 token 的 139 个样本；</li>
+<li><strong>RepoQA</strong>：根据自然语言描述在仓库上下文中定位目标函数，共覆盖 60 个仓库和 6 种语言。</li>
+</ul>
+<h3 id="72-models-and-baselines">7.2 Models and Baselines<a hidden class="anchor" aria-hidden="true" href="#72-models-and-baselines">#</a></h3>
+<p>开源目标模型包括：</p>
+<ul>
+<li>DeepSeek-Coder-6.7B；</li>
+<li>Qwen2.5-Coder-7B；</li>
+<li>Seed-Coder-8B。</li>
+</ul>
+<p>闭源模型包括 GPT-4o 与 Claude-3.7-Sonnet。基线覆盖五类方法：</p>
+<ol>
+<li><strong>No Compression / No Context</strong>：完整输入和完全不输入代码；</li>
+<li><strong>Random Token / Random Line</strong>：随机删除 token 或代码行；</li>
+<li><strong>RAG</strong>：滑动窗口检索、函数级检索，编码器为 UniXCoder-base；</li>
+<li><strong>Code-specific Compression</strong>：DietCode、SlimCode；</li>
+<li><strong>General Prompt Compression</strong>：LLMLingua、LongLLMLingua、LLMLingua-2；</li>
+<li><strong>Advanced Code RAG</strong>：A3-CodGen、cAST、RepoGenix、RLCoder。</li>
+</ol>
+<h3 id="73-metrics">7.3 Metrics<a hidden class="anchor" aria-hidden="true" href="#73-metrics">#</a></h3>
+<ul>
+<li><strong>Compression Ratio</strong>：原始 token 数除以压缩后 token 数，因此数值越大表示压缩越强；</li>
+<li><strong>Completion</strong>：Edit Similarity（ES）与 Exact Match（EM）；</li>
+<li><strong>Summarization</strong>：使用 GPT-4o-mini 比较压缩上下文总结 \(\hat{s}\) 与完整上下文总结 \(s_o\)，交换候选顺序执行两次判断，以减轻位置偏差：</li>
+</ul>
+$$
+\operatorname{CompScore}=
+\frac{1}{2}
+\left[
+\mathcal{P}(s_o\succ\hat{s})
++1-\mathcal{P}(\hat{s}\succ s_o)
+\right].
+$$<ul>
+<li><strong>RepoQA</strong>：生成函数与目标函数的 BLEU 高于 0.8 时判为正确。</li>
+</ul>
+<h3 id="74-hyperparameters-and-hardware">7.4 Hyperparameters and Hardware<a hidden class="anchor" aria-hidden="true" href="#74-hyperparameters-and-hardware">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th style="text-align: right">Final Budget \(B\)</th>
+          <th style="text-align: right">\(R_{\mathrm{fine}}\)</th>
+          <th style="text-align: right">\(\beta\)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Code Completion</td>
+          <td style="text-align: right">2K</td>
+          <td style="text-align: right">0.8</td>
+          <td style="text-align: right">0.5</td>
+      </tr>
+      <tr>
+          <td>Module Summarization</td>
+          <td style="text-align: right">5K</td>
+          <td style="text-align: right">0.3</td>
+          <td style="text-align: right">0.5</td>
+      </tr>
+      <tr>
+          <td>RepoQA</td>
+          <td style="text-align: right">2K</td>
+          <td style="text-align: right">1.0</td>
+          <td style="text-align: right">—</td>
+      </tr>
+  </tbody>
+</table>
+<p>RepoQA 设置 \(R_{\mathrm{fine}}=1.0\)，即保留检索到的完整函数，只使用粗粒度选择。实验运行在 Intel Xeon Gold 6254 CPU 和 NVIDIA A100 80GB GPU 上。</p>
+<h2 id="8-main-results">8. Main Results<a hidden class="anchor" aria-hidden="true" href="#8-main-results">#</a></h2>
+<h3 id="81-long-code-completion">8.1 Long Code Completion<a hidden class="anchor" aria-hidden="true" href="#81-long-code-completion">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th>Method</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">Ratio</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>DeepSeek-Coder-6.7B</td>
+          <td>No Compression</td>
+          <td style="text-align: right">57.14</td>
+          <td style="text-align: right">34.40</td>
+          <td style="text-align: right">1.0×</td>
+      </tr>
+      <tr>
+          <td>DeepSeek-Coder-6.7B</td>
+          <td>LongCodeZip</td>
+          <td style="text-align: right"><strong>60.58</strong></td>
+          <td style="text-align: right"><strong>35.40</strong></td>
+          <td style="text-align: right"><strong>5.3×</strong></td>
+      </tr>
+      <tr>
+          <td>Qwen2.5-Coder-7B</td>
+          <td>No Compression</td>
+          <td style="text-align: right">56.36</td>
+          <td style="text-align: right">31.80</td>
+          <td style="text-align: right">1.0×</td>
+      </tr>
+      <tr>
+          <td>Qwen2.5-Coder-7B</td>
+          <td>RAG Function</td>
+          <td style="text-align: right">52.79</td>
+          <td style="text-align: right">26.00</td>
+          <td style="text-align: right">3.1×</td>
+      </tr>
+      <tr>
+          <td>Qwen2.5-Coder-7B</td>
+          <td>LongCodeZip</td>
+          <td style="text-align: right"><strong>57.55</strong></td>
+          <td style="text-align: right"><strong>32.40</strong></td>
+          <td style="text-align: right"><strong>4.3×</strong></td>
+      </tr>
+      <tr>
+          <td>Seed-Coder-8B</td>
+          <td>No Compression</td>
+          <td style="text-align: right"><strong>64.04</strong></td>
+          <td style="text-align: right"><strong>40.20</strong></td>
+          <td style="text-align: right">1.0×</td>
+      </tr>
+      <tr>
+          <td>Seed-Coder-8B</td>
+          <td>LongCodeZip</td>
+          <td style="text-align: right">63.11</td>
+          <td style="text-align: right">37.40</td>
+          <td style="text-align: right"><strong>5.6×</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>LongCodeZip 在 DeepSeek 与 Qwen 上压缩后反而超过完整上下文，说明删除无关代码能够缓解注意力稀释。Seed-Coder 上存在小幅下降，但在 5.6× 压缩率下仍保持接近完整上下文的表现。相比函数级 RAG，LongCodeZip 在 Qwen 上同时获得更高压缩率和更高 ES/EM，表明 AMI 与函数内筛选都在发挥作用。</p>
+<h3 id="82-long-module-summarization">8.2 Long Module Summarization<a hidden class="anchor" aria-hidden="true" href="#82-long-module-summarization">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th style="text-align: right">No Compression</th>
+          <th style="text-align: right">LongCodeZip</th>
+          <th style="text-align: right">Ratio</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>DeepSeek-Coder-6.7B</td>
+          <td style="text-align: right">19.09</td>
+          <td style="text-align: right"><strong>28.01</strong></td>
+          <td style="text-align: right">2.5×</td>
+      </tr>
+      <tr>
+          <td>Qwen2.5-Coder-7B</td>
+          <td style="text-align: right">56.00</td>
+          <td style="text-align: right"><strong>56.47</strong></td>
+          <td style="text-align: right">1.7×</td>
+      </tr>
+      <tr>
+          <td>Seed-Coder-8B</td>
+          <td style="text-align: right">44.95</td>
+          <td style="text-align: right"><strong>55.07</strong></td>
+          <td style="text-align: right">3.5×</td>
+      </tr>
+  </tbody>
+</table>
+<p>三个模型的 CompScore 都没有因压缩下降。尤其是 DeepSeek 与 Seed-Coder，压缩上下文的总结明显优于完整上下文。这说明模块总结不需要逐字保留所有实现细节；突出核心接口与主路径，反而更利于模型概括模块职责。</p>
+<h3 id="83-repoqa">8.3 RepoQA<a hidden class="anchor" aria-hidden="true" href="#83-repoqa">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th style="text-align: right">No Compression Avg.</th>
+          <th style="text-align: right">LongCodeZip Avg.</th>
+          <th style="text-align: right">Ratio</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>DeepSeek-Coder-6.7B</td>
+          <td style="text-align: right">38.3</td>
+          <td style="text-align: right"><strong>75.3</strong></td>
+          <td style="text-align: right">5.3×</td>
+      </tr>
+      <tr>
+          <td>Qwen2.5-Coder-7B</td>
+          <td style="text-align: right">86.0</td>
+          <td style="text-align: right"><strong>87.2</strong></td>
+          <td style="text-align: right">4.5×</td>
+      </tr>
+      <tr>
+          <td>Seed-Coder-8B</td>
+          <td style="text-align: right">69.0</td>
+          <td style="text-align: right"><strong>80.7</strong></td>
+          <td style="text-align: right">5.3×</td>
+      </tr>
+  </tbody>
+</table>
+<p>RepoQA 的提升最明显。因为任务要求根据描述定位一个目标函数，完整仓库上下文中的干扰函数很多；AMI 粗筛能把与描述最相关、但不一定词面相似的函数集中到有限窗口中。DeepSeek 的平均正确率从 38.3 提升到 75.3，几乎翻倍。</p>
+<h3 id="84-closed-source-models">8.4 Closed-source Models<a hidden class="anchor" aria-hidden="true" href="#84-closed-source-models">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th>Model</th>
+          <th style="text-align: right">No Compression</th>
+          <th style="text-align: right">LongCodeZip</th>
+          <th style="text-align: right">Ratio</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Completion ES / EM</td>
+          <td>Claude-3.7-Sonnet</td>
+          <td style="text-align: right">66.24 / 41.20</td>
+          <td style="text-align: right"><strong>66.27 / 40.20</strong></td>
+          <td style="text-align: right">4.3×</td>
+      </tr>
+      <tr>
+          <td>Completion ES / EM</td>
+          <td>GPT-4o</td>
+          <td style="text-align: right"><strong>65.13 / 40.80</strong></td>
+          <td style="text-align: right">64.72 / 38.80</td>
+          <td style="text-align: right">4.3×</td>
+      </tr>
+      <tr>
+          <td>Summarization</td>
+          <td>Claude-3.7-Sonnet</td>
+          <td style="text-align: right">60.72</td>
+          <td style="text-align: right"><strong>61.47</strong></td>
+          <td style="text-align: right">1.7×</td>
+      </tr>
+      <tr>
+          <td>Summarization</td>
+          <td>GPT-4o</td>
+          <td style="text-align: right">58.42</td>
+          <td style="text-align: right"><strong>59.04</strong></td>
+          <td style="text-align: right">1.7×</td>
+      </tr>
+      <tr>
+          <td>RepoQA</td>
+          <td>Claude-3.7-Sonnet</td>
+          <td style="text-align: right"><strong>89.7</strong></td>
+          <td style="text-align: right">88.9</td>
+          <td style="text-align: right">5.1×</td>
+      </tr>
+      <tr>
+          <td>RepoQA</td>
+          <td>GPT-4o</td>
+          <td style="text-align: right">87.8</td>
+          <td style="text-align: right"><strong>88.9</strong></td>
+          <td style="text-align: right">5.1×</td>
+      </tr>
+  </tbody>
+</table>
+<p>总体上，LongCodeZip 对闭源模型也能直接迁移。需要指出，论文正文在讨论 Claude RepoQA 时写成 90.7，但 Table V 中 LongCodeZip 的数值是 88.9；这里采用表格中的结果，并将正文数值视为可能的笔误。</p>
+<h3 id="85-comparison-with-advanced-rag">8.5 Comparison with Advanced RAG<a hidden class="anchor" aria-hidden="true" href="#85-comparison-with-advanced-rag">#</a></h3>
+<p>在 Seed-Coder 补全任务中，LongCodeZip 达到 <strong>63.11 ES / 37.40 EM / 5.6×</strong>，而 RepoGenix 为 <strong>60.28 / 34.70 / 3.5×</strong>。在 Claude 上，LongCodeZip 为 <strong>66.27 / 40.20 / 4.3×</strong>，RLCoder 为 <strong>62.76 / 37.90 / 4.0×</strong>。</p>
+<p>这组结果说明，高级 RAG 即使引入 AST 或仓库结构，仍主要解决“选择哪些候选片段”；LongCodeZip 进一步在候选函数内部做任务感知压缩，因此能在更短上下文中保留更密集的有效信息。</p>
+<h2 id="9-ablation-study">9. Ablation Study<a hidden class="anchor" aria-hidden="true" href="#9-ablation-study">#</a></h2>
+<p>论文在 Qwen2.5-Coder-7B 的长代码补全任务上逐项替换或移除组件：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Variant</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">ES Drop</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Full LongCodeZip</td>
+          <td style="text-align: right"><strong>57.55</strong></td>
+          <td style="text-align: right"><strong>32.40</strong></td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td>Similarity Ranking</td>
+          <td style="text-align: right">49.66</td>
+          <td style="text-align: right">25.20</td>
+          <td style="text-align: right">-7.89</td>
+      </tr>
+      <tr>
+          <td>Random Ranking</td>
+          <td style="text-align: right">39.76</td>
+          <td style="text-align: right">11.50</td>
+          <td style="text-align: right">-17.79</td>
+      </tr>
+      <tr>
+          <td>Without Fine-grained Stage</td>
+          <td style="text-align: right">56.10</td>
+          <td style="text-align: right">31.20</td>
+          <td style="text-align: right">-1.45</td>
+      </tr>
+      <tr>
+          <td>Without Adaptive Allocation</td>
+          <td style="text-align: right">55.21</td>
+          <td style="text-align: right">29.40</td>
+          <td style="text-align: right">-2.34</td>
+      </tr>
+      <tr>
+          <td>Fixed Line Chunking</td>
+          <td style="text-align: right">55.98</td>
+          <td style="text-align: right">31.20</td>
+          <td style="text-align: right">-1.57</td>
+      </tr>
+      <tr>
+          <td>Random Line Selection</td>
+          <td style="text-align: right">55.07</td>
+          <td style="text-align: right">29.00</td>
+          <td style="text-align: right">-2.48</td>
+      </tr>
+  </tbody>
+</table>
+<p>可以得到四个清晰结论：</p>
+<ol>
+<li><strong>AMI 粗粒度排序是最关键组件</strong>。改成相似度排序损失 7.89 ES，随机排序损失 17.79 ES；</li>
+<li><strong>细粒度阶段提供稳定增益</strong>。完全移除后下降 1.45 ES，说明粗筛已经很强，但函数内部仍存在冗余；</li>
+<li><strong>预算必须按任务相关性分配</strong>。统一比例压缩会浪费高价值函数的预算；</li>
+<li><strong>语义块优于随机行或固定行块</strong>。保持完整逻辑单元能减少结构破坏。</li>
+</ol>
+<h2 id="10-transferability-and-efficiency">10. Transferability and Efficiency<a hidden class="anchor" aria-hidden="true" href="#10-transferability-and-efficiency">#</a></h2>
+<h3 id="101-small-compressor-large-target-model">10.1 Small Compressor, Large Target Model<a hidden class="anchor" aria-hidden="true" href="#101-small-compressor-large-target-model">#</a></h3>
+<p>论文比较了不同规模的压缩器。使用 0.5B 模型计算相关性时，平均 ES 为 60.13；使用 7B 压缩器时为 60.58，差距很小。这说明 AMI 排序不要求压缩器与目标模型同等规模，可以采用“小模型负责压缩、大模型负责生成”的部署方式。</p>
+<h3 id="102-runtime-and-gpu-memory">10.2 Runtime and GPU Memory<a hidden class="anchor" aria-hidden="true" href="#102-runtime-and-gpu-memory">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Method</th>
+          <th style="text-align: right">Compression Time</th>
+          <th style="text-align: right">Compression Memory</th>
+          <th style="text-align: right">Generation Time</th>
+          <th style="text-align: right">Generation Extra Memory</th>
+          <th style="text-align: right">Ratio</th>
+          <th style="text-align: right">ES</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>No Compression</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">15.70 s</td>
+          <td style="text-align: right">3.48 GB</td>
+          <td style="text-align: right">1.0×</td>
+          <td style="text-align: right">56.36</td>
+      </tr>
+      <tr>
+          <td>RAG Function</td>
+          <td style="text-align: right">0.53 s</td>
+          <td style="text-align: right">1.07 GB</td>
+          <td style="text-align: right">7.57 s</td>
+          <td style="text-align: right">1.13 GB</td>
+          <td style="text-align: right">3.1×</td>
+          <td style="text-align: right">52.79</td>
+      </tr>
+      <tr>
+          <td>LongCodeZip</td>
+          <td style="text-align: right">2.58 s</td>
+          <td style="text-align: right"><strong>0.69 GB</strong></td>
+          <td style="text-align: right"><strong>6.59 s</strong></td>
+          <td style="text-align: right"><strong>0.81 GB</strong></td>
+          <td style="text-align: right"><strong>4.3×</strong></td>
+          <td style="text-align: right"><strong>57.55</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>LongCodeZip 将输入 token 减少约 77%，生成时间从 15.70 秒下降到 6.59 秒，生成阶段缩短约 58%。若把 2.58 秒压缩开销也算入端到端时间，总时间为 9.17 秒，仍比 15.70 秒低约 41.6%。</p>
+<p>论文报告的显存是模型基础参数之外的额外占用，基础模型参数本身约占 28.37 GB。压缩过程比普通 RAG 慢，但换来了更高任务性能、更强压缩率，以及更低的生成阶段显存。对于按 token 收费的闭源 API，2.58 秒的本地预处理通常也比长期支付冗余输入费用更划算。</p>
+<h2 id="11-compressionperformance-trade-off">11. Compression–Performance Trade-off<a hidden class="anchor" aria-hidden="true" href="#11-compressionperformance-trade-off">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LongCodeZip/performance.png"></p>
+<p>随着保留比例降低，大多数方法都会逐渐退化，但 LongCodeZip 在极端压缩区域的优势更加明显，尤其是在只保留原上下文不到 10% 时。原因是它并非均匀缩短每个函数，而是先跨函数集中预算，再在关键函数内部集中预算。</p>
+<p>这一现象也说明，评估压缩器不能只比较某一个固定 token 预算。更公平的比较应同时观察完整的 <strong>performance–compression curve</strong>：如果一种方法只在宽松预算下有效，而预算稍紧就快速崩溃，就很难适用于真正超出上下文窗口的仓库。</p>
+<h2 id="12-case-study">12. Case Study<a hidden class="anchor" aria-hidden="true" href="#12-case-study">#</a></h2>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/LongCodeZip/case-study.png"></p>
+<p>细粒度案例展示了 LongCodeZip 如何删除一个函数中的非关键行，同时保留与任务相关的初始化、核心计算和返回路径。与随机行删除相比，它尽量让保留区域对应连续的逻辑块，而不是留下语法正确但语义残缺的碎片。</p>
+<p>案例也体现了两类评分的分工：</p>
+<ul>
+<li>函数级 AMI 回答“这个函数是否值得进入候选集”；</li>
+<li>块级 AMI 回答“在已经相关的函数里，哪部分最能解释当前指令”。</li>
+</ul>
+<p>如果只做第一层，长函数会整体占用大量预算；如果只做第二层，则需要为仓库中的每个函数执行昂贵的逐行分析。层次化处理因此同时控制了压缩质量和计算成本。</p>
+<h2 id="13-limitations-and-threats-to-validity">13. Limitations and Threats to Validity<a hidden class="anchor" aria-hidden="true" href="#13-limitations-and-threats-to-validity">#</a></h2>
+<h3 id="131-failure-cases">13.1 Failure Cases<a hidden class="anchor" aria-hidden="true" href="#131-failure-cases">#</a></h3>
+<p>论文总结了两类主要失败场景：</p>
+<ol>
+<li><strong>上下文本身不包含答案</strong>：压缩器只能筛选已有信息，无法补回仓库中缺失的依赖；</li>
+<li><strong>指令含糊或与代码难以对齐</strong>：AMI 依赖指令条件化评分，如果任务描述过于宽泛，重要性排序也会不稳定。</li>
+</ol>
+<p>此外，AMI 计算需要额外的语言模型前向过程，细粒度逐行困惑度与块级背包也带来预处理开销。因此论文建议：高价闭源模型或极长上下文采用完整两阶段流程；便宜模型、延迟极敏感或预算较宽松时，可以只启用粗粒度阶段。</p>
+<h3 id="132-evaluation-threats">13.2 Evaluation Threats<a hidden class="anchor" aria-hidden="true" href="#132-evaluation-threats">#</a></h3>
+<ul>
+<li><strong>LLM-as-a-Judge 偏差</strong>：模块总结使用 GPT-4o-mini 比较结果，论文通过交换候选顺序并取组合分数降低位置偏差，但不能完全消除模型偏好；</li>
+<li><strong>任务覆盖范围</strong>：虽然包括补全、总结、问答和 6 种语言，但仍不能代表所有仓库级软件工程任务；</li>
+<li><strong>模型覆盖范围</strong>：实验模型以 6.7B–8B 开源模型及两个闭源模型为主，更大或更新架构上的效果仍需验证；</li>
+<li><strong>数据泄漏风险</strong>：论文使用训练时间较早的 DeepSeek-Coder，并选择时间更晚的基准来降低泄漏可能，但闭源模型的训练数据不可知；</li>
+<li><strong>代理相关性偏差</strong>：AMI 衡量的是代码对“预测指令”的帮助，不是对“生成正确答案”的直接贡献，两者高度相关但并不等价。</li>
+</ul>
+<h2 id="14-practical-deployment">14. Practical Deployment<a hidden class="anchor" aria-hidden="true" href="#14-practical-deployment">#</a></h2>
+<p>官方仓库提供了 <code>LongCodeZipCompressor</code> 接口，典型调用方式如下：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">from</span> longcodezip <span style="color:#f92672">import</span> LongCodeZipCompressor
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>compressor <span style="color:#f92672">=</span> LongCodeZipCompressor(
+</span></span><span style="display:flex;"><span>    model_name<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;your-compressor-model&#34;</span>,
+</span></span><span style="display:flex;"><span>    device<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;cuda&#34;</span>,
+</span></span><span style="display:flex;"><span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>compressed_code <span style="color:#f92672">=</span> compressor<span style="color:#f92672">.</span>compress(
+</span></span><span style="display:flex;"><span>    code<span style="color:#f92672">=</span>long_code_context,
+</span></span><span style="display:flex;"><span>    instruction<span style="color:#f92672">=</span>user_instruction,
+</span></span><span style="display:flex;"><span>    target_token<span style="color:#f92672">=</span><span style="color:#ae81ff">2000</span>,
+</span></span><span style="display:flex;"><span>)
+</span></span></code></pre></div><p>在实际系统中，可以按以下方式接入：</p>
+<ol>
+<li>在 Agent 的文件搜索、仓库索引之后执行 LongCodeZip，而不是替代所有检索；</li>
+<li>对安全检查、接口定义、用户明确指定的行设置强制保留；</li>
+<li>根据任务调整预算：补全需要精确局部实现，总结需要覆盖更多模块结构，RepoQA 则优先保留完整候选函数；</li>
+<li>缓存函数级 AMI 或代码解析结果，避免多轮 Agent 反复处理未变化文件；</li>
+<li>同时记录压缩耗时和生成耗时，不要只报告生成阶段加速；</li>
+<li>在进入目标模型前执行语法解析、名称引用或最小编译检查，及时发现压缩造成的结构缺口。</li>
+</ol>
+<h2 id="15-conclusion">15. Conclusion<a hidden class="anchor" aria-hidden="true" href="#15-conclusion">#</a></h2>
+<p>LongCodeZip 的核心并不是“把代码变短”，而是把有限上下文预算分配给最能帮助当前任务的代码结构。它用 AMI 替代单纯相似度，用函数级选择解决跨实体冗余，再用困惑度分块、自适应预算和 0/1 背包解决实体内部冗余。</p>
+<p>实验表明，这套无训练、模型无关的流程在 1.7×–5.6× 的压缩范围内能够保持或改善补全、总结与仓库问答效果。消融实验进一步说明，函数级 AMI 排序贡献最大，细粒度阶段则在严格预算下提供额外收益。对于长上下文 Coding Agent，LongCodeZip 展示了一条实用路线：先用轻量模型完成任务感知的信息筛选，再让昂贵的大模型只处理高密度、结构完整的代码证据。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/code-llm/">Code LLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/long-context/">Long Context</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/context-compression/">Context Compression</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/code-generation/">Code Generation</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/ase/">ASE</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

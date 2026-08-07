@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Real-Time Inference on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/real-time-inference/</link>
+    <description>Recent content in Real-Time Inference on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Wed, 05 Aug 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/real-time-inference/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 VLASH: Real-Time VLAs via Future-State-Aware Asynchronous Inference</title>
+      <link>https://jjl357.github.io/blog/posts/vlash---real-time-vlas-via-future-state-aware-asynchronous-inference/</link>
+      <pubDate>Wed, 05 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/vlash---real-time-vlas-via-future-state-aware-asynchronous-inference/</guid>
+      <description>&lt;h1 id=&#34;vlash-real-time-vlas-via-future-state-aware-asynchronous-inference&#34;&gt;VLASH: Real-Time VLAs via Future-State-Aware Asynchronous Inference&lt;/h1&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLASH/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Status:&lt;/strong&gt; &lt;strong&gt;Preprint, arXiv v2 (2026-07-26)&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2512.01031&#34;&gt;https://arxiv.org/abs/2512.01031&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/mit-han-lab/vlash&#34;&gt;https://github.com/mit-han-lab/vlash&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;一句话总结：&lt;/strong&gt; VLASH 不再让 VLA 根据“开始推理时已经过期的机器人状态”规划动作，而是利用上一段已经确定的动作，把机器人状态前推到新动作真正开始执行的时刻；再用时间偏移数据增强教会模型理解这一未来状态，从而在不增加推理步骤的前提下实现稳定的异步控制。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;my-thoughts&#34;&gt;My Thoughts&lt;/h2&gt;
+&lt;p&gt;这篇工作的关键并不是让 VLA 的一次 forward 更快，而是重新安排 &lt;strong&gt;推理与物理执行的时间关系&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;同步控制将模型延迟直接暴露为机器人停顿；朴素异步控制虽然把推理藏在动作执行之后，却让模型对着过去的状态预测未来要执行的动作。VLASH 的洞察是：未来环境画面确实未知，但在推理期间将要执行的动作已经由上一 action chunk 确定，因此&lt;strong&gt;未来的本体状态（proprioceptive state）是可以近似推演的&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;我认为这篇论文最值得把握的有三点：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;异步不是简单地开两个线程。&lt;/strong&gt; 如果不处理 prediction-execution misalignment，吞吐和响应变快并不等于闭环控制更好。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;VLASH 只预测可预测的未来。&lt;/strong&gt; 它不构建完整 world model，只前推由已知动作决定的机器人自身状态，因此部署开销非常小。&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;反应速度与任务完成速度是两个指标。&lt;/strong&gt; 异步执行主要把最大反应延迟从 \(D+2L\) 降到 \(2L\)；动作量化才进一步缩短物理动作序列，使任务完成时间获得约 \(1.5\text{--}2.0\times\) 加速。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;1-motivationvla-为什么看起来总是慢半拍&#34;&gt;1. Motivation：VLA 为什么看起来总是“慢半拍”？&lt;/h2&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/VLASH/figure1.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;Vision-Language-Action Model（VLA）根据视觉观测、语言指令和机器人状态生成低层动作。为了避免每个控制周期都运行一次大模型，现代 VLA 通常采用 &lt;strong&gt;action chunking&lt;/strong&gt;：一次推理生成一段未来动作，然后连续执行其中若干步。&lt;/p&gt;
+&lt;p&gt;设时刻 \(t\) 的环境观测为 \(o_t\)，机器人状态为 \(s_t\)，VLA policy 为&lt;/p&gt;
+$$
+\pi_\theta(A_t\mid o_t,s_t),
+$$&lt;p&gt;一次生成长度为 \(H\) 的动作块&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

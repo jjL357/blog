@@ -71,40 +71,30 @@
         document.querySelector("html").dataset.theme = 'light';
     }
 
-</script><script type="text/javascript"
-        async
-        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     }
-});
+  };
 </script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/tags/agent/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
@@ -157,6 +147,36 @@ code.has-jax {
   <header class="page-header" style="margin-top:10px; margin-bottom:5px;">
     <h1>Agent</h1>
   </header>
+
+    <article class="post-entry tag-entry" style="margin-top:5px; margin-bottom:10px;"> 
+
+      <header class="entry-header" style="margin-bottom:5px;">
+        <h2 class="entry-hint-parent">
+          <a href="https://jjl357.github.io/blog/posts/swe-pruner-pro---the-coder-llm-already-knows-what-to-prune/">📝 SWE-Pruner Pro: The Coder LLM Already Knows What to Prune</a>
+        </h2>
+      </header>
+
+      
+      
+      <footer class="entry-footer" style="margin-top:5px;"><span title='2026-08-06 00:00:00 +0000 UTC'>August 6, 2026</span></footer>
+
+      <a class="entry-link" aria-label="post link to 📝 SWE-Pruner Pro: The Coder LLM Already Knows What to Prune" href="https://jjl357.github.io/blog/posts/swe-pruner-pro---the-coder-llm-already-knows-what-to-prune/"></a>
+    </article>
+
+    <article class="post-entry tag-entry" style="margin-top:5px; margin-bottom:10px;"> 
+
+      <header class="entry-header" style="margin-bottom:5px;">
+        <h2 class="entry-hint-parent">
+          <a href="https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/">📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents</a>
+        </h2>
+      </header>
+
+      
+      
+      <footer class="entry-footer" style="margin-top:5px;"><span title='2026-07-20 00:00:00 +0000 UTC'>July 20, 2026</span></footer>
+
+      <a class="entry-link" aria-label="post link to 📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents" href="https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/"></a>
+    </article>
 
     <article class="post-entry tag-entry" style="margin-top:5px; margin-bottom:10px;"> 
 

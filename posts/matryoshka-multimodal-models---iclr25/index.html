@@ -77,40 +77,30 @@ While token pruning and merging methods exist, they produce a single-length outp
         document.querySelector("html").dataset.theme = 'light';
     }
 
-</script><script type="text/javascript"
-        async
-        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     }
-});
+  };
 </script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/matryoshka-multimodal-models---iclr25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
@@ -168,8 +158,8 @@ While token pruning and merging methods exist, they produce a single-length outp
   "keywords": [
     "MLLM"
   ],
-  "articleBody": "\nConference: ICLR'25\nGithub: https://github.com/mu-cai/matryoshka-mm\n1. Introduction Large Multimodal Models (LMMs) such as LLaVA have shown strong performance in visual-linguistic reasoning. These models first embed images into a fixed large number of visual tokens and then feed them into a Large Language Model (LLM). However, this design causes an excessive number of tokens for dense visual scenarios such as high-resolution images and videos, leading to great inefficiency.\nWhile token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 Matryoshka Multimodal Models (M³)。该模型学习将视觉内容表示为嵌套的视觉 Token 集合（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。\n为 LMM 带来了几个独特的优势：\n显式粒度控制 (Explicit Granularity Control)： 推理时可以根据任务复杂度或计算预算，动态调整代表图像的 Token 数量。例如，简单场景用少量 Token，复杂场景用多量 Token。\n数据集粒度分析框架： 研究发现 COCO 风格的基准测试仅需约 9 个视觉 Token 即可达到与使用全部 576 个 Token 相当的准确率。\n性能与效率的最佳权衡： 揭示了当前固定尺度表示与“神谕（Oracle）”上限（即针对每个样本自动选择最佳尺度）之间存在巨大差距。\n2. M3: Matryoshka Multimodal Models 本节详细介绍如何构建和训练具有“套娃”结构的视觉 Token 序列。\n2.1 嵌套视觉表示的设计 (Nested Visual Representation) M³ 的核心目标是学习一组嵌套的视觉 Token 集合 $$ \\mathcal{V}^{(1)} \\subset \\mathcal{V}^{(2)} \\subset \\cdots \\subset \\mathcal{V}^{(S)} $$ 并满足 $$ |\\mathcal{V}^{(1)}| \u003c |\\mathcal{V}^{(2)}| \u003c \\cdots \u003c |\\mathcal{V}^{(S)}| $$\n与传统的 Matryoshka Representation Learning (MRL) 不同（MRL 侧重于特征维度的嵌套），M³ 侧重于 Token 序列长度维度 的嵌套。\n具体的池化层次结构 (Pooling Hierarchy)：\n模型采用预训练的视觉编码器（如 CLIP-ViT-L-336）将输入图像 $I$ 投影为一个二维视觉 Token 网格： $$ \\mathbf{X}^{(0)} = f_{\\text{vision}}(I) \\in \\mathbb{R}^{H \\times W \\times d} $$ 其中 $H=W=24$，因此初始 Token 数为 $24 \\times 24 = 576$。\n基础分辨率： 初始输入为 $$ |\\mathcal{V}^{(0)}| = 576 $$ 个 Token。\n多尺度下采样： 为了构建嵌套结构且不引入新的参数，模型在原始视觉 Token 上序列化地应用 平均池化 (Average Pooling)：\n应用 $2 \\times 2$ 的平均池化（stride = 2）： $$ \\mathbf{X}^{(1)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(0)}) \\Rightarrow |\\mathcal{V}^{(1)}| = 12 \\times 12 = 144 $$\n再次应用 $2 \\times 2$ 池化： $$ \\mathbf{X}^{(2)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(1)}) \\Rightarrow |\\mathcal{V}^{(2)}| = 6 \\times 6 = 36 $$\n再次应用 $2 \\times 2$ 池化： $$ \\mathbf{X}^{(3)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(2)}) \\Rightarrow |\\mathcal{V}^{(3)}| = 3 \\times 3 = 9 $$\n最后应用全局平均池化： $$ \\mathbf{X}^{(4)} = \\text{AvgPool}_{3 \\times 3}(\\mathbf{X}^{(3)}) \\Rightarrow |\\mathcal{V}^{(4)}| = 1 $$\n最终形成的 5 个 Token 尺度为： $$ |\\mathcal{V}| \\in {576,\\ 144,\\ 36,\\ 9,\\ 1} $$\n这种方法不仅保留了空间结构，还确保了粗粒度 Token 直接由细粒度 Token 计算而来，实现了真正的“嵌套”。\nRefer to Figure 3: Architecture of M³. CLIP 特征被表示为多组由粗到精的 Token。\n2.2 训练目标 (Training Objective) M³ 的训练通过在每个尺度 $s$ 上平均自回归下一个 Token 预测损失（next token prediction loss）来实现。\n对于特定尺度 $s$，给定视觉表示 $\\mathcal{V}^{(s)}$ 和文本问题 $Q$，模型最大化生成正确答案 $A = {a_1, \\dots, a_T}$ 的似然函数： $$ \\log p(A \\mid Q, \\mathcal{V}^{(s)}; \\theta) = \\sum_{t=1}^{T} \\log p(a_t \\mid a_{",
-  "wordCount" : "682",
+  "articleBody": "\nConference: ICLR'25\nGithub: https://github.com/mu-cai/matryoshka-mm\n1. Introduction Large Multimodal Models (LMMs) such as LLaVA have shown strong performance in visual-linguistic reasoning. These models first embed images into a fixed large number of visual tokens and then feed them into a Large Language Model (LLM). However, this design causes an excessive number of tokens for dense visual scenarios such as high-resolution images and videos, leading to great inefficiency.\nWhile token pruning and merging methods exist, they produce a single-length output for each image and cannot afford flexibility in trading off information density v.s. efficiency. 受到俄罗斯套娃（Matryoshka Dolls）概念的启发，本文提出 Matryoshka Multimodal Models (M³)。该模型学习将视觉内容表示为嵌套的视觉 Token 集合（nested sets of visual tokens），从而捕捉从粗糙到精细（coarse-to-fine）的多尺度粒度信息。\n为 LMM 带来了几个独特的优势：\n显式粒度控制 (Explicit Granularity Control)： 推理时可以根据任务复杂度或计算预算，动态调整代表图像的 Token 数量。例如，简单场景用少量 Token，复杂场景用多量 Token。\n数据集粒度分析框架： 研究发现 COCO 风格的基准测试仅需约 9 个视觉 Token 即可达到与使用全部 576 个 Token 相当的准确率。\n性能与效率的最佳权衡： 揭示了当前固定尺度表示与“神谕（Oracle）”上限（即针对每个样本自动选择最佳尺度）之间存在巨大差距。\n2. M3: Matryoshka Multimodal Models 本节详细介绍如何构建和训练具有“套娃”结构的视觉 Token 序列。\n2.1 嵌套视觉表示的设计 (Nested Visual Representation) M³ 的核心目标是学习一组嵌套的视觉 Token 集合 $$\r\\mathcal{V}^{(1)} \\subset \\mathcal{V}^{(2)} \\subset \\cdots \\subset \\mathcal{V}^{(S)}\r$$ 并满足 $$\r|\\mathcal{V}^{(1)}| \u003c |\\mathcal{V}^{(2)}| \u003c \\cdots \u003c |\\mathcal{V}^{(S)}|\r$$与传统的 Matryoshka Representation Learning (MRL) 不同（MRL 侧重于特征维度的嵌套），M³ 侧重于 Token 序列长度维度 的嵌套。\n具体的池化层次结构 (Pooling Hierarchy)：\n模型采用预训练的视觉编码器（如 CLIP-ViT-L-336）将输入图像 $I$ 投影为一个二维视觉 Token 网格： $$\r\\mathbf{X}^{(0)} = f_{\\text{vision}}(I) \\in \\mathbb{R}^{H \\times W \\times d}\r$$ 其中 $H=W=24$，因此初始 Token 数为 $24 \\times 24 = 576$。\n基础分辨率： 初始输入为 $$\r|\\mathcal{V}^{(0)}| = 576\r$$ 个 Token。\n多尺度下采样： 为了构建嵌套结构且不引入新的参数，模型在原始视觉 Token 上序列化地应用 平均池化 (Average Pooling)：\n应用 $2 \\times 2$ 的平均池化（stride = 2）： $$\r\\mathbf{X}^{(1)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(0)}) \\Rightarrow |\\mathcal{V}^{(1)}| = 12 \\times 12 = 144\r$$ 再次应用 $2 \\times 2$ 池化： $$\r\\mathbf{X}^{(2)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(1)}) \\Rightarrow |\\mathcal{V}^{(2)}| = 6 \\times 6 = 36\r$$ 再次应用 $2 \\times 2$ 池化： $$\r\\mathbf{X}^{(3)} = \\text{AvgPool}_{2 \\times 2}(\\mathbf{X}^{(2)}) \\Rightarrow |\\mathcal{V}^{(3)}| = 3 \\times 3 = 9\r$$ 最后应用全局平均池化： $$\r\\mathbf{X}^{(4)} = \\text{AvgPool}_{3 \\times 3}(\\mathbf{X}^{(3)}) \\Rightarrow |\\mathcal{V}^{(4)}| = 1\r$$ 最终形成的 5 个 Token 尺度为： $$\r|\\mathcal{V}| \\in {576,\\ 144,\\ 36,\\ 9,\\ 1}\r$$这种方法不仅保留了空间结构，还确保了粗粒度 Token 直接由细粒度 Token 计算而来，实现了真正的“嵌套”。\nRefer to Figure 3: Architecture of M³. CLIP 特征被表示为多组由粗到精的 Token。\n2.2 训练目标 (Training Objective) M³ 的训练通过在每个尺度 $s$ 上平均自回归下一个 Token 预测损失（next token prediction loss）来实现。\n对于特定尺度 $s$，给定视觉表示 $\\mathcal{V}^{(s)}$ 和文本问题 $Q$，模型最大化生成正确答案 $A = {a_1, \\dots, a_T}$ 的似然函数： $$\r\\log p(A \\mid Q, \\mathcal{V}^{(s)}; \\theta)\r= \\sum_{t=1}^{T} \\log p(a_t \\mid a_{\\lt t}, Q, \\mathcal{V}^{(s)}; \\theta) $$ 其中 $\\theta$ 表示模型的所有可训练参数（包括视觉编码器和 LLM）。\n最终的总损失函数定义为所有 $S=5$ 个尺度的平均负对数似然：\n$$\r\\mathcal{L}\r= \\frac{1}{S} \\sum_{s=1}^{S}\r\\left(- \\sum_{t=1}^{T}\r\\log p(a_t \\mid a_{\\lt t}, Q, \\mathcal{V}^{(s)}; \\theta) \\right)\r$$通过这一目标函数，M³ 能够在同一套权重下，学习让 LLM 同时适应从极简（$1$ token）到极细（$576$ tokens）的各种视觉输入。\n3. Experiments 3.1 Experiment Settings 模型基座： 使用 LLaVA-1.5 和 LLaVA-NeXT 作为基础，LLM 骨干网络均为 Vicuna-7B。\n训练细节：\nLLM 学习率：$\\eta_{\\text{LLM}} = 2 \\times 10^{-5}$ 视觉编码器学习率：$\\eta_{\\text{vision}} = 2 \\times 10^{-6}$ 硬件： 在 8 张 NVIDIA H100 GPU 上训练 1 个 epoch。\n初始化： 从预训练好的 LLaVA 权重初始化，效果显著优于从零训练。\n评价指标：\n图像理解： POPE, GQA, MMBench, VizWiz, SEEDBench, ScienceQA, MMMU OCR： DocVQA, ChartQA, AI2D, TextVQA 视频理解：\n开放式：MSVD-QA, MSRVTT-QA, ActivityNet-QA 多选题：NEXT-QA, IntentQA, EgoSchema 3.2 Image Understanding 在图像理解任务中，LLaVA-1.5-M³ 展示了极强的灵活性和性能：\n极简 Token 的强大性能： 在 MMBench 上，仅使用 $$\r|\\mathcal{V}| = 9\r$$ 个 Token 的 LLaVA-1.5-M³ 即超过使用 $256$ Token 的 Qwen-VL-Chat；甚至在 $$\r|\\mathcal{V}| = 1\r$$ 时也能达到相当性能。\n全尺度覆盖： 如 Table 1 所示，在所有测试尺度上，M³ 均优于 InstructBLIP。\n3.3 Video Understanding 对于视频任务，Token 数量通常是效率瓶颈。M³ 能显著减少视频帧的 Token 需求：\n在多个视频 QA 基准测试中，使用较少 Token 的 M³ 达到了与全量模型相当的准确率。\n在相同 Token 预算 $B$ 下： $$\r\\text{frames} \\propto \\frac{B}{|\\mathcal{V}_{\\text{per-frame}}|}\r$$ 例如：\n$1$ token / frame $\\Rightarrow 2880$ frames $576$ tokens / frame $\\Rightarrow 5$ frames 极大提升了长视频理解能力。\n3.4 In-depth Analysis 与启发式采样（Heuristics）对比： M³ 显著优于测试时直接进行平均池化、空间采样（Spatial Sampling）或序列采样（Sequential Sampling）。当 Token 数减少时，M³ 的性能退化非常缓慢。\n上限 (Oracle Performance)： 定义 Oracle 为： $$\rs^\\star = \\arg\\min_s {|\\mathcal{V}^{(s)}| \\mid \\text{answer correct}}\r$$ 惊人的发现： Oracle 模型平均仅使用 $$\r\\mathbb{E}[|\\mathcal{V}|] = 8.9\r$$ 个 Token，其性能比 $576$ Token 的 LLaVA-NeXT 高 8 个百分点。\n零样本泛化 (Zero-shot generalization)： 训练于 $24 \\times 24$ 网格，推理扩展至 $48 \\times 48$ 网格： $$\r\\mathbf{X} \\in \\mathbb{R}^{48 \\times 48 \\times d}\r$$ OCR 性能提升： TextVQA、ChartQA、DocVQA 分别提升 $+2.12,\\ +1.80,\\ +4.11$。\n3.5 Ablation Studies 消融实验验证了：\n训练尺度的影响： 联合训练所有尺度 $$\r{\\mathcal{V}^{(s)}}_{s=1}^{S}\r$$ 优于仅训练特定尺度（SS）。\n池化策略： 空间平均池化保留二维位置先验 $$\r(i,j) \\in \\mathbb{Z}^2\r$$ 显著优于序列重排方案。\n4. Conclusion and Future Work 我们提出了 Matryoshka Multimodal Models (M³)，学习将视觉内容表示为嵌套的视觉 Token 集合，实现推理时对视觉粒度的显式控制。\n核心贡献总结：\n效率提升： 通过减少 Token 数 $|\\mathcal{V}|$，显著降低 FLOPs 与 KV-cache 内存开销。\n复杂度度量： M³ 可作为评估数据集视觉复杂度的框架： COCO 类自然场景 $\\Rightarrow |\\mathcal{V}| \\approx 9$ OCR / 文档任务 $\\Rightarrow |\\mathcal{V}| \\in [144, 576]$\n揭示瓶颈： Oracle 上限与固定尺度模型之间存在巨大性能鸿沟。\n未来工作：\n自动尺度预测器： 学习函数 $$\rg(I, Q) \\rightarrow s^\\star\r$$ 自动选择最优 Token 尺度。\n多模态扩展： 将嵌套思想推广至纯文本 LLM 的长上下文建模与其他高密度感知任务。\n",
+  "wordCount" : "681",
   "inLanguage": "zh-cn",
   "datePublished": "2026-01-30T00:00:00Z",
   "dateModified": "2026-01-30T00:00:00Z",
@@ -264,28 +254,31 @@ While token pruning and merging methods exist, they produce a single-length outp
 <p>本节详细介绍如何构建和训练具有“套娃”结构的视觉 Token 序列。</p>
 <h3 id="21-嵌套视觉表示的设计-nested-visual-representation">2.1 嵌套视觉表示的设计 (Nested Visual Representation)<a hidden class="anchor" aria-hidden="true" href="#21-嵌套视觉表示的设计-nested-visual-representation">#</a></h3>
 <p>M³ 的核心目标是学习一组<strong>嵌套的视觉 Token 集合</strong>
+</p>
 $$
 \mathcal{V}^{(1)} \subset \mathcal{V}^{(2)} \subset \cdots \subset \mathcal{V}^{(S)}
-$$
+$$<p>
 并满足
+</p>
 $$
-|\mathcal{V}^{(1)}| &lt; |\mathcal{V}^{(2)}| &lt; \cdots &lt; |\mathcal{V}^{(S)}|
-$$</p>
-<p>与传统的 Matryoshka Representation Learning (MRL) 不同（MRL 侧重于特征维度的嵌套），M³ 侧重于 <strong>Token 序列长度维度</strong> 的嵌套。</p>
+|\mathcal{V}^{(1)}| < |\mathcal{V}^{(2)}| < \cdots < |\mathcal{V}^{(S)}|
+$$<p>与传统的 Matryoshka Representation Learning (MRL) 不同（MRL 侧重于特征维度的嵌套），M³ 侧重于 <strong>Token 序列长度维度</strong> 的嵌套。</p>
 <hr>
 <p><strong>具体的池化层次结构 (Pooling Hierarchy)：</strong></p>
 <p>模型采用预训练的视觉编码器（如 CLIP-ViT-L-336）将输入图像 $I$ 投影为一个二维视觉 Token 网格：
+</p>
 $$
 \mathbf{X}^{(0)} = f_{\text{vision}}(I) \in \mathbb{R}^{H \times W \times d}
-$$
+$$<p>
 其中 $H=W=24$，因此初始 Token 数为 $24 \times 24 = 576$。</p>
 <ol>
 <li>
 <p><strong>基础分辨率：</strong>
 初始输入为
+</p>
 $$
-|\mathcal{V}^{(0)}| = 576
-$$
+   |\mathcal{V}^{(0)}| = 576
+   $$<p>
 个 Token。</p>
 </li>
 <li>
@@ -296,53 +289,53 @@ $$
 <ul>
 <li>
 <p>应用 $2 \times 2$ 的平均池化（stride = 2）：
+</p>
 $$
-\mathbf{X}^{(1)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(0)}) \Rightarrow |\mathcal{V}^{(1)}| = 12 \times 12 = 144
-$$</p>
-</li>
+  \mathbf{X}^{(1)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(0)}) \Rightarrow |\mathcal{V}^{(1)}| = 12 \times 12 = 144
+  $$</li>
 <li>
 <p>再次应用 $2 \times 2$ 池化：
+</p>
 $$
-\mathbf{X}^{(2)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(1)}) \Rightarrow |\mathcal{V}^{(2)}| = 6 \times 6 = 36
-$$</p>
-</li>
+  \mathbf{X}^{(2)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(1)}) \Rightarrow |\mathcal{V}^{(2)}| = 6 \times 6 = 36
+  $$</li>
 <li>
 <p>再次应用 $2 \times 2$ 池化：
+</p>
 $$
-\mathbf{X}^{(3)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(2)}) \Rightarrow |\mathcal{V}^{(3)}| = 3 \times 3 = 9
-$$</p>
-</li>
+  \mathbf{X}^{(3)} = \text{AvgPool}_{2 \times 2}(\mathbf{X}^{(2)}) \Rightarrow |\mathcal{V}^{(3)}| = 3 \times 3 = 9
+  $$</li>
 <li>
 <p>最后应用全局平均池化：
+</p>
 $$
-\mathbf{X}^{(4)} = \text{AvgPool}_{3 \times 3}(\mathbf{X}^{(3)}) \Rightarrow |\mathcal{V}^{(4)}| = 1
-$$</p>
-</li>
+  \mathbf{X}^{(4)} = \text{AvgPool}_{3 \times 3}(\mathbf{X}^{(3)}) \Rightarrow |\mathcal{V}^{(4)}| = 1
+  $$</li>
 </ul>
 <p>最终形成的 5 个 Token 尺度为：
+</p>
 $$
 |\mathcal{V}| \in {576,\ 144,\ 36,\ 9,\ 1}
-$$</p>
-<p>这种方法不仅保留了空间结构，还确保了粗粒度 Token 直接由细粒度 Token 计算而来，实现了真正的“嵌套”。</p>
+$$<p>这种方法不仅保留了空间结构，还确保了粗粒度 Token 直接由细粒度 Token 计算而来，实现了真正的“嵌套”。</p>
 <p><em>Refer to Figure 3: Architecture of M³. CLIP 特征被表示为多组由粗到精的 Token。</em></p>
 <hr>
 <h3 id="22-训练目标-training-objective">2.2 训练目标 (Training Objective)<a hidden class="anchor" aria-hidden="true" href="#22-训练目标-training-objective">#</a></h3>
 <p>M³ 的训练通过在每个尺度 $s$ 上平均自回归下一个 Token 预测损失（next token prediction loss）来实现。</p>
 <p>对于特定尺度 $s$，给定视觉表示 $\mathcal{V}^{(s)}$ 和文本问题 $Q$，模型最大化生成正确答案 $A = {a_1, \dots, a_T}$ 的似然函数：
+</p>
 $$
 \log p(A \mid Q, \mathcal{V}^{(s)}; \theta)
-= \sum_{t=1}^{T} \log p(a_t \mid a_{&lt;t}, Q, \mathcal{V}^{(s)}; \theta)
-$$
+= \sum_{t=1}^{T} \log p(a_t \mid a_{\lt t}, Q, \mathcal{V}^{(s)}; \theta)
+$$<p>
 其中 $\theta$ 表示模型的所有可训练参数（包括视觉编码器和 LLM）。</p>
 <p>最终的总损失函数定义为所有 $S=5$ 个尺度的平均负对数似然：</p>
-<p>$$
+$$
 \mathcal{L}
 = \frac{1}{S} \sum_{s=1}^{S}
 \left(- \sum_{t=1}^{T}
-\log p(a_t \mid a_{&lt;t}, Q, \mathcal{V}^{(s)}; \theta)
+\log p(a_t \mid a_{\lt t}, Q, \mathcal{V}^{(s)}; \theta)
 \right)
-$$</p>
-<p>通过这一目标函数，M³ 能够在<strong>同一套权重</strong>下，学习让 LLM 同时适应从极简（$1$ token）到极细（$576$ tokens）的各种视觉输入。</p>
+$$<p>通过这一目标函数，M³ 能够在<strong>同一套权重</strong>下，学习让 LLM 同时适应从极简（$1$ token）到极细（$576$ tokens）的各种视觉输入。</p>
 <hr>
 <h2 id="3-experiments">3. Experiments<a hidden class="anchor" aria-hidden="true" href="#3-experiments">#</a></h2>
 <h3 id="31-experiment-settings">3.1 Experiment Settings<a hidden class="anchor" aria-hidden="true" href="#31-experiment-settings">#</a></h3>
@@ -387,13 +380,15 @@ $$</p>
 <li>
 <p><strong>极简 Token 的强大性能：</strong>
 在 MMBench 上，仅使用
+</p>
 $$
-|\mathcal{V}| = 9
-$$
+  |\mathcal{V}| = 9
+  $$<p>
 个 Token 的 LLaVA-1.5-M³ 即超过使用 $256$ Token 的 Qwen-VL-Chat；甚至在
+</p>
 $$
-|\mathcal{V}| = 1
-$$
+  |\mathcal{V}| = 1
+  $$<p>
 时也能达到相当性能。</p>
 </li>
 <li>
@@ -411,9 +406,10 @@ $$
 </li>
 <li>
 <p>在相同 Token 预算 $B$ 下：
+</p>
 $$
-\text{frames} \propto \frac{B}{|\mathcal{V}_{\text{per-frame}}|}
-$$
+  \text{frames} \propto \frac{B}{|\mathcal{V}_{\text{per-frame}}|}
+  $$<p>
 例如：</p>
 </li>
 </ul>
@@ -435,25 +431,26 @@ M³ 显著优于测试时直接进行平均池化、空间采样（Spatial Sampl
 <li>
 <p><strong>上限 (Oracle Performance)：</strong>
 定义 Oracle 为：
+</p>
 $$
-s^\star = \arg\min_s {|\mathcal{V}^{(s)}| \mid \text{answer correct}}
-$$</p>
-</li>
+  s^\star = \arg\min_s {|\mathcal{V}^{(s)}| \mid \text{answer correct}}
+  $$</li>
 <li>
 <p><strong>惊人的发现：</strong>
 Oracle 模型平均仅使用
+</p>
 $$
-\mathbb{E}[|\mathcal{V}|] = 8.9
-$$
+  \mathbb{E}[|\mathcal{V}|] = 8.9
+  $$<p>
 个 Token，其性能比 $576$ Token 的 LLaVA-NeXT 高 <strong>8 个百分点</strong>。</p>
 </li>
 <li>
 <p><strong>零样本泛化 (Zero-shot generalization)：</strong>
 训练于 $24 \times 24$ 网格，推理扩展至 $48 \times 48$ 网格：
+</p>
 $$
-\mathbf{X} \in \mathbb{R}^{48 \times 48 \times d}
-$$</p>
-</li>
+  \mathbf{X} \in \mathbb{R}^{48 \times 48 \times d}
+  $$</li>
 <li>
 <p><strong>OCR 性能提升：</strong>
 TextVQA、ChartQA、DocVQA 分别提升 $+2.12,\ +1.80,\ +4.11$。</p>
@@ -468,17 +465,19 @@ TextVQA、ChartQA、DocVQA 分别提升 $+2.12,\ +1.80,\ +4.11$。</p>
 <li>
 <p><strong>训练尺度的影响：</strong>
 联合训练所有尺度
+</p>
 $$
-{\mathcal{V}^{(s)}}_{s=1}^{S}
-$$
+   {\mathcal{V}^{(s)}}_{s=1}^{S}
+   $$<p>
 优于仅训练特定尺度（SS）。</p>
 </li>
 <li>
 <p><strong>池化策略：</strong>
 空间平均池化保留二维位置先验
+</p>
 $$
-(i,j) \in \mathbb{Z}^2
-$$
+   (i,j) \in \mathbb{Z}^2
+   $$<p>
 显著优于序列重排方案。</p>
 </li>
 </ol>
@@ -506,9 +505,10 @@ Oracle 上限与固定尺度模型之间存在巨大性能鸿沟。</p>
 <ol>
 <li>
 <p><strong>自动尺度预测器：</strong> 学习函数
+</p>
 $$
-g(I, Q) \rightarrow s^\star
-$$
+   g(I, Q) \rightarrow s^\star
+   $$<p>
 自动选择最优 Token 尺度。</p>
 </li>
 <li>

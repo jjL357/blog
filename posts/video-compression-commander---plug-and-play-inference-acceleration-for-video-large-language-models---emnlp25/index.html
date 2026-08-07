@@ -90,40 +90,30 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
         document.querySelector("html").dataset.theme = 'light';
     }
 
-</script><script type="text/javascript"
-        async
-        src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
-MathJax.Hub.Config({
-  tex2jax: {
-    inlineMath: [['$','$'], ['\\(','\\)']],
-    displayMath: [['$$','$$'], ['\[\[','\]\]']],
-    processEscapes: true,
-    processEnvironments: true,
-    skipTags: ['script', 'noscript', 'style', 'textarea', 'pre'],
-    TeX: { equationNumbers: { autoNumber: "AMS" },
-         extensions: ["AMSmath.js", "AMSsymbols.js"] }
-  }
-});
-
-MathJax.Hub.Queue(function() {
-    
-    
-    
-    var all = MathJax.Hub.getAllJax(), i;
-    for(i = 0; i < all.length; i += 1) {
-        all[i].SourceElement().parentNode.className += ' has-jax';
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
     }
-});
+  };
 </script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
 
 <style>
-code.has-jax {
-    font: inherit;
-    font-size: 100%;
-    background: inherit;
-    border: inherit;
-    color: #515151;
-}
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/video-compression-commander---plug-and-play-inference-acceleration-for-video-large-language-models---emnlp25/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
@@ -202,8 +192,8 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
   "keywords": [
     "MLLM", "Vision Token Pruning", "Paper Note"
   ],
-  "articleBody": "\nConference: EMNLP'25\nGithub: https://github.com/xuyang-liu16/VidCom2\n1. Introduction 视频大语言模型（VideoLLMs）在视频理解任务（如视频问答、视频推理、时序理解等）上表现出色，但其推理效率受到视觉 token 数量过多的严重制约。具体而言，当前主流 VideoLLM 通常将视频拆解为多帧图像，每一帧再由 ViT 等视觉编码器转化为大量 patch-level tokens，这些视觉 tokens 会与文本 tokens 一同送入 LLM 进行跨模态建模。\n由于 Transformer 自注意力的复杂度为 $O(N^2)$，当视频帧数 $T$ 和每帧 token 数 $M$ 较大时，总 token 数 $N = T \\times M$ 会迅速膨胀，导致推理延迟和显存消耗急剧上升。这一问题在长视频理解和高分辨率视频场景中尤为突出。\n作者系统性地分析了现有 VideoLLM token compression 方法，发现其普遍存在两个关键问题：\n忽视帧间差异性（Frame-level Distinctiveness） 多数方法对所有帧采用统一的压缩比例，默认每一帧“信息密度相同”，从而容易在关键帧上丢失重要视觉线索。\n工程实现受限（Implementation Constraints） 一些方法依赖特定模型结构（如 ViT 的 [CLS] token）或显式 attention 权重，导致难以兼容现代视觉编码器（如 SigLIP）或高效注意力算子（如 FlashAttention）。\n为此，作者总结出 三条 VideoLLM token compression 的设计原则，并提出一种**即插即用（plug-and-play）**的推理加速框架 Video Compression Commander（VidCom2）。\nVidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（uniqueness）”，并据此动态调整不同帧的压缩强度，从而在保证信息保真的前提下最大化冗余削减。\n大量实验表明，VidCom2 在多种 VideoLLM 架构和 benchmark 上均取得了更优的性能-效率权衡。\n在仅保留 25% 视觉 tokens 的情况下，VidCom2 在 LLaVA-OneVision 上仍能保持 99.6% 的原始性能，同时将 LLM 生成延迟降低 70.8%，显示出极高的性价比。\n此外，VidCom2 提出的 Frame Compression Adjustment（帧级压缩调度） 机制具备良好的通用性，可作为一个外部模块，与现有 token compression 方法叠加使用，进一步提升整体性能。\n2. Motivation To mitigate this computational burden, researchers have turned to token compression methods (Chen et al., 2024a; Yang et al., 2025), considering the inherent visual redundancy and aiming to minimize redundant visual information.\n为缓解 VideoLLM 的计算开销，研究者提出了多种 token compression 方法，基于一个核心观察：视频中存在大量时序与空间冗余，并非所有视觉 tokens 都同等重要。\nThese approaches can be categorized as pre-LLM (Zhang et al., 2024b) or intra-LLM (Chen et al., 2024a) methods, based on whether compression occurs before or within the LLM.\n现有方法大致可分为两类：\nPre-LLM compression：在视觉 encoder 输出后、送入 LLM 前进行 token 压缩； Intra-LLM compression：在 LLM 内部（如特定层）动态丢弃或合并 tokens。 Most of these methods are training-free, enabling plug-and-play inference acceleration for existing VideoLLMs.\n多数方法无需额外训练，具备即插即用特性，理论上适合部署到已有 VideoLLM 系统中。\nHowever, despite these efforts, existing token compression methods suffer from two critical issues:\n(I) Design Myopia In human video perception we naturally focus on distinctive frames (e.g., those with significant spatio-temporal changes) while ignoring repetitive and redundant visual information (Ma et al., 2025).\n人类在观看视频时，天然会聚焦于发生显著变化的关键帧，而对高度重复的画面自动忽略。\nBy contrast, most existing token compression methods apply a uniform compression strategy across all frames, treating each one as equally informative.\n然而，大多数方法对所有帧使用统一压缩比例，默认每一帧的信息价值相同。\nEven recent VideoLLM-specific method DyCoke (Tao et al., 2025) exhibits this limitation by grouping every four consecutive frames into a fixed window and compressing them identically.\n即便是针对 VideoLLM 设计的 DyCoke，也采用固定窗口（如每 4 帧）进行一致压缩，忽略了帧间差异。\nFigure 1 further illustrates the critical nature of this issue: removing 24 redundant frames does not affect the accurate response of the LLaVA-OneVision, whereas dropping just 8 unique frames causes it to fail.\nFigure 1 直观展示了这一问题：删除 24 个冗余帧对模型预测几乎无影响，而仅删除 8 个关键帧就会导致模型失败，尽管数量更少。\nThis contrast shows that uniform compression risks discarding critical information in unique frames.\n这表明均匀压缩极易误伤关键信息帧。\nNotably, Table 2 indicates that some methods even underperform random token dropping.\nTable 2 中甚至显示，部分方法的效果不如随机丢 token，说明其压缩策略存在明显缺陷。\n(II) Implementation Constraints Beyond design limitations, existing methods face practical constraints.\n除设计层面问题外，现有方法在工程实现上也存在严重限制。\nSome token compression works rely on [CLS] attention weights in ViT, yet modern VideoLLMs adopt SigLIP without [CLS] token.\n一些方法依赖 ViT 的 [CLS] token attention，但现代 VideoLLM 通常采用 SigLIP 等无 [CLS] 架构，导致方法失效。\nMeanwhile, certain methods require explicit attention weights in specific LLM layers, making them incompatible with efficient attention operators (Dao et al., 2022).\n另一些方法需要访问显式 attention weights，无法与 FlashAttention 等高效算子兼容，反而增加显存峰值（Table 4）。\nWe identify three key principles:\nModel Adaptability Frame Uniqueness Operator Compatibility VidCom2 的设计正是围绕这三条原则展开。\n3. Method Video Compression Commander VidCom2 是一个训练无关、模型无关、算子友好的视频 token 压缩框架。\nFigure 2 展示了 VidCom2 的整体流程，其核心由两个阶段构成：\nStage 1: Frame Compression Adjustment（帧级压缩调度） Stage 2: Adaptive Token Compression（自适应 token 压缩） 该两阶段设计体现了 VidCom2 的核心思想： 先在“帧级”决定资源分配，再在“token 级”执行精细压缩。\n3.3 Stage 1: Frame Compression Adjustment 设计目标 该阶段的目标是： 根据每一帧在整个视频中的独特性，动态调整其 token 保留比例。\n数学建模 设视频共有 $T$ 帧，每帧包含 $M$ 个视觉 tokens：\n$$ x^v_{t,m} \\in \\mathbb{R}^{D’} $$\n全局视频表示 通过对所有帧、所有 token 求平均，得到视频级表示：\n$$ g_v = \\frac{1}{T \\cdot M} \\sum_{t=1}^{T} \\sum_{m=1}^{M} x^v_{t,m} $$\n该向量 $g_v$ 作为整个视频的粗粒度语义中心。\nToken 级视频相似度 计算每个 token 与视频全局表示的余弦相似度：\n$$ s^{video}{t,m} = \\frac{x^v{t,m} \\cdot g_v}{|x^v_{t,m}| |g_v|} $$\n相似度越低，说明该 token 与“视频整体”差异越大，信息越独特。\n定义 token 的视频级独特性：\n$$ u^{video}{t,m} = - s^{video}{t,m} $$\n帧级独特性评分 对每一帧的 token 独特性求平均：\n$$ u_t = \\frac{1}{M} \\sum_{m=1}^{M} u^{video}_{t,m} $$\n$u_t$ 越大，说明该帧包含的 token 越“非冗余”。\nFigure 3 展示了 $u_t$ 在真实视频中的分布情况，可有效区分关键帧与冗余帧。\n稳定化与归一化 为避免数值不稳定，作者进行 softmax 调度：\n$$ \\tilde{u}_t = \\frac{u_t - \\max(u_t)}{\\tau}, \\quad \\tau = 0.01 $$\n$$ \\sigma_t = \\frac{\\exp(\\tilde{u}t)}{\\sum{l=1}^{T} \\exp(\\tilde{u}_l) + \\epsilon} $$\n帧级保留比例调整 给定全局平均保留率 $R$，每帧的实际保留率为：\n$$ r_t = R \\times \\left(1 + \\sigma_t - \\frac{1}{T}\\right) $$\n该公式保证：\n平均保留率仍为 $R$ 独特帧 $r_t \u003e R$ 冗余帧 $r_t \u003c R$ 3.4 Stage 2: Adaptive Token Compression 设计目标 在已确定每帧 token 预算 $r_t \\times M$ 后，选择最有信息量的 tokens。\nToken 独特性建模 帧级表示 $$ g_{f,t} = \\frac{1}{M} \\sum_{m=1}^{M} x^v_{t,m} $$\n帧内相似度 $$ s^{frame}{t,m} = \\frac{x^v{t,m} \\cdot g_{f,t}}{|x^v_{t,m}| |g_{f,t}|} $$\n定义帧内独特性：\n$$ u^{frame}{t,m} = - s^{frame}{t,m} $$\n综合独特性评分 结合帧内与视频级信息：\n$$ u_{t,m} = u^{frame}{t,m} + u^{video}{t,m} $$\n该设计使 token 同时满足：\n在当前帧中是“非中心”的 在整个视频中是“非冗余”的 Top-K 压缩 $$ \\hat{X}^v_t = \\text{TopK}(X^v_t, {u_{t,m}}, r_t \\times M) $$\n最终得到压缩后的视频 token 序列。\n完整算法流程见 Appendix E。\n4. Evaluation 4.1 Experimental Setting 实验在多种 VideoLLM 架构上进行，包括 LLaVA-OneVision 等主流模型，覆盖多种视频理解 benchmark（如视频问答、推理任务等）。\nVidCom2 作为 inference-time 插件，无需微调模型参数。\n4.2 Main Comparisons 主要对比方法包括：\nRandom token dropping Uniform token compression DyCoke 其他 pre-LLM / intra-LLM 方法（Table 1） 结果显示：\n在相同 token 保留率下，VidCom2 性能最高 在相同性能下，VidCom2 延迟最低 Table 2 表明，VidCom2 在 25% tokens 下仍保持 99.6% 精度。\nTable 4 显示，VidCom2 显著降低 LLM 生成延迟（70.8%），且显存占用低于部分压缩方法。\n4.3 Ablation Study and Analysis 消融实验验证了：\nFrame Compression Adjustment 的必要性 双重独特性（frame + video）优于单一标准 VidCom2 可与其他方法叠加，进一步提升性能 5. Conclusion 本文系统分析了 VideoLLM token compression 的设计与工程瓶颈，提出三条设计原则，并据此提出 VidCom2 框架。\nVidCom2 通过帧级调度 + token 级选择，在不牺牲模型性能的前提下显著降低推理成本。\n尽管当前未在 72B 级模型上评估，但作者合理推断该方法在大模型场景下收益更大。\n未来方向包括：\n更大规模模型验证 实时流式视频理解适配 ",
-  "wordCount" : "774",
+  "articleBody": "\nConference: EMNLP'25\nGithub: https://github.com/xuyang-liu16/VidCom2\n1. Introduction 视频大语言模型（VideoLLMs）在视频理解任务（如视频问答、视频推理、时序理解等）上表现出色，但其推理效率受到视觉 token 数量过多的严重制约。具体而言，当前主流 VideoLLM 通常将视频拆解为多帧图像，每一帧再由 ViT 等视觉编码器转化为大量 patch-level tokens，这些视觉 tokens 会与文本 tokens 一同送入 LLM 进行跨模态建模。\n由于 Transformer 自注意力的复杂度为 $O(N^2)$，当视频帧数 $T$ 和每帧 token 数 $M$ 较大时，总 token 数 $N = T \\times M$ 会迅速膨胀，导致推理延迟和显存消耗急剧上升。这一问题在长视频理解和高分辨率视频场景中尤为突出。\n作者系统性地分析了现有 VideoLLM token compression 方法，发现其普遍存在两个关键问题：\n忽视帧间差异性（Frame-level Distinctiveness） 多数方法对所有帧采用统一的压缩比例，默认每一帧“信息密度相同”，从而容易在关键帧上丢失重要视觉线索。\n工程实现受限（Implementation Constraints） 一些方法依赖特定模型结构（如 ViT 的 [CLS] token）或显式 attention 权重，导致难以兼容现代视觉编码器（如 SigLIP）或高效注意力算子（如 FlashAttention）。\n为此，作者总结出 三条 VideoLLM token compression 的设计原则，并提出一种**即插即用（plug-and-play）**的推理加速框架 Video Compression Commander（VidCom2）。\nVidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（uniqueness）”，并据此动态调整不同帧的压缩强度，从而在保证信息保真的前提下最大化冗余削减。\n大量实验表明，VidCom2 在多种 VideoLLM 架构和 benchmark 上均取得了更优的性能-效率权衡。\n在仅保留 25% 视觉 tokens 的情况下，VidCom2 在 LLaVA-OneVision 上仍能保持 99.6% 的原始性能，同时将 LLM 生成延迟降低 70.8%，显示出极高的性价比。\n此外，VidCom2 提出的 Frame Compression Adjustment（帧级压缩调度） 机制具备良好的通用性，可作为一个外部模块，与现有 token compression 方法叠加使用，进一步提升整体性能。\n2. Motivation To mitigate this computational burden, researchers have turned to token compression methods (Chen et al., 2024a; Yang et al., 2025), considering the inherent visual redundancy and aiming to minimize redundant visual information.\n为缓解 VideoLLM 的计算开销，研究者提出了多种 token compression 方法，基于一个核心观察：视频中存在大量时序与空间冗余，并非所有视觉 tokens 都同等重要。\nThese approaches can be categorized as pre-LLM (Zhang et al., 2024b) or intra-LLM (Chen et al., 2024a) methods, based on whether compression occurs before or within the LLM.\n现有方法大致可分为两类：\nPre-LLM compression：在视觉 encoder 输出后、送入 LLM 前进行 token 压缩； Intra-LLM compression：在 LLM 内部（如特定层）动态丢弃或合并 tokens。 Most of these methods are training-free, enabling plug-and-play inference acceleration for existing VideoLLMs.\n多数方法无需额外训练，具备即插即用特性，理论上适合部署到已有 VideoLLM 系统中。\nHowever, despite these efforts, existing token compression methods suffer from two critical issues:\n(I) Design Myopia In human video perception we naturally focus on distinctive frames (e.g., those with significant spatio-temporal changes) while ignoring repetitive and redundant visual information (Ma et al., 2025).\n人类在观看视频时，天然会聚焦于发生显著变化的关键帧，而对高度重复的画面自动忽略。\nBy contrast, most existing token compression methods apply a uniform compression strategy across all frames, treating each one as equally informative.\n然而，大多数方法对所有帧使用统一压缩比例，默认每一帧的信息价值相同。\nEven recent VideoLLM-specific method DyCoke (Tao et al., 2025) exhibits this limitation by grouping every four consecutive frames into a fixed window and compressing them identically.\n即便是针对 VideoLLM 设计的 DyCoke，也采用固定窗口（如每 4 帧）进行一致压缩，忽略了帧间差异。\nFigure 1 further illustrates the critical nature of this issue: removing 24 redundant frames does not affect the accurate response of the LLaVA-OneVision, whereas dropping just 8 unique frames causes it to fail.\nFigure 1 直观展示了这一问题：删除 24 个冗余帧对模型预测几乎无影响，而仅删除 8 个关键帧就会导致模型失败，尽管数量更少。\nThis contrast shows that uniform compression risks discarding critical information in unique frames.\n这表明均匀压缩极易误伤关键信息帧。\nNotably, Table 2 indicates that some methods even underperform random token dropping.\nTable 2 中甚至显示，部分方法的效果不如随机丢 token，说明其压缩策略存在明显缺陷。\n(II) Implementation Constraints Beyond design limitations, existing methods face practical constraints.\n除设计层面问题外，现有方法在工程实现上也存在严重限制。\nSome token compression works rely on [CLS] attention weights in ViT, yet modern VideoLLMs adopt SigLIP without [CLS] token.\n一些方法依赖 ViT 的 [CLS] token attention，但现代 VideoLLM 通常采用 SigLIP 等无 [CLS] 架构，导致方法失效。\nMeanwhile, certain methods require explicit attention weights in specific LLM layers, making them incompatible with efficient attention operators (Dao et al., 2022).\n另一些方法需要访问显式 attention weights，无法与 FlashAttention 等高效算子兼容，反而增加显存峰值（Table 4）。\nWe identify three key principles:\nModel Adaptability Frame Uniqueness Operator Compatibility VidCom2 的设计正是围绕这三条原则展开。\n3. Method Video Compression Commander VidCom2 是一个训练无关、模型无关、算子友好的视频 token 压缩框架。\nFigure 2 展示了 VidCom2 的整体流程，其核心由两个阶段构成：\nStage 1: Frame Compression Adjustment（帧级压缩调度） Stage 2: Adaptive Token Compression（自适应 token 压缩） 该两阶段设计体现了 VidCom2 的核心思想： 先在“帧级”决定资源分配，再在“token 级”执行精细压缩。\n3.3 Stage 1: Frame Compression Adjustment 设计目标 该阶段的目标是： 根据每一帧在整个视频中的独特性，动态调整其 token 保留比例。\n数学建模 设视频共有 $T$ 帧，每帧包含 $M$ 个视觉 tokens：\n$$\rx^v_{t,m} \\in \\mathbb{R}^{D'}\r$$全局视频表示 通过对所有帧、所有 token 求平均，得到视频级表示：\n$$\rg_v = \\frac{1}{T \\cdot M} \\sum_{t=1}^{T} \\sum_{m=1}^{M} x^v_{t,m}\r$$该向量 $g_v$ 作为整个视频的粗粒度语义中心。\nToken 级视频相似度 计算每个 token 与视频全局表示的余弦相似度：\n$$\rs^{\\text{video}}_{t,m} = \\frac{x^v_{t,m} \\cdot g_v}{\\lVert x^v_{t,m}\\rVert\\,\\lVert g_v\\rVert} $$相似度越低，说明该 token 与“视频整体”差异越大，信息越独特。\n定义 token 的视频级独特性：\n$$\ru^{\\text{video}}_{t,m} = -s^{\\text{video}}_{t,m} $$帧级独特性评分 对每一帧的 token 独特性求平均：\n$$\ru_t = \\frac{1}{M} \\sum_{m=1}^{M} u^{video}_{t,m}\r$$$u_t$ 越大，说明该帧包含的 token 越“非冗余”。\nFigure 3 展示了 $u_t$ 在真实视频中的分布情况，可有效区分关键帧与冗余帧。\n稳定化与归一化 为避免数值不稳定，作者进行 softmax 调度：\n$$\r\\tilde{u}_t = \\frac{u_t - \\max(u_t)}{\\tau}, \\quad \\tau = 0.01\r$$$$\r\\sigma_t = \\frac{\\exp(\\tilde{u}_t)}{\\sum_{l=1}^{T} \\exp(\\tilde{u}_l) + \\epsilon} $$帧级保留比例调整 给定全局平均保留率 $R$，每帧的实际保留率为：\n$$\rr_t = R \\times \\left(1 + \\sigma_t - \\frac{1}{T}\\right)\r$$该公式保证：\n平均保留率仍为 $R$ 独特帧 $r_t \u003e R$ 冗余帧 $r_t \u003c R$ 3.4 Stage 2: Adaptive Token Compression 设计目标 在已确定每帧 token 预算 $r_t \\times M$ 后，选择最有信息量的 tokens。\nToken 独特性建模 帧级表示 $$\rg_{f,t} = \\frac{1}{M} \\sum_{m=1}^{M} x^v_{t,m}\r$$帧内相似度 $$\rs^{\\text{frame}}_{t,m} = \\frac{x^v_{t,m} \\cdot g_{f,t}}{\\lVert x^v_{t,m}\\rVert\\,\\lVert g_{f,t}\\rVert} $$定义帧内独特性：\n$$\ru^{\\text{frame}}_{t,m} = -s^{\\text{frame}}_{t,m} $$综合独特性评分 结合帧内与视频级信息：\n$$\ru_{t,m} = u^{\\text{frame}}_{t,m} + u^{\\text{video}}_{t,m} $$该设计使 token 同时满足：\n在当前帧中是“非中心”的 在整个视频中是“非冗余”的 Top-K 压缩 $$\r\\hat{X}^v_t = \\text{TopK}(X^v_t, {u_{t,m}}, r_t \\times M)\r$$最终得到压缩后的视频 token 序列。\n完整算法流程见 Appendix E。\n4. Evaluation 4.1 Experimental Setting 实验在多种 VideoLLM 架构上进行，包括 LLaVA-OneVision 等主流模型，覆盖多种视频理解 benchmark（如视频问答、推理任务等）。\nVidCom2 作为 inference-time 插件，无需微调模型参数。\n4.2 Main Comparisons 主要对比方法包括：\nRandom token dropping Uniform token compression DyCoke 其他 pre-LLM / intra-LLM 方法（Table 1） 结果显示：\n在相同 token 保留率下，VidCom2 性能最高 在相同性能下，VidCom2 延迟最低 Table 2 表明，VidCom2 在 25% tokens 下仍保持 99.6% 精度。\nTable 4 显示，VidCom2 显著降低 LLM 生成延迟（70.8%），且显存占用低于部分压缩方法。\n4.3 Ablation Study and Analysis 消融实验验证了：\nFrame Compression Adjustment 的必要性 双重独特性（frame + video）优于单一标准 VidCom2 可与其他方法叠加，进一步提升性能 5. Conclusion 本文系统分析了 VideoLLM token compression 的设计与工程瓶颈，提出三条设计原则，并据此提出 VidCom2 框架。\nVidCom2 通过帧级调度 + token 级选择，在不牺牲模型性能的前提下显著降低推理成本。\n尽管当前未在 72B 级模型上评估，但作者合理推断该方法在大模型场景下收益更大。\n未来方向包括：\n更大规模模型验证 实时流式视频理解适配 ",
+  "wordCount" : "761",
   "inLanguage": "zh-cn",
   "datePublished": "2026-01-22T00:00:00Z",
   "dateModified": "2026-01-22T00:00:00Z",
@@ -357,47 +347,39 @@ VidCom2 的核心思想是：量化每一帧在整个视频中的“独特性（
 <strong>根据每一帧在整个视频中的独特性，动态调整其 token 保留比例</strong>。</p>
 <h4 id="数学建模">数学建模<a hidden class="anchor" aria-hidden="true" href="#数学建模">#</a></h4>
 <p>设视频共有 $T$ 帧，每帧包含 $M$ 个视觉 tokens：</p>
-<p>$$
-x^v_{t,m} \in \mathbb{R}^{D&rsquo;}
-$$</p>
-<h5 id="全局视频表示">全局视频表示<a hidden class="anchor" aria-hidden="true" href="#全局视频表示">#</a></h5>
+$$
+x^v_{t,m} \in \mathbb{R}^{D'}
+$$<h5 id="全局视频表示">全局视频表示<a hidden class="anchor" aria-hidden="true" href="#全局视频表示">#</a></h5>
 <p>通过对所有帧、所有 token 求平均，得到视频级表示：</p>
-<p>$$
+$$
 g_v = \frac{1}{T \cdot M} \sum_{t=1}^{T} \sum_{m=1}^{M} x^v_{t,m}
-$$</p>
-<p>该向量 $g_v$ 作为整个视频的<strong>粗粒度语义中心</strong>。</p>
+$$<p>该向量 $g_v$ 作为整个视频的<strong>粗粒度语义中心</strong>。</p>
 <h5 id="token-级视频相似度">Token 级视频相似度<a hidden class="anchor" aria-hidden="true" href="#token-级视频相似度">#</a></h5>
 <p>计算每个 token 与视频全局表示的余弦相似度：</p>
-<p>$$
-s^{video}<em>{t,m} =
-\frac{x^v</em>{t,m} \cdot g_v}{|x^v_{t,m}| |g_v|}
-$$</p>
-<p>相似度越低，说明该 token 与“视频整体”差异越大，信息越独特。</p>
+$$
+s^{\text{video}}_{t,m} =
+\frac{x^v_{t,m} \cdot g_v}{\lVert x^v_{t,m}\rVert\,\lVert g_v\rVert}
+$$<p>相似度越低，说明该 token 与“视频整体”差异越大，信息越独特。</p>
 <p>定义 token 的视频级独特性：</p>
-<p>$$
-u^{video}<em>{t,m} = - s^{video}</em>{t,m}
-$$</p>
-<h5 id="帧级独特性评分">帧级独特性评分<a hidden class="anchor" aria-hidden="true" href="#帧级独特性评分">#</a></h5>
+$$
+u^{\text{video}}_{t,m} = -s^{\text{video}}_{t,m}
+$$<h5 id="帧级独特性评分">帧级独特性评分<a hidden class="anchor" aria-hidden="true" href="#帧级独特性评分">#</a></h5>
 <p>对每一帧的 token 独特性求平均：</p>
-<p>$$
+$$
 u_t = \frac{1}{M} \sum_{m=1}^{M} u^{video}_{t,m}
-$$</p>
-<p>$u_t$ 越大，说明该帧包含的 token 越“非冗余”。</p>
+$$<p>$u_t$ 越大，说明该帧包含的 token 越“非冗余”。</p>
 <p>Figure 3 展示了 $u_t$ 在真实视频中的分布情况，可有效区分关键帧与冗余帧。</p>
 <h5 id="稳定化与归一化">稳定化与归一化<a hidden class="anchor" aria-hidden="true" href="#稳定化与归一化">#</a></h5>
 <p>为避免数值不稳定，作者进行 softmax 调度：</p>
-<p>$$
+$$
 \tilde{u}_t = \frac{u_t - \max(u_t)}{\tau}, \quad \tau = 0.01
-$$</p>
-<p>$$
-\sigma_t = \frac{\exp(\tilde{u}<em>t)}{\sum</em>{l=1}^{T} \exp(\tilde{u}_l) + \epsilon}
-$$</p>
-<h5 id="帧级保留比例调整">帧级保留比例调整<a hidden class="anchor" aria-hidden="true" href="#帧级保留比例调整">#</a></h5>
+$$$$
+\sigma_t = \frac{\exp(\tilde{u}_t)}{\sum_{l=1}^{T} \exp(\tilde{u}_l) + \epsilon}
+$$<h5 id="帧级保留比例调整">帧级保留比例调整<a hidden class="anchor" aria-hidden="true" href="#帧级保留比例调整">#</a></h5>
 <p>给定全局平均保留率 $R$，每帧的实际保留率为：</p>
-<p>$$
+$$
 r_t = R \times \left(1 + \sigma_t - \frac{1}{T}\right)
-$$</p>
-<p>该公式保证：</p>
+$$<p>该公式保证：</p>
 <ul>
 <li>平均保留率仍为 $R$</li>
 <li>独特帧 $r_t &gt; R$</li>
@@ -409,33 +391,28 @@ $$</p>
 <p>在已确定每帧 token 预算 $r_t \times M$ 后，选择<strong>最有信息量的 tokens</strong>。</p>
 <h4 id="token-独特性建模">Token 独特性建模<a hidden class="anchor" aria-hidden="true" href="#token-独特性建模">#</a></h4>
 <h5 id="帧级表示">帧级表示<a hidden class="anchor" aria-hidden="true" href="#帧级表示">#</a></h5>
-<p>$$
+$$
 g_{f,t} = \frac{1}{M} \sum_{m=1}^{M} x^v_{t,m}
-$$</p>
-<h5 id="帧内相似度">帧内相似度<a hidden class="anchor" aria-hidden="true" href="#帧内相似度">#</a></h5>
-<p>$$
-s^{frame}<em>{t,m} =
-\frac{x^v</em>{t,m} \cdot g_{f,t}}{|x^v_{t,m}| |g_{f,t}|}
-$$</p>
-<p>定义帧内独特性：</p>
-<p>$$
-u^{frame}<em>{t,m} = - s^{frame}</em>{t,m}
-$$</p>
-<h5 id="综合独特性评分">综合独特性评分<a hidden class="anchor" aria-hidden="true" href="#综合独特性评分">#</a></h5>
+$$<h5 id="帧内相似度">帧内相似度<a hidden class="anchor" aria-hidden="true" href="#帧内相似度">#</a></h5>
+$$
+s^{\text{frame}}_{t,m} =
+\frac{x^v_{t,m} \cdot g_{f,t}}{\lVert x^v_{t,m}\rVert\,\lVert g_{f,t}\rVert}
+$$<p>定义帧内独特性：</p>
+$$
+u^{\text{frame}}_{t,m} = -s^{\text{frame}}_{t,m}
+$$<h5 id="综合独特性评分">综合独特性评分<a hidden class="anchor" aria-hidden="true" href="#综合独特性评分">#</a></h5>
 <p>结合帧内与视频级信息：</p>
-<p>$$
-u_{t,m} = u^{frame}<em>{t,m} + u^{video}</em>{t,m}
-$$</p>
-<p>该设计使 token 同时满足：</p>
+$$
+u_{t,m} = u^{\text{frame}}_{t,m} + u^{\text{video}}_{t,m}
+$$<p>该设计使 token 同时满足：</p>
 <ul>
 <li>在当前帧中是“非中心”的</li>
 <li>在整个视频中是“非冗余”的</li>
 </ul>
 <h5 id="top-k-压缩">Top-K 压缩<a hidden class="anchor" aria-hidden="true" href="#top-k-压缩">#</a></h5>
-<p>$$
+$$
 \hat{X}^v_t = \text{TopK}(X^v_t, {u_{t,m}}, r_t \times M)
-$$</p>
-<p>最终得到压缩后的视频 token 序列。</p>
+$$<p>最终得到压缩后的视频 token 序列。</p>
 <p><img loading="lazy" src="https://jjl357.github.io/blog/image/VidCom2/figure3.png"></p>
 <p>完整算法流程见 Appendix E。</p>
 <hr>

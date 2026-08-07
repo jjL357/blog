@@ -275,11 +275,9 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;因此，如何将e-GPUs和e-NPUs统一到单一的流水线并行中，以实现高效的LLMs微调，是一个尚未充分探索且具有挑战性的问题。&lt;/p&gt;
 &lt;h2 id=&#34;2-preliminary&#34;&gt;2. Preliminary&lt;/h2&gt;
 &lt;p&gt;与通过反向传播计算梯度的BP-enable设备（e-GPUs）不同，BP-free设备（e-NPUs）仅使用前向传播基于方向导数估计梯度。具体来说，当使用参数高效方法如LoRA微调LLM $\Theta$时，带有可训练参数$\theta$和损失函数$L$的$\Theta$，在小批量$B = {b_1, &amp;hellip;, b_M}$上的估计梯度可计算如下：&lt;/p&gt;
-&lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{L(\theta + \epsilon\mathbf{z}|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z} = g(\mathbf{z})\mathbf{z},$$&lt;/p&gt;
-&lt;p&gt;其中$L(\theta + \epsilon\mathbf{z}|\Theta)$表示可训练参数$\theta$在方向$\mathbf{z} \sim \mathcal{N}(0, I_d)$上扰动后的损失，这是对可训练参数的随机扰动。$d$表示可训练参数的大小，$\epsilon$表示标量步长。$g(\mathbf{z}) = \frac{L(\theta+\epsilon\mathbf{z}|\Theta;B) - L(\theta|\Theta;B)}{\epsilon}$表示随机方向$\mathbf{z}$的方向导数。因此，基于两次前向传播，作者可以获得$\theta$在方向$\mathbf{z}$上的下降尺度。&lt;/p&gt;
+$$\hat{\nabla}L(\theta|\Theta) = \frac{L(\theta + \epsilon\mathbf{z}|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z} = g(\mathbf{z})\mathbf{z},$$&lt;p&gt;其中$L(\theta + \epsilon\mathbf{z}|\Theta)$表示可训练参数$\theta$在方向$\mathbf{z} \sim \mathcal{N}(0, I_d)$上扰动后的损失，这是对可训练参数的随机扰动。$d$表示可训练参数的大小，$\epsilon$表示标量步长。$g(\mathbf{z}) = \frac{L(\theta+\epsilon\mathbf{z}|\Theta;B) - L(\theta|\Theta;B)}{\epsilon}$表示随机方向$\mathbf{z}$的方向导数。因此，基于两次前向传播，作者可以获得$\theta$在方向$\mathbf{z}$上的下降尺度。&lt;/p&gt;
 &lt;p&gt;图2a显示了估计梯度与通过带反向传播的一阶优化计算的梯度之间的相似性。作者观察到，添加扰动可以使估计梯度更接近BP梯度，同时仍比一阶优化实现更低的执行时间，如图2a所示。因此，为进一步减少估计方差并稳定微调，估计梯度可以通过对$Q$个独立采样方向$\mathbf{z}_q \sim \mathcal{N}(0, I_d)$取平均来计算：&lt;/p&gt;
-&lt;p&gt;$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$&lt;/p&gt;
-&lt;p&gt;此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。&lt;/p&gt;
+$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$&lt;p&gt;此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。&lt;/p&gt;
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure2.png&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;3-contribution&#34;&gt;3. Contribution&lt;/h2&gt;
 &lt;ul&gt;
@@ -291,7 +289,10 @@ RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部�
 &lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure3.png&#34;&gt;&lt;/p&gt;
 &lt;h3 id=&#34;41-overview&#34;&gt;4.1 Overview&lt;/h3&gt;
 &lt;p&gt;在HybridOP并行方案中，e-GPUs使用反向传播计算BP梯度，而e-NPUs使用多次前向传播计算估计梯度。首先，这些e-GPUs和e-NPUs协作执行第一次前向传播，并获取相应的无扰动基础损失（蓝色箭头）。然后，e-NPU设备生成可训练参数的随机扰动，并基于这些扰动参数执行前向传播（绿色箭头）。同时，e-GPU设备执行反向传播以计算BP梯度（橙色箭头）。流水线的最后一个设备计算损失和对应于随机扰动的方向导数$g(\mathbf{z})$，并将$g(\mathbf{z})$传输到所有e-NPU设备。e-NPU设备基于公式(10)计算估计梯度。最后，所有异构设备在流水线中获取小批量$b_i$的梯度。&lt;/p&gt;
-&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;</description>
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/HybridOP/figure4.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;将零阶优化的估计梯度和一阶优化的真实梯度融合到单一流水线中时，需要解决一些棘手的挑战：
+(1) 如何将LLM层划分到流水线中的异构设备上，以最小化执行延迟？
+(2) 如何在不延长执行延迟的情况下进一步提高计算利用率？&lt;/p&gt;</description>
     </item>
     <item>
       <title>📝 Efficiently Serving Large Multimodal Models Using EPD Disaggregation - ICML&#39;25</title>

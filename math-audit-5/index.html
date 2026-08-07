@@ -1,0 +1,2658 @@
+<!doctype html>
+<html lang="zh-cn">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=56368&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="utf-8">
+  <title>Math Audit</title>
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+
+</head>
+<body>
+  
+  
+  
+    <section data-source="posts\ChunkKV-  Semantic-Preserving KV Cache Compression for Efficient Long-Context LLM Inference - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/title.png"></p>
+<p><strong>Conference</strong>: NeurIPS'25</p>
+<p><strong>Github:</strong> <a href="https://github.com/NVIDIA/kvpress">https://github.com/NVIDIA/kvpress</a></p>
+<hr>
+<h2 id="my-thoughts">My Thoughts</h2>
+<ul>
+<li>ChunkKV 假定“删除部分 token 不会丢失极其关键的细节”，在<strong>法律/医疗等需要逐字级别保真</strong>的场景可能不合适（论文明确指出）。</li>
+<li>当前实现使用固定 size chunk（效率高但语义边界未显式对齐）；未来可以尝试基于句法/语义边界的 adaptive chunk（但需权衡额外开销）。</li>
+</ul>
+<h2 id="1-motivation">1. Motivation</h2>
+<ul>
+<li>随着 LLM 处理超长上下文（tens of thousands tokens），KV cache 的内存成为推理阶段的主要瓶颈——例如 7B 模型单 token 的 KV cache 大约占 0.5MB，导致 10k token 的 prompt 消耗约 5GB GPU 内存。</li>
+<li>现有压缩方法（H2O、SnapKV 等）通过删除被认为“不重要”的离散 token 来减少 KV 大小，但<strong>孤立地评估 token 重要度</strong>会破坏语义连贯性（会把主语或宾语切碎），从而在一些需要语义完整的任务上产生明显性能下降。论文通过示例强调：按 token 剪枝会保留与问题相关的某些词但漏掉关键对象信息，导致语义丢失。</li>
+</ul>
+<p><strong>问题</strong>：如何避免孤立 token 重要度评估，并在 KV cache 压缩时最大限度保存语义信息？</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/figure1.png"></p>
+<ul>
+<li>以往方法在 token 维度上进行稀疏化/删减，忽略了自然语言语义通常以连续片段（chunk）出现的事实；因此需要一个<strong>按语义连续段（chunk）作为压缩单位</strong>的方法以保留“完整的语义单元”。</li>
+</ul>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table1.png"></p>
+<ul>
+<li>发现并量化了“离散 token 压缩会破坏语义”的现象</li>
+<li>提出 <strong>ChunkKV</strong>：以固定大小（或可调整）chunk 为单位做 KV 压缩，保留最有信息量的 chunk，尽可能保留主谓宾等语义完整性，并设计了<strong>layer-wise index reuse</strong> 技术来复用所选索引，从而显著降低额外计算开销。</li>
+<li>在 LongBench、NIAH、GSM8K、JailbreakV 等多项 benchmark 以及多个模型（DeepSeek-R1、LLaMA-3、Qwen2、Mistral）上进行大规模评测，展示在相同压缩率下 ChunkKV 在准确率/召回/检索等方面优于现有方法，且在 latency/throughput 上得益于索引复用与向量化实现。</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<h3 id="41-chunk-level-compression">4.1 Chunk-level compression</h3>
+<ul>
+<li><strong>核心假设</strong>：自然语言中的“完整语义信息”通常由一段连续 token 构成（例如主语 + 谓语 + 宾语或整个短语）。将这些 token 作为整体（chunk）保留或删除，比以 token 为单位做稀疏更能保留语义。</li>
+<li><strong>Chunk 的定义</strong>：论文采用<strong>固定大小滑窗分块</strong>（chunk size = $c$），将整个 Key/Value 序列按顺序分为 $C=\lceil T_k / c\rceil$ 个 chunk（最后一个 chunk 可能不足 $c$）。保留策略基于 chunk 的“重要性分数”（由 observe window 的 attention 得到）。</li>
+</ul>
+<p><strong>算法伪码:</strong></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/algorithm1.png"></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Algorithm 1 ChunkKV（论文伪码，整理说明）
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>输入：
+</span></span><span style="display:flex;"><span>  Q ∈ R^{T_q × d}, K ∈ R^{T_k × d}, V ∈ R^{T_v × d}
+</span></span><span style="display:flex;"><span>  observe window size w
+</span></span><span style="display:flex;"><span>  chunk size c
+</span></span><span style="display:flex;"><span>  compressed KV cache max length L_max
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>步骤：
+</span></span><span style="display:flex;"><span>1. 计算 observe window 的 attention scores:
+</span></span><span style="display:flex;"><span>   A ← Q_{t_q−w : t_q} K^T    (注意 A 的尺寸是 R^{w × T_k})
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>2. 计算 chunk 数量：
+</span></span><span style="display:flex;"><span>   C = ⌈ T_k / c ⌉
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>3. 对每个 chunk i（i = 1..C），计算 chunk attention score:
+</span></span><span style="display:flex;"><span>   A_i = ∑_{j=(i−1)c+1}^{i c} ∑_{q=0}^{w−1} A_{q, j}
+</span></span><span style="display:flex;"><span>   （即对 chunk 内所有 token 在 observe window 上的 attention 求和）
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>4. 选择 top-k chunks，k = ⌊ L_max / c ⌋ （确保压缩后 KV 长度 ≤ L_max）
+</span></span><span style="display:flex;"><span>   kept_chunks = TopK(A_i, k)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>5. 保证最近上下文（recent window）被保留：
+</span></span><span style="display:flex;"><span>   把原始 KV 的最后 w tokens 强制置为保留（用于保持最近信息）
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>6. 构造选择 mask 并用 indices 做 index_select：
+</span></span><span style="display:flex;"><span>   indices = concat(indices_from_kept_chunks, indices_of_recent_window)
+</span></span><span style="display:flex;"><span>   K&#39; = index_select(K, indices)
+</span></span><span style="display:flex;"><span>   V&#39; = index_select(V, indices)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>输出：压缩后的 K&#39;, V&#39;
+</span></span></code></pre></div><h3 id="42-layer-wise-index-reuse层内索引复用">4.2 Layer-Wise Index Reuse（层内索引复用）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/figure2.png"></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table2.png"></p>
+<ul>
+<li><strong>观测</strong>：ChunkKV 选出的 chunk 索引在相邻层之间具有高相似性（论文用 Jaccard similarity 统计，ChunkKV 在 LLaMA-3-8B 上相邻层平均相似度远高于 SnapKV），因此完全可以在若干连续层间共享索引。</li>
+<li><strong>算法</strong>：
+<img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/algorithm2.png"></li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Algorithm 2 Layer-Wise Index Reuse
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>输入：N_layers, N_reuse
+</span></span><span style="display:flex;"><span>初始化：I_reuse = {}
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>for l = 0 .. N_layers − 1:
+</span></span><span style="display:flex;"><span>  if l mod N_reuse == 0:
+</span></span><span style="display:flex;"><span>    (K&#39;_l, V&#39;_l, I_l) ← ChunkKV(K_l, V_l)   # 做完整的 chunk 选择
+</span></span><span style="display:flex;"><span>    I_reuse[l] ← I_l
+</span></span><span style="display:flex;"><span>  else:
+</span></span><span style="display:flex;"><span>    # 复用最近的 I_reuse entry
+</span></span><span style="display:flex;"><span>    I_l ← I_reuse[floor(l / N_reuse) * N_reuse]
+</span></span><span style="display:flex;"><span>    K&#39;_l ← index_select(K_l, I_l)
+</span></span><span style="display:flex;"><span>    V&#39;_l ← index_select(V_l, I_l)
+</span></span></code></pre></div><ul>
+<li><strong>实测</strong>：论文在多个模型/任务上以 <code>N_reuse = 2</code> 做评估，Latency/throughput 上均显著提升（见 Table 8）；在 LongBench 上的性能下降通常 &lt; 0.6%。</li>
+</ul>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-实验设置">5.1 实验设置</h3>
+<ul>
+<li><strong>模型</strong>：DeepSeek-R1-Distill-Llama-8B、LLaMA-3-8B-Instruct、LLaMA-3.1-8B-Instruct、Mistral-7B-Instruct、Qwen2-7B-Instruct（部分结果包含 70B 模型，Appendix）。模型参数/配置详见 Appendix E（表格列出 L、N、D 等）。</li>
+<li><strong>benchmarks</strong>：GSM8K（及 many-shot 50-shot）、JailbreakV、LongBench（English + LongBench-ZH）、Needle-In-A-HayStack (NIAH)（8k / 32k length）、评价时使用 GPT-4o-mini 作为 judge（NIAH）。</li>
+<li><strong>压缩率 / KV size</strong>：常用比率有 10%、20%、30% 或固定 KV size（e.g., 128, 256, 512），chunk size 默认 $c=10$（论文将 chunk size 的常用范围设为 {3,5,10,20,30} 进行消融）。</li>
+<li>所有实验重复 3 次取均值以保证鲁棒性（论文说明）。</li>
+</ul>
+<hr>
+<h3 id="52-in-context-learninggsm8kmany-shotjailbreak">5.2 In-Context Learning（GSM8K、Many-Shot、Jailbreak）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table3.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table4.png"></p>
+<h4 id="gsm8k单步chain-of-thought-场景">GSM8K（单步/chain of thought 场景）</h4>
+<ul>
+<li>
+<p><strong>设置</strong>：CoT prompt 按 Wei et al. 的标准；many-shot 设置 50-shot（prompt &gt; 4k tokens）。</p>
+</li>
+<li>
+<p><strong>主要结果（摘要）</strong>：在不同模型与压缩比下，ChunkKV 在保持相同压缩率时，相比 H2O、SnapKV、PyramidKV 等显著更接近 FullKV 基线，甚至在某些配置优于 FullKV（论文表格展示多组数据）。示例（部分摘录）：LLaMA-3-8B-Instruct 在 10% 压缩下，ChunkKV 得到 65.7%（vs others 显著更低）。</p>
+</li>
+<li>
+<p><strong>分析要点</strong>：</p>
+<ul>
+<li>Many-shot 场景（50-shot）对语义完整性要求更高（示例完整保留对数学推理与 chain-of-thought 非常关键），ChunkKV 在 many-shot 下优势更明显（论文 Table 4）。</li>
+<li>math tasks 对索引复用（index reuse）的敏感度比 LongBench 更高（后文 index reuse 的消融中给出详细曲线）。</li>
+</ul>
+</li>
+</ul>
+<h4 id="jailbreakv安全评估">JailbreakV（安全评估）</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table5.png"></p>
+<ul>
+<li><strong>设置</strong>：Jailbreak prompts 与 Luo et al. 的设置一致。</li>
+<li><strong>主要发现</strong>：ChunkKV 在安全/绕过（jailbreak）评测中也表现优越，说明 chunk 保留能更好地维护 prompt 的对齐/安全相关上下文（Table 5）。在 10%/20% 比例下均优于多数 token-level 方法。</li>
+</ul>
+<hr>
+<h3 id="53-long-context-benchmarklongbench--niah">5.3 Long-Context Benchmark（LongBench &amp; NIAH）</h3>
+<h4 id="longbench多任务长上下文">LongBench（多任务长上下文）</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table6.png"></p>
+<ul>
+<li><strong>整体测评</strong>：论文以压缩后性能差距（相对 FullKV）来呈现结果（Table 6）。ChunkKV 在 LLaMA-3-8B、Mistral-7B、Qwen2-7B 的各项子任务上普遍优于或接近最优（在某些 ratio 下甚至小幅超过 FullKV），尤其在 10%~30% 区间效果稳定。</li>
+<li><strong>任务差异</strong>：ChunkKV 对需要“精确片段检索”的单文档/多文档 QA 表现尤为突出，因为 chunk 保持了原文片段完整性，减少碎片化带来的信息丢失。</li>
+</ul>
+<h4 id="needle-in-a-haystackniah检索型压力测试">Needle-In-A-HayStack（NIAH，检索型压力测试）</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table7.png"></p>
+<ul>
+<li>
+<p><strong>设置</strong>：用 GPT-4o-mini 做 judge；测试在 8k / 32k 上下文长度与不同 KV cache sizes（128/256/512 等）。</p>
+</li>
+<li>
+<p><strong>主要结果</strong>（摘要）：</p>
+<ul>
+<li>NIAH 在 LLaMA-3-8B 中，当 KV size = 128 时，ChunkKV 能在更深的 depth% 与更长 token limit 上成功检索到“needle”（Figure 3 的热力图、Table 7 的具体数值）。例如在某些配置下 ChunkKV 的准确率为 73.8%（远超 SnapKV / H2O）。</li>
+<li>Mistral-7B 在 128 的 KV size 下几乎接近 FullKV（99.8%），说明在一些模型上 ChunkKV 几乎不损失性能。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="54-index-reuse效率与性能权衡的详细数据">5.4 Index Reuse（效率与性能权衡的详细数据）</h3>
+<h4 id="性能latency--throughput">性能（Latency / Throughput）</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table8.png"></p>
+<ul>
+<li>在 A40 GPU 上，以 FlashAttention2 进行推理，论文报告了多个 input/output 配置（4096→1024, 4096→4096, 8192→1024, 8192→4096）。ChunkKV 与 ChunkKV_reuse（复用索引）相较 FullKV 在 latency 与 throughput 上均有显著提升，最长输入场景下 ChunkKV_reuse 可达 <strong>20.7% latency 减少</strong> 与 <strong>26.5% throughput 提升</strong>（见 Table 8）。</li>
+</ul>
+<h4 id="任务性能复用对准确率的影响">任务性能（复用对准确率的影响）</h4>
+<ul>
+<li>Index reuse（以 <code>N_reuse=2</code> 为例）在 LongBench 上带来的性能下降通常小于 0.6%；在 GSM8K 上有时表现出中性或微升（Table 9）。论文进一步给出不同 reuse depth 的消融图：数学任务对 reuse depth 更敏感（当 reuse depth 增大到 3、5、8 时性能开始显著下降），因此实际部署时需要在 throughput 和任务敏感度之间做折中。</li>
+</ul>
+<h4 id="消融建议工程">消融建议（工程）</h4>
+<ul>
+<li>对于“对准确率特别敏感”的任务（数学推理、某些 QA），建议 <code>N_reuse ≤ 2</code>；对延迟敏感但对少量性能下降可容忍的应用，可选择更大 reuse depth 以获取更高 throughput。论文提供了具体的 index-depth vs accuracy 曲线与表格供参考。</li>
+</ul>
+<hr>
+<h3 id="55-chunk-size-消融">5.5 Chunk Size 消融</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table10.png"></p>
+<ul>
+<li>
+<p><strong>实验范围</strong>：chunk size ∈ {1, 3, 5, 10, 15, 20, 30}（论文在 LongBench / NIAH / GSM8K 上做了广泛消融）。主要结论：</p>
+<ul>
+<li>当 chunk size 在 5–20 之间，性能相对稳定（波动 &lt; 1%），<strong>$c=10$ 常常为最优或近最优</strong>（论文推荐默认 c=10）。</li>
+<li>当 chunk size 太小（如 1 或 3）时，会把语义片段过度碎片化，导致性能下降（例如 LongBench、NIAH 的结果）。当 chunk size 太大（如 30）时，会丢失细粒度信息，某些任务（需要精确 token 的）出现退化。Table 10 / Table 19/20 显示了完整值。</li>
+</ul>
+</li>
+<li>
+<p><strong>推荐</strong>：默认 $c=10$；若任务偏向短 prompt（如 GSM8K 的 CoT ~1k tokens），可在 3–10 范围微调；若对长文档检索更敏感，10–20 也常表现良好。</p>
+</li>
+</ul>
+<hr>
+<h3 id="56-与-kv-quantization-的对比kivi-等">5.6 与 KV Quantization 的对比（KIVI 等）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table11.png"></p>
+<ul>
+<li>
+<p><strong>核心差异</strong>：</p>
+<ul>
+<li>Quantization（如 KIVI）减少的是表示精度（bitwidth），需要在 prefilling 阶段存在 full KV 来生成量化表示；</li>
+<li>ChunkKV 在 prefilling 之前就做 token-eviction（通过删除 token），因此可以在推理全程都只维护压缩后的 KV，节省 prefilling 内存 / 复制开销。</li>
+</ul>
+</li>
+<li>
+<p><strong>性能/效率实测</strong>（示例）：在 LLaMA-3-8B-Instruct、prompt 8192 / output 4096 的配置下，ChunkKV（10%）在 Total Gen Time 上 164.66s，而 KIVI-2bits 为 226.52s（ChunkKV 有 ~27.3% 的整体推理速度优势）；TTFT、TPOT 等延迟关键指标 ChunkKV 也更优（详见 Table 11）。</p>
+</li>
+<li>
+<p><strong>结论</strong>：两者属于互补（一个降低 size，一个降低精度）；在延迟敏感场景下，ChunkKV 在总体效率上具有显著优势。</p>
+</li>
+</ul>
+<hr>
+<h3 id="57-hybrid-compressionchunk-level-vs-token-level-在不同层深的混合策略">5.7 Hybrid Compression（Chunk-level vs Token-level 在不同层深的混合策略）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ChunkKv/table12.png"></p>
+<ul>
+<li>
+<p>实验：采用 hybrid（下半层用 ChunkKV，上半层用 SnapKV）并与纯 ChunkKV / 纯 SnapKV 比较（同一压缩率）。结果显示：</p>
+<ul>
+<li>对于<strong>局部信息检索</strong>（Single-Doc / Multi-Doc QA），纯 ChunkKV 表现最好；</li>
+<li>对于<strong>全局理解</strong>（Summarization / Few-shot），混合模型有时候更优（可能因为深层语义表达更抽象，token-level 的多样保留能帮助 global signals）。</li>
+</ul>
+</li>
+<li>
+<p><strong>实践启示</strong>：可设计任务感知的分层压缩策略（例如对文档理解任务在 deeper layers 增加 token-level 保留），但论文结论是：作为通用方法，纯 ChunkKV 更稳健。</p>
+</li>
+</ul>
+<hr>
+<h2 id="7-limitation">7. Limitation</h2>
+<ul>
+<li>ChunkKV 假定“删除部分 token 不会丢失极其关键的细节”，在<strong>法律/医疗等需要逐字级别保真</strong>的场景可能不合适（论文明确指出）。</li>
+<li>当前实现使用固定 size chunk（效率高但语义边界未显式对齐）；未来可以尝试基于句法/语义边界的 adaptive chunk（但需权衡额外开销）。</li>
+</ul>
+<hr>
+<h2 id="8-conclusion">8. Conclusion</h2>
+<ul>
+<li>ChunkKV 通过将 KV 压缩单元从“孤立 token”提升为“语义 chunk”，解决了 token-level 压缩破坏语义连续性的问题，从而在 long-context 与 in-context 场景获得更好的任务表现与工程效率。实验在 LongBench、NIAH、GSM8K、JailbreakV 等 benchmark 上均显示优势，并通过 layer-wise index reuse 在延迟/吞吐上取得可观提升（最高 ~20.7% latency 降低、~26.5% throughput 提升）。</li>
+</ul>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\Stop Looking for “Important Tokens” in Multimodal Language Models - Duplication Matters More - EMNLP&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/title.png"></p>
+<p><strong>Conference:</strong> <strong>EMNLP'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/ZichenWen1/DART">https://github.com/ZichenWen1/DART</a></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>Vision tokens 在多模态大模型（MLLMs）中因数量巨大而成为主要计算瓶颈，尤其是高分辨率图像或多帧视频，会将图像编码为成千上万的视觉 token，使得模型推理的时间和内存成本迅速上升。为此，许多近期工作提出了<strong>训练免费（training-free）<strong>的 token pruning 方法，通常采用“先度量每个 token 的importance，再删除importance低的 token”的范式来加速推理。论文指出并实证了：以 attention-score 作为 importance 的方式</strong>存在严重缺陷</strong>，在某些场景下竟然<strong>比随机丢弃（random pruning）更差</strong>，并且与硬件加速（如 FlashAttention）不兼容，从而无法在实际部署时取得理想的速度-性能折中。</p>
+<p><strong>直觉动机</strong>：论文提出另一种思路——<strong>把重复（duplication）作为 token reduction 的主要考虑因素</strong>。当多个视觉 token 表示高度相似时，保留其中一个便足以维持信息完整度；相反，删除“重复”token 不但能大幅削减计算，也更不容易损害下游性能。基于该想法，作者提出了 DART（Duplication-Aware Reduction of Tokens）这一简单、训练免费、对硬件友好的 token 削减 Pipeline。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>论文系统性地列举并分析了当前 importance-based token pruning 的问题：</p>
+<ul>
+<li>
+<p><strong>(I) 忽略 token 间的交互（dynamic interaction）</strong>：importance-based 方法往往把每个 token 的分数当作对全集 $X$ 的函数 $s_i=F(x_i\mid X)$ 并进行静态选择，但当某些 token 被移除后，剩下 token 的“重要性”应发生改变（例如两近似 token 存在互补性，移除其中之一会提高另一个的相对重要性），而静态评分忽略了这一点。论文通过形式化说明和实证展示了该偏差来源（见式 (4)-(6)）。</p>
+</li>
+<li>
+<p><strong>(II) 与高效注意力算子（FlashAttention）不兼容</strong>：许多 importance-based 方法需要访问 attention scores，但高效实现（FlashAttention / FlashAttention-2）在内部并不暴露中间 attention map，这就迫使要么禁用高效实现（带来速度和内存损失），要么放弃这些方法。论文强调在保持 FlashAttention 的同时设计 pruning 方法的重要性。</p>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure1.png"></p>
+<ul>
+<li><strong>(III) 位置偏差（positional bias）</strong>：attention-score 存在位置偏差（靠近序列末端的 token 更容易获得高 attention），因此用 attention 直接作为 importance 测度会产生空间偏差（例如经常保留同一区域的 token），影响视觉上下文的均衡感知（见 Fig.1 的可视化说明）。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure2.png"></p>
+<ul>
+<li><strong>(IV) 精度显著下降</strong>：令人惊讶的是，部分被广泛引用的方法在高压缩率下表现<strong>比随机选择还低</strong>（论文用实验展示了 FastV、SparseVLM 等在极端压缩时的劣化），这进一步提示 importance-based 指标可能根本不是理想的 pruning 导向。图 2 给出了对比。</li>
+</ul>
+<p>因此理想方法应满足：同时考虑 token 个体价值与与其他 token 的交互、计算开销小、与硬件友好（可兼容 FlashAttention）、无明显位置偏差。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<ul>
+<li>
+<p><strong>Rethink Token Importance</strong>：通过实证分析证明 attention score 作为 token importance 的不足，揭示 importance-paradigm 的固有问题（包括比随机更差的情况）。</p>
+</li>
+<li>
+<p><strong>Token Duplication as a Key Factor</strong>：提出基于 token 重复性的训练免费、即插即用的 token 削减方法 DART，方法简单且兼容 FlashAttention（不依赖 attention map）。</p>
+</li>
+<li>
+<p><strong>Superior Performance with Extreme Compression</strong>：在多个 MLLM 与超过十个基准上展示 DART 的优秀性能（例如：在 LLaVA-1.5-7B、保留 64 token 时，DART 达到 93.7%，比第二名高 2.2%），并在极端压缩率（↓88.9%）下仍保持较高准确率与显著加速。相关实验结果见表格与表 1、2、3。</p>
+</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure3.png"></p>
+<h3 id="41-概览pipeline">4.1 概览（Pipeline）</h3>
+<p>尽管“基于重要性（importance-based）”的 token 剪枝范式在提升多模态大语言模型（MLLMs）推理效率方面取得了初步成功，但这种方法本身存在一些<strong>难以克服的结构性局限</strong>。
+论文在此小节中从形式化角度揭示了其核心问题：<strong>忽视了 token 重要性的动态性（dynamic nature）</strong>。</p>
+<p>对于一个 token 序列 ${x_1, x_2, \dots, x_n}$，传统的剪枝方法会通过一个静态打分函数来计算每个 token 的重要性：</p>
+$$
+s_i = F(x_i \mid X),
+$$<p>其中 $X$ 表示完整的 token 集合。接着，它们会选择得分最高的前 $k$ 个 token 进行保留：</p>
+$$
+X_{\text{pruned}} = \arg\max_{X' \subseteq X,,|X'| = k} \sum_{x_j \in X'} s_j \tag{4}
+$$<p>这种做法<strong>隐含了一个独立性假设（independence assumption）</strong>：
+即每个 token 的得分 $s_j$ 不会因为其他 token 的增删而发生变化，认为 token 的重要性是<strong>静态且互不影响</strong>的。</p>
+<p>然而，这与 Transformer 架构中 token 之间复杂的交互关系相矛盾。
+举例来说，若两个 token $x_p$ 与 $x_q$ 语义上高度相似（即 $s_p \approx s_q$），那么当我们删除其中一个（例如 $x_q$）后，剩下的那个 $x_p$ 的重要性理应提升，因为它现在唯一保留了这部分语义信息：</p>
+$$
+s'_p = F(x_p \mid X' \setminus {x_q}) > s_p \tag{5}
+$$<p>这就导致了一个<strong>重要性估计偏差（bias in importance estimation）</strong>：</p>
+$$
+\Delta = s'_p - s_p
+$$<p>也就是说，当剪枝发生时，原本的静态重要性分数 $s_p$ 已不再准确，它没有反映 token 间的动态补偿效应。</p>
+<p>为了形式化描述这种“静态评分与动态交互之间的矛盾”，论文进一步定义了在所有随机子集 $X&rsquo; \subset X$ 上的期望偏差：</p>
+$$
+\mathbb{E}_{X' \subset X} \left[ \sum_{x_i \in X'} \Delta_i \right]
+$$<p>这个表达式表明，在随机采样的子集上，静态重要性分数与真实的交互式重要性之间存在<strong>系统性偏差</strong>，而这种偏差在期望意义下是非零的。
+这正是许多基于重要性剪枝方法在实践中出现“保留错误 token”或“性能不稳定”的根本原因：它们假设每个 token 的价值是固定的，但实际上 token 之间存在着<strong>动态的相互依赖与补偿关系</strong>。</p>
+<p>DART 的核心思想与流程可分为两步（图示见 Figure 3）：</p>
+<ol>
+<li>
+<p><strong>选择少量 pivot tokens</strong> $P={p_1,\dots,p_k}$（$k \ll n$，通常不超过全部 token 的 2%）：这些 pivot token 通过简单且计算量极小的策略选取（例如按 K-norm 最大，或 V-norm，或直接随机），目的是用少量代表性 token 覆盖整个 token 空间。</p>
+</li>
+<li>
+<p><strong>基于 pivot 计算 duplication（余弦相似）并筛除重复 token</strong>：对每个视觉 token $x_j$ 计算其与所有 pivot 的 cosine similarity（定义为 ϵ-duplicate score），然后以预定的 token 保留比例（reduction ratio）动态确定阈值 $\epsilon$，保留那些<strong>与 pivot 最不相似</strong>的 token（即低重复），删除与 pivot 重复度高的 token。由于 pivot 数量极少，这一步计算开销很小（论文报告整个过程 overhead ≤ 0.08s）。</p>
+</li>
+</ol>
+<p>整体思路的直观理由：保留与 pivot “最不同”的 token，可以最大化 retained set 的覆盖性（即尽量保留多样性信息），同时删除那些与其它 token 高度重复、信息冗余的 token，从而以极低的计算成本实现信息保留。</p>
+<hr>
+<h3 id="42-关键定义与公式来自论文">4.2 关键定义与公式（来自论文）</h3>
+<ul>
+<li><strong>Transformer 中的注意力（复述）</strong>：</li>
+</ul>
+$$
+\text{Attention}(Q,K,V) = \text{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+$$<p>（论文在 §3.2 展示了这一经典公式以引入基于 attention 的 importance 流派。）</p>
+<ul>
+<li>
+<p><strong>Pivot token（定义 1）</strong>：$P={p_1,\dots,p_k}\subset X$，$k\ll n$，代表性子集（用于代表整个视觉 token 集合）。</p>
+</li>
+<li>
+<p><strong>ϵ-duplicate Score（定义 2）</strong>：对 pivot $p_i$ 与视觉 token $x_j$：</p>
+</li>
+</ul>
+$$
+\text{dup}(p_i, x_j) = \frac{p_i^\top x_j}{|p_i| |x_j|},
+$$<p>若 $\text{dup}(p_i,x_j) &gt; \epsilon$，则称 $p_i$ 与 $x_j$ 为 $\epsilon$-duplicates。基于此，为每个 pivot 定义：</p>
+$$
+R_i = { x_j \mid \text{dup}(p_i, x_j) \le \epsilon }
+$$<p>最终 retained set：</p>
+$$
+R = P \cup \left( \bigcup_{p_i \in P} R_i \right).
+$$<p>阈值 $\epsilon$ 针对每个 pivot 动态设定以满足总体的 reduction ratio（即确保最终保留 token 数等于目标）。</p>
+<hr>
+<h3 id="43-pivot-tokens-的选择策略实践细节">4.3 Pivot tokens 的选择策略（实践细节）</h3>
+<p>论文中实验了多种 pivot 选取策略并发现 <strong>对最终效果不敏感</strong>（即 DART 对 pivot 的选择具有鲁棒性）——常用策略包括：</p>
+<ul>
+<li>
+<p><strong>按 K-norm 最大（K-norm♠）</strong>：即计算 attention 中 $K$ 矩阵对应 token 的 L1-norm（或某种 norm 度量），选择 top-k。论文在大多数主实验中采用了 K-norm 最大选择作为默认设置。</p>
+</li>
+<li>
+<p><strong>按 V-norm</strong>：类似的用 $V$ 矩阵的 norm。</p>
+</li>
+<li>
+<p><strong>按 attention score（A-Score）</strong>：使用 attention-based 排序（注意：这种策略会牺牲对 FlashAttention 的兼容性，如果需要暴力访问 attention map）。</p>
+</li>
+<li>
+<p><strong>随机选择（Random）</strong>：完全随机抽取 pivot。令人惊讶的是，随机策略的性能仅比最优策略低约 1.2%（在某些实验中与基于 importance 的方法相比仍有明显优势），这说明 duplication-driven 的设计比选 pivot 的“重要性”更关键。</p>
+</li>
+</ul>
+<hr>
+<h3 id="44-理论分析性能保证">4.4 理论分析（性能保证）</h3>
+<p>论文给出基于 Hausdorff 距离的理论界（Theorem 1），在若干假设下（Transformer property：Lipschitz 连续性相对于 Hausdorff 距离，以及 token embedding 有界 $|x| \le B$），证明了 retained set $R$ 与原始集合 $X$ 在模型输出上的差异是可控的：</p>
+<ul>
+<li>
+<p>结论（Lemma / Theorem 的关键信息）：</p>
+<ul>
+<li>若 token 对 pivot 的重复度不超过 $\epsilon$，则任一被删除的 $x$ 与其最接近 pivot 的距离有界：
+$$
+    \min_{p_i\in P} |p_i - x_j| \le \sqrt{2(1-\epsilon)} B.
+    $$</li>
+<li>从而 Hausdorff 距离有界：
+$$
+    d_H(X,R) \le \sqrt{2(1-\epsilon)} B.
+    $$</li>
+<li>结合 Lipschitz 假设 $K$，得到输出误差上界：
+$$
+    | f(X) - f(R) | \le K \sqrt{2(1-\epsilon)} B.
+    $$</li>
+</ul>
+</li>
+</ul>
+<p>该界表明，通过控制 $\epsilon$（即允许的重复阈值），可以在可控误差范围内删减重复 token，从而提供理论上的可信度保证（论文的证明详见 §3.4）。</p>
+<hr>
+<h3 id="45-实现与复杂度兼容性">4.5 实现与复杂度/兼容性</h3>
+<ul>
+<li>
+<p><strong>计算复杂度</strong>：由于 pivot 数量 $k$ 很小（论文实验常用 $k=8$，且 pivot 比例 ≤ 2%），计算 pivot 与所有 token 的余弦相似度复杂度为 $O(nk)$，显著低于 $O(n^2)$。因此总体 overhead 很小（论文报告 ≤ 0.08 秒的额外开销），并且该过程可以在预填充（prefill）阶段完成，从而与 FlashAttention 等高效实现兼容，不必暴露 attention map。</p>
+</li>
+<li>
+<p><strong>与 FlashAttention 的兼容性</strong>：DART 不需要访问 attention matrix——只在 token embedding 空间做余弦相似度计算，因此能在保留 FlashAttention 加速的同时实现 token pruning，从而在真实部署中既能保证速度也能保持性能。论文在效率对比（表 2）中给出了 DART 与 FastV、SparseVLM 在总时间、prefill 时间、FLOPs、KV cache 等方面的比较，显示 DART 在速度上具有明显优势并兼顾精度。</p>
+</li>
+</ul>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="50-实验设置experiment-setting">5.0 实验设置（Experiment Setting）</h3>
+<ul>
+<li>
+<p><strong>模型与基准</strong>：在超过 4 个不同的 MLLMs（例如 LLaVA-1.5-7B、LLaVA-Next-7B、Qwen2-VL-72B、MiniCPM 等）和 10+ 图像基准 + 4 个视频基准上评估 DART。详细数据集（GQA、MMB、MME、POPE、SQA、VQAv2、VQA-Text、VizWiz、OCRBench 等）以及视频基准（MSVD、TGIF、MSRVT 等）在附录 C 中给出。</p>
+</li>
+<li>
+<p><strong>剪枝配置</strong>：常见设置是<strong>在第二层后（after layer 2）进行 token pruning</strong>（论文的大量实验采用这一点），pivot token 数量常用为 8，默认 pivot 选取方式为 K-norm 最大（除非做消融对比）。在不同的保留 token 数（例如保留 192、128、64）下进行横向对比。</p>
+</li>
+</ul>
+<hr>
+<h3 id="51-main-results">5.1 Main Results</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table1.png">
+<strong>表 1（LLaVA-1.5-7B 不同保留 token 配置）</strong>：论文在 LLaVA-1.5-7B 上展示了多种 baseline（ToMe, FastV, SparseVLM, HiRED, FitPrune, PDrop, MustDrop 等）与 DART 的对比，在三种主要保留量下（192 tokens ↓66.7%，128 tokens ↓77.8%，64 tokens ↓88.9%）：</p>
+<ul>
+<li>
+<p>当保留 <strong>192 tokens（↓66.7%）</strong> 时，DART 达到 <strong>98.8%</strong> 的平均表现（接近 Vanilla），并且 <strong>DART †</strong>（在训练阶段加入 DART）甚至超过 100%（微超 vanilla），表明将 DART 纳入训练阶段能进一步提升 trade-off。</p>
+</li>
+<li>
+<p>当保留 <strong>128 tokens（↓77.8%）</strong> 时，DART 仍显著优于大部分 baselines（98.0%/99.9% for DART/DART†）。</p>
+</li>
+<li>
+<p>在极端压缩 <strong>64 tokens（↓88.9%）</strong> 时，DART 仍能取得 <strong>93.7%</strong>（DART）与 <strong>97.2%</strong>（DART†），并明显领先 FastV 与多数方法（许多方法在该压缩率下表现急剧下滑）。这正是论文强调 DART 在“极端压缩”场景下的优势。</p>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table3.png"></p>
+<p><strong>表 3（LLaVA-Next-7B，保留 320 tokens ↓88.9%）</strong>：在更大/不同架构上，DART 也能保持强鲁棒性（在 LLaVA-Next-7B 上 DART 平均 93.9%），显示方法能够 scale 到大型模型与更高 token 基数场景。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table5.png"></p>
+<p><strong>表 4 / 表 5（Qwen2-VL-7B、MiniCPM）</strong>：DART 在不同模型与不同尺度下都显著优于 FastV，并在多任务（GQA、MMB、MME、POPE 等）上取得稳健提升，表明方法不依赖特定模型结构或训练细节即可发挥效果。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table6.png"></p>
+<p><strong>视频理解任务（Table 6）</strong>：将 DART 集成到 Video-LLaVA，按标准协议对视频抽帧（8 帧，2048 vision tokens，保留 50%）进行评估，DART 在 MSVD、TGIF、MSRVT 等指标上均优于 FastV，平均精度与评分也更好，说明 DART 对时序/多帧冗余也有效。</p>
+<hr>
+<h3 id="52-efficiency-analysis效率分析">5.2 Efficiency Analysis（效率分析）</h3>
+<p>论文不仅报告准确率变化，也在<strong>真实推理时间</strong>上进行衡量（比仅报 FLOPs 更有说服力）：</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table2.png"></p>
+<ul>
+<li>
+<p><strong>表 2（Inference costs）</strong>：对比 Vanilla（2880 tokens）与 FastV、SparseVLM、DART（token 减至 320）：</p>
+<ul>
+<li>Vanilla 总时间 36:16（min:sec），prefill 22:51；</li>
+<li>+FastV 总时间降到 18:17，prefill 7:41，speedup 1.98×（总）与 2.97×（prefill）；</li>
+<li>+DART 总时间 18:13，prefill 7:38，speedup 1.99×（总）与 2.99×（prefill）。</li>
+<li>注意：FLOPs 与 KV Cache 的相对变化也列出（DART 与 FastV 在 FLOPs 降幅近似时，DART 在实际 wall-clock 上略优，这说明 FLOPs 并非预测实测加速的充分指标，工程实现、内存访问、并行化等实现细节也很重要）。</li>
+</ul>
+</li>
+<li>
+<p><strong>要点总结</strong>：</p>
+<ul>
+<li>DART 在不暴露 attention maps 的前提下仍能保持 FlashAttention，加速效果真实（实测 latency 降低）。</li>
+<li>与其它方法（如 SparseVLM）相比，即使 FLOPs 接近，实际 speedup 可能不同——因为并行性、内存占用、KV cache 大小与实现细节会影响实测性能。论文对此做了细致讨论并用 Figure 4 展示了 performance-latency tradeoff。</li>
+</ul>
+</li>
+</ul>
+<p>（Figure 4: latency-vs-performance 曲线）
+<img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure4.png"></p>
+<hr>
+<h3 id="53-关于-pivot-selectionprune-layer-与-pivot-数量的消融">5.3 关于 Pivot Selection、Prune Layer 与 Pivot 数量的消融</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/table8.png">
+<strong>Pivot selection（§5.2）</strong>：论文在 Appendix A.1 展示了 Table 8，比较了 Random、A-Score、K-norm、V-norm 等策略（在 LLaVA-1.5-7B，保留 128 tokens 的设置），结果显示各种策略均能达到很高的保真度（多数策略 &gt;94.9%），<strong>随机策略仅比最优策略差约 1.2%</strong>，从统计上说明 DART 对 pivot 的选择并不敏感，强调 duplication 而非 importance 的中心地位。表格摘录见下（论文原 Table 8 的 summary）。</p>
+<p><strong>Pruned layer 的影响（§5.3）</strong>：</p>
+<ul>
+<li>在较浅层（例如 layer 2）进行剪枝带来最大速度收益，但可能在极端压缩下轻微影响性能；</li>
+<li>在更深层剪枝（如 layer 10、15、20）通常能接近或超过 vanilla（论文发现某些深层剪枝竟然略优于 vanilla，可能是去除 duplicate token 同时减少 hallucination 的副作用）；同时更深层剪枝会减少加速收益（因为早期层的计算仍需执行）。论文以 Figure 6 展示了各层剪枝对性能与 latency 的 trade-off。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure6.png"></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure5.png"></p>
+<p><strong>Pivot 数量的影响（Figure 5 与 Appendix A.2）</strong>：</p>
+<ul>
+<li>Pivot 太少（例如 1-2）会导致代表性不足（覆盖面差），而 pivot 太多（例如 ≥20）会导致多数保留下来的成为 pivot，自身退化成 importance-based 的行为；</li>
+<li>论文发现中等数量（如 8）能取得稳健表现（这是作者主实验常用值）。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure5.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure6.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/Dart/figure7.png"></p>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<ul>
+<li>
+<p>DART 提出了一条不同于 importance-based 的 token 削减范式：<strong>关注重复性（duplication）而非仅仅关注 attention-based importance</strong>，并通过选择少量 pivot + 余弦相似度筛除重复 token 的简单机制实现训练免费、对硬件友好且极高效的加速策略。</p>
+</li>
+<li>
+<p>实验表明 DART 在多模型、多数据集与多模态（图像/视频/音频/VLA）上均有竞争力：在极端压缩下仍保持较高精度并实现实测 speedup，且 DART †（训练时使用 DART）还能进一步提升表现。</p>
+</li>
+<li>
+<p>论文的额外 insight 包括：不同保留 token 集合（overlap &lt; 50%）仍可给出类似性能，表明存在多个互补且有效的 token 子集；去除重复 token 甚至能减少 hallucination（在某些基准上 pruned 模型反而优于 vanilla）。</p>
+</li>
+</ul>
+
+    </section>
+  
+    <section data-source="posts\MoVE-KD - Knowledge Distillation for VLMs with Mixture of Visual Encoders - CVPR&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/title.png"></p>
+<p><strong>Conference:</strong> <strong>CVPR 2025</strong></p>
+<p><strong>Github：</strong> <a href="https://github.com/hey-cjj/MoVE-KD">https://github.com/hey-cjj/MoVE-KD</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>视觉编码器（Visual Encoder）是视觉语言模型（VLM）的核心组件，每个编码器通常源自不同的视觉基础模型（Visual Foundation Model），因此具备不同的特长与感知能力。为了充分利用这些差异化优势，近年来许多研究在单一 VLM 中整合多个视觉编码器。然而，这种设计虽然能融合多源知识，却导致计算量大幅上升、模型复杂度增加，严重影响了效率与可扩展性。</p>
+<p><strong>核心问题：</strong></p>
+<blockquote>
+<p>是否可以将多个视觉编码器的特长“蒸馏”进一个单一编码器中，从而兼具多编码器的性能与单编码器的高效性？</p>
+</blockquote>
+<p>MoVE-KD（Mixture-of-Visual-Encoder Knowledge Distillation）正是为了解决这一问题而提出的。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>现有方法（如 [24, 38, 42]）通常通过特征拼接（feature concatenation）或注意力融合（attention fusion）等方式结合多个视觉编码器，但多编码器必然带来高计算开销和复杂模型结构，削弱了训练与推理效率。</p>
+<p>此外，尽管知识蒸馏（Knowledge Distillation, KD）为知识压缩提供了思路，但传统 KD 主要是 <strong>一对一（one-to-one）</strong> 蒸馏，即单个教师到单个学生。而如何从多个来源、不同预训练目标的视觉教师模型中同时学习，是一个尚未充分探索的问题。</p>
+<p>此前如 <strong>AM-RADIO [36]</strong> 虽引入多教师思路，但由于共享主干、学习冲突严重，性能受限。
+MoVE-KD 的目标是建立一个统一框架，将多教师视觉知识高效压缩进单一学生模型中，同时解决知识冲突与效率问题。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/figure1.png"></p>
+<p>MoVE-KD 的提出灵感来自 ViT 的 token 扩展方法 [9]，其核心思想是利用注意力机制引导多教师的知识蒸馏过程，通过 [CLS] token 判断视觉 token 的重要性，并分配动态权重，从而“选择性”吸收有价值的信息。</p>
+<ol>
+<li>
+<p><strong>提出 MoVE-KD 框架</strong></p>
+<ul>
+<li>首个从知识蒸馏角度实现“多视觉编码器融合”的统一框架；</li>
+<li>可在不增加模型复杂度的情况下，将不同视觉编码器的知识压缩进单模型。</li>
+</ul>
+</li>
+<li>
+<p><strong>提出 Attention-guided KD 机制</strong></p>
+<ul>
+<li>通过 [CLS] token 的注意力图，动态评估每个视觉 token 的重要性；</li>
+<li>引入多教师权重自适应机制（Teacher Weighting），使更有价值的教师贡献更大；</li>
+<li>使用 <strong>Mixture-of-LoRA-Experts (MoLE)</strong> 结构缓解教师间知识冲突。</li>
+</ul>
+</li>
+<li>
+<p><strong>在 LLaVA / LLaVA-NeXT 等主流 VLM 上取得 SOTA</strong></p>
+<ul>
+<li>显著提升性能与效率，证明方法在不同多模态任务上的通用性与稳定性。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="4-related-work">4. Related Work</h2>
+<h3 id="41-vision-encoder-distillation">4.1 Vision Encoder Distillation</h3>
+<p>视觉编码器在 VLM 中负责提取视觉特征，其性能直接决定视觉理解能力。</p>
+<ul>
+<li>DINOv2 [34] 采用自蒸馏训练小模型；</li>
+<li>CLIP-based KD [44] 从单一 CLIP 教师蒸馏，但由于单教师能力有限，效果受限；</li>
+<li>AM-RADIO [36] 引入多个视觉专家蒸馏机制，但未在 VLM 框架中统一实现。</li>
+</ul>
+<p>MoVE-KD 是首个在 <strong>统一的视觉语言模型框架</strong> 下实现多视觉教师蒸馏的方法。</p>
+<h3 id="42-multi-teacher-kd">4.2 Multi-Teacher KD</h3>
+<p>多教师 KD 在传统深度学习中已有探索，如 [49] 使用三元组损失（Triplet Loss）进行多教师学习；
+在大语言模型领域，OneS [46] 是首个实现多教师知识整合的 LLM KD 方法。
+而在 VLM 领域，MoVE-KD 是第一个实现多视觉教师协同蒸馏的工作。</p>
+<hr>
+<p>明白了，我帮你把所有公式里的 <code>\mathcal</code> 去掉，同时保持原本内容和 LaTeX 公式格式不变。修改后的内容如下：</p>
+<hr>
+<h2 id="5-method">5. Method</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/figure3.png"></p>
+<h3 id="51-overview">5.1 Overview</h3>
+<p>MoVE-KD 的总体流程如下：</p>
+<ol>
+<li>
+<p><strong>多教师视觉编码器输出获取：</strong>
+   将输入图像送入多个预训练视觉编码器（如 CLIP、DINOv2、SAM 等），得到各自的视觉 token 表示。</p>
+</li>
+<li>
+<p><strong>编码器适配器（Encoder Adapter）：</strong>
+   由于不同教师的特征空间不一致，直接蒸馏会导致分布偏移。MoVE-KD 为每个教师引入单独的 <em>encoder adapter</em>（两层 MLP），将输出映射到统一表征空间。</p>
+</li>
+<li>
+<p><strong>注意力引导的蒸馏（Attention-guided KD）：</strong>
+   基于 CLIP 的 [CLS] token 注意力权重，计算：</p>
+</li>
+</ol>
+<p>   * <strong>Token-level 权重</strong>：确定每个视觉 token 的重要程度；
+   * <strong>Teacher-level 权重</strong>：根据教师模型对样本的平均注意力，确定每个教师的贡献比例。</p>
+<ol start="4">
+<li>
+<p><strong>学生端结构（Student Encoder with MoLE）：</strong>
+   学生模型基于预训练 CLIP 编码器，加入 <strong>Mixture-of-LoRA-Experts (MoLE)</strong> 结构，使不同教师的知识通过不同专家通道流动，从而避免冲突、提升泛化。</p>
+</li>
+<li>
+<p><strong>损失函数（Loss Function）：</strong>
+   整体损失为：
+   </p>
+$$
+      L_{total} = L_{text} + \lambda_{kd} \cdot L_{kd}
+      $$<p>
+   其中 $L_{text}$ 为文本生成损失，$L_{kd}$ 为蒸馏损失。</p>
+</li>
+</ol>
+<hr>
+<h3 id="52-learning-from-multiple-encoders">5.2 Learning from Multiple Encoders</h3>
+<h4 id="编码器适配器encoder-adapter">编码器适配器（Encoder Adapter）</h4>
+<p>由于各个视觉教师的特征维度和分布不同，MoVE-KD 为每个教师引入独立的 Adapter，用于：</p>
+<ul>
+<li>特征对齐（Dimension Alignment）；</li>
+<li>空间映射（Feature Projection）；</li>
+<li>保证蒸馏目标空间统一。</li>
+</ul>
+<p>每个适配器为一个两层 MLP，仅对该教师的输出进行调整，避免互相干扰。</p>
+<h4 id="molemixture-of-lora-experts">MoLE（Mixture-of-LoRA-Experts）</h4>
+<p>在学生模型中，MoLE 结合了 MoE（Mixture of Experts）与 LoRA（Low-Rank Adaptation）的优点：</p>
+<ul>
+<li>
+<p><strong>MoE 路由机制：</strong>
+  每一层的前馈网络（FFN）通过路由器函数 $f(x)$ 激活最相关的专家：
+  </p>
+$$
+    F_\star(x) = F(x) + E_i(x), \quad i = \arg\max(\text{Softmax}(f(x)))
+    $$<p>
+  其中 $E_i$ 是第 $i$ 个专家。</p>
+</li>
+<li>
+<p><strong>LoRA 专家结构：</strong>
+  与传统 MoE 不同，MoVE-KD 不复制整个 FFN 模块，而是让每个专家仅由 LoRA 参数组成（即两个低秩矩阵 $A,B$ 替代完整参数矩阵）。这样可显著减少参数量，并提高泛化能力。</p>
+</li>
+</ul>
+<p><strong>优势：</strong></p>
+<ul>
+<li>参数开销极小；</li>
+<li>可根据输入动态选择专家，适应不同教师知识；</li>
+<li>避免知识冲突与过拟合。</li>
+</ul>
+<hr>
+<h3 id="53-attention-guided-kd-regularization">5.3 Attention-Guided KD Regularization</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/figure4.png"></p>
+<p>MoVE-KD 的核心创新之一是通过 CLIP 的 [CLS] 注意力权重来衡量视觉 token 的价值，从而在蒸馏时实现 <strong>“重要区域强化，冗余区域抑制”</strong>。</p>
+<h4 id="蒸馏损失函数">蒸馏损失函数</h4>
+<p>设有 $m$ 个教师模型，每个教师输出 $n$ 个视觉 token：
+</p>
+$$
+L_{kd} = \sum_{i=1}^{m} W_i^{(tea)} \sum_{j=1}^{n} \left(W_j^{(tok)} + \frac{1}{n}\right) \text{MSE}\left(V_{i,j}^{(t)}, V_j^{(s)}\right)
+$$<p>
+其中：</p>
+<ul>
+<li>$V^{(t)}$、$V^{(s)}$ 分别为教师与学生视觉 token；</li>
+<li>$W^{(tok)}$ 为 token 级注意力权重；</li>
+<li>$W^{(tea)}$ 为教师级权重。</li>
+</ul>
+<h4 id="token-权重计算">Token 权重计算</h4>
+<p>使用 CLIP 中 [CLS] token 与其他视觉 token 的注意力：
+</p>
+$$
+W^{(tok)} = \text{Softmax}\left(\frac{(V^{(cls)} W^{(Q)}) (V^{(res)} W^{(V)})^T}{\sqrt{d}}\right)
+$$<h4 id="teacher-权重计算">Teacher 权重计算</h4>
+<p>通过 [CLS] token 与每个教师输出的平均注意力确定教师重要性：
+</p>
+$$
+W^{(tea)} = \text{Softmax}\left(\text{mean}\left(\frac{V^{(cls)} (V_i^{(t)})^T}{\sqrt{d}}\right)\right)
+$$<p>
+并且为防止学生遗忘自身知识，CLIP 自身也作为教师之一，赋予固定高权重（0.8）。</p>
+<hr>
+<h3 id="54-总体损失函数overall-loss">5.4 总体损失函数（Overall Loss）</h3>
+$$
+L_{total} = L_{text} + \lambda_{kd} \cdot L_{kd}
+$$<p>其中 $L_{text}$ 为语言生成损失，$\lambda_{kd}$ 控制蒸馏强度。</p>
+<hr>
+<h2 id="6-evaluation">6. Evaluation</h2>
+<h3 id="61-训练细节training-details">6.1 训练细节（Training Details）</h3>
+<p>训练过程分为两个阶段：</p>
+<ol>
+<li>
+<p><strong>预训练阶段（Pre-training Stage）</strong></p>
+<ul>
+<li>训练模块：MoLE、Adapter、Projection；</li>
+<li>冻结教师编码器和其他参数；</li>
+<li>目标：最小化 $\mathcal{L}_{total}$。</li>
+</ul>
+</li>
+<li>
+<p><strong>微调阶段（Fine-tuning Stage）</strong></p>
+<ul>
+<li>解冻除教师外的所有参数；</li>
+<li>继续优化 $\mathcal{L}_{total}$。</li>
+</ul>
+</li>
+</ol>
+<p><strong>超参数：</strong></p>
+<ul>
+<li>CLIP 教师权重：0.8；</li>
+<li>MoLE 专家数：3；</li>
+<li>LoRA rank：32；</li>
+<li>蒸馏损失权重 $\lambda_{kd}$：0.5；</li>
+<li>训练设备：16 × A800 GPU。</li>
+</ul>
+<p>训练遵循 LLaVA 的两阶段指令微调流程。</p>
+<hr>
+<h3 id="62-main-results">6.2 Main Results</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/table1.png"></p>
+<p>结果显示 MoVE-KD 在多个标准视觉语言任务（如 VQAv2、ScienceQA、GQA 等）上显著超越 LLaVA、LLaVA-NeXT 等基线模型，在保持推理效率的同时获得更高的性能。</p>
+<hr>
+<h3 id="63-ablation-study">6.3 Ablation Study</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/table2.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/table3.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/table4.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/table5.png"></p>
+<h4 id="核心结论">核心结论：</h4>
+<ul>
+<li>移除 MoLE 后性能明显下降 → 证明专家机制有效缓解知识冲突；</li>
+<li>不使用注意力引导的 KD，模型难以聚焦关键区域；</li>
+<li>减少教师数量，性能线性下降；</li>
+<li>CLIP 作为教师保留有助于防止遗忘并保持稳定表现。</li>
+</ul>
+<hr>
+<h3 id="64-可视化分析visualization">6.4 可视化分析（Visualization）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/MoVE-KD/figure5.png"></p>
+<p>MoVE-KD 的注意力热力图显示，学生模型成功学习到教师模型的聚焦模式，关注于语义关键区域，同时保留对背景的全局感知能力。</p>
+<hr>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>本文提出 <strong>MoVE-KD（Mixture-of-Visual-Encoder Knowledge Distillation）</strong>，首次从知识蒸馏视角融合多个视觉编码器为单一模型。通过：</p>
+<ul>
+<li>Attention-guided 蒸馏策略；</li>
+<li>Mixture-of-LoRA-Experts 架构；</li>
+<li>动态教师与 token 权重机制；</li>
+</ul>
+<p>MoVE-KD 实现了多教师知识的高效融合，兼顾性能与推理效率。</p>
+<p>在 LLaVA 与 LLaVA-NeXT 等框架上，MoVE-KD 均取得了显著性能提升。
+作者指出，随着模型规模扩大，KD 的边际收益下降，瓶颈可能出现在视觉与语言投影模块上——未来研究应重点关注视觉-文本特征的高效无损对齐。</p>
+
+    </section>
+  
+    <section data-source="posts\DartQuant - Efficient Rotational Distribution Calibration for LLM Quantization - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25</strong></p>
+<hr>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>当时在复现 <strong>SpinQuant</strong> 的时候，确实感受到了 training 的计算资源需求非常大。记得训练一个 epoch 都一些时间，而 SpinQuant 官方给的 example script 甚至建议训练 100 个 epoch。当时就意识到：<strong>针对旋转矩阵的优化（Rotation Optimization）需要更高效的方式</strong>。</p>
+<p>结果果然别人的手速很快，NeurIPS’25 上就出现了这个 <strong>DartQuant</strong> 工作，它不仅加速了旋转矩阵的优化过程，还能缓解 calibration 阶段的 <strong>task-specific overfitting</strong> 问题和通过QR分解解决必须正交的问题，非常巧妙。</p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>近年来，大型语言模型（LLMs）在多种 NLP 任务上表现卓越，如文本生成、翻译、问答系统等。然而，其推理阶段的计算与内存开销极高，限制了在边缘设备或资源受限场景下的部署。</p>
+<p>在各种模型压缩方法中（剪枝、蒸馏、参数共享、量化等），<strong>后训练量化（Post-Training Quantization, PTQ）</strong> 因为不需要重新训练、可直接作用于现成模型，而在实际部署中最具实用价值。</p>
+<p>不过，激活分布中存在的极端值（outliers）严重影响了低比特量化效果。为了解决这一问题，研究者提出了 <strong>旋转变换（rotation transformation）</strong> 来改变激活分布，使其更适合量化。旋转矩阵具有以下优势：</p>
+<ul>
+<li>保持范数不变；</li>
+<li>可逆；</li>
+<li>能在推理阶段与权重线性层融合，不增加推理时延。</li>
+</ul>
+<p>例如，<strong>QuaRot</strong> 和 <strong>SpinQuant</strong> 分别使用随机或可训练旋转矩阵来削弱 outlier 的影响。然而，SpinQuant 的 end-to-end 旋转训练开销巨大（显存、时间都极高），同时容易在小规模 calibration set 上 <strong>过拟合</strong>。
+这正是 DartQuant 要解决的痛点：<strong>如何在不做昂贵端到端微调的情况下，快速获得合适的旋转矩阵。</strong></p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure1.png"></p>
+<p>现有的基于旋转的量化方法（如 SpinQuant、OSTQuant）主要问题如下：</p>
+<ol>
+<li>
+<p><strong>计算与显存开销过大</strong>：
+对 70B 模型进行旋转矩阵优化需要上百 GiB 显存与数十 GPU 小时，完全不符合 PTQ 快速部署的目标。</p>
+</li>
+<li>
+<p><strong>优化复杂（正交约束）</strong>：
+旋转矩阵必须保持正交性 $RR^\top = I$，因此需要在黎曼流形（Stiefel / Grassmann manifold）上优化。常用方法如 <strong>Cayley 优化器</strong> 或 <strong>Riemannian SGD</strong>，均需进行复杂的投影计算，带来额外的时间消耗。</p>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/table1.png"></p>
+<ol start="3">
+<li><strong>过拟合风险高</strong>：
+calibration 数据有限时，end-to-end fine-tuning 容易对特定分布过拟合，使量化后模型在 0-shot 等下游任务上泛化能力下降。</li>
+</ol>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p>DartQuant 针对上述挑战，提出了一个<strong>高效的旋转分布校准框架（Rotational Distribution Calibration）</strong>，主要贡献如下：</p>
+<ul>
+<li>
+<p><strong>提出分布校准式旋转优化</strong>：
+不依赖任务损失（如 cross-entropy），而是直接优化旋转后激活的统计分布，使其更适合量化，从而减少过拟合。</p>
+</li>
+<li>
+<p><strong>设计 Whip Loss</strong>：
+一种基于分布均匀化的损失函数，使旋转后的激活趋向均匀分布，显著降低量化误差并加速收敛。</p>
+</li>
+<li>
+<p><strong>提出 QR-Orth 优化器</strong>：
+通过 QR 分解保持旋转矩阵的正交性，无需使用复杂的流形优化器，大幅降低计算复杂度。</p>
+</li>
+<li>
+<p><strong>显著提升性能与效率</strong>：
+在 Llama-2/3 等模型上，DartQuant 实现了 47× 的 GPU 时间加速、10× 的显存节省；并首次在单张 RTX 3090 上完成了 70B 模型的旋转校准（仅约 3 小时）。</p>
+</li>
+</ul>
+<hr>
+<h2 id="4-related-work">4. Related Work</h2>
+<h3 id="41-llm-量化挑战">4.1 LLM 量化挑战</h3>
+<p>激活中的异常值（outliers）会占据量化区间，导致有效精度降低。早期方法采用 <strong>mixed precision</strong>（不同层或通道使用不同精度），但增加了实现复杂度。</p>
+<h3 id="42-基于缩放的-outlier-处理">4.2 基于缩放的 outlier 处理</h3>
+<p>例如：</p>
+<ul>
+<li><strong>SmoothQuant</strong>：将 outlier 从激活转移到权重；</li>
+<li><strong>Outlier Suppression+</strong>：对激活通道进行缩放与偏移；</li>
+<li><strong>OmniQuant</strong>：通过可学习裁剪（learnable clipping）进行误差补偿。</li>
+</ul>
+<p>这些方法能缓解激活异常值，但可能转移问题到权重侧，并在极端 outlier 情况下失效。</p>
+<h3 id="43-基于旋转的-outlier-处理">4.3 基于旋转的 outlier 处理</h3>
+<p>旋转方法的典型代表包括：</p>
+<ul>
+<li><strong>QuIP / QuIP#</strong>：使用随机正交变换或 Hadamard 变换降低相关性；</li>
+<li><strong>QuaRot</strong>：结合旋转与缩放，适用于 LLaMA 大模型；</li>
+<li><strong>SpinQuant / OSTQuant</strong>：将旋转矩阵视为可训练参数，用端到端方式优化。</li>
+</ul>
+<p>然而，端到端优化需大量资源，并存在 overfitting 与复杂正交约束问题。
+DartQuant 则提出无任务损失的“分布校准”方案，显著简化了优化过程。</p>
+<hr>
+<h2 id="5-method">5. Method</h2>
+<h3 id="-preliminaries-and-difficulty">🔹 Preliminaries and Difficulty</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure2.png"></p>
+<p>在 Transformer 中，线性层输出为：</p>
+$$
+Y = XW^\top
+$$<p>若插入旋转矩阵 $R$（满足 $RR^\top = I$），则：</p>
+$$
+Y = (XR)(R^\top W^\top)
+$$<p>由于旋转保持范数不变，上式与原输出等价，因此可以安全插入旋转矩阵来调整激活分布，而不会改变模型推理输出。</p>
+<p>现有工作（如 SpinQuant）通过 end-to-end 微调学习 $R$，但这种方式计算和显存消耗巨大。
+此外，旋转矩阵的优化需保持正交约束，使得优化过程位于 <strong>Stiefel 流形</strong> 上：</p>
+$$
+\mathcal{S}(n,p) = { R \in \mathbb{R}^{n \times p} | R^\top R = I_p }
+$$<p>这需要特定的优化器（如 Riemannian SGD），实现复杂且效率低。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure3.png"></p>
+<p>上图展示了不同旋转方法在 20 层激活的 outlier 数量与量化误差对比。
+可以看出，即使经过 end-to-end fine-tuning，outlier 数量下降有限，说明该过程并未有效调整激活分布。</p>
+<hr>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure4.png"></p>
+<h3 id="51-rotational-distribution-calibration">5.1 Rotational Distribution Calibration</h3>
+<p>DartQuant 重新定义旋转优化问题，从“任务损失最小化”转向“分布校准最优”。
+目标是寻找一个旋转矩阵 $R$，使得旋转后的激活分布更接近量化友好的均匀分布：</p>
+$$
+\min_R \sum_{i=1}^{C_{in}} \mathbb{I}(|(R x)_i| > \tau)
+$$<p>其中，$\mathbb{I}(\cdot)$ 为指示函数，$\tau$ 是 outlier 阈值。
+但该目标不可导，因此作者提出可微近似方法，并分析了三种传统度量（方差、峰度、量化误差）的不足：</p>
+<ul>
+<li><strong>方差（variance）</strong>：由于旋转不改变范数，优化无效；</li>
+<li><strong>峰度（kurtosis）</strong>：仅在尾部分布极端时有效；</li>
+<li><strong>量化误差（quantization loss）</strong>：难以直接反向传播。</li>
+</ul>
+<p>因此，论文提出新的度量 —— <strong>Whip Loss</strong>。</p>
+<hr>
+<h3 id="52-activation-uniformity-via-whip-loss">5.2 Activation Uniformity via Whip Loss</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure5.png"></p>
+<p>论文观察到，激活值近似服从对称的 <strong>Laplace 分布</strong>：</p>
+$$
+f(x) = \frac{1}{2b} e^{-|x|/b}
+$$<p>目标是将其变换为更平坦的 <strong>均匀分布</strong>，可通过累积分布函数（CDF）映射实现：</p>
+$$
+U_X(x) = 2\tau \left( \int_{-\infty}^{x} \frac{1}{2b} e^{-|t|/b}dt - \frac{1}{2} \right)
+$$<p>计算得：</p>
+$$
+U_X(x) =
+\begin{cases}
+\tau (e^{x/b} - 1), & x \le 0 \
+\tau (1 - e^{-x/b}), & x > 0
+\end{cases}
+$$<p>这一变换可将“中心峰值”平展、同时压缩尾部 outlier。</p>
+<p>基于该思路，提出可微损失函数 <strong>Whip Loss</strong>：</p>
+$$
+\mathcal{L}_{\text{Whip}}(x) = \sum_i e^{-|x_i|}
+$$<ul>
+<li>对小幅度激活（接近 0）梯度较大，使其远离中心；</li>
+<li>由于旋转保持范数，放大中间值会间接压缩 outlier；</li>
+<li>整体激活分布趋向均匀，减少量化误差。</li>
+</ul>
+<p>Whip Loss 可直接使用常规优化器（如 SGD）训练，收敛快且稳定。
+实验显示，相较 variance/kurtosis/quantization loss，Whip Loss 在数个迭代内即可显著降低激活量化误差（见 Figure 6 与 Figure 7）。</p>
+<hr>
+<h3 id="53-enforcing-orthogonality-with-qr-orth">5.3 Enforcing Orthogonality with QR-Orth</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/algorithm1.png"></p>
+<p>为避免昂贵的流形优化，DartQuant 提出 <strong>QR-Orth</strong>：</p>
+<p>通过引入潜在矩阵 $Z \in \mathbb{R}^{n \times n}$，对其进行 QR 分解：</p>
+$$
+Z = QR
+$$<p>取 $Q$ 作为正交矩阵，即旋转矩阵 $R$。
+这样就可以在普通欧几里得空间中更新 $Z$，每次通过 QR 分解获得新的正交矩阵，完全避免了 Cayley 或 Riemannian 投影(<strong>很巧妙的做法</strong>)。</p>
+<p><strong>复杂度分析：</strong></p>
+<ul>
+<li>Householder QR 分解复杂度约为 $\frac{4}{3}n^3$；</li>
+<li>Cayley 变换需多次矩阵乘法，复杂度约 $6n^3$；</li>
+<li>实测 QR-Orth 比 Cayley 优化快 1.4×，并支持单 GPU 运行。</li>
+</ul>
+<p><strong>实现要点：</strong></p>
+<ul>
+<li>使用一次 token sampling 收集激活样本；</li>
+<li>$Z_0$ 采用随机 Hadamard 初始化；</li>
+<li>优化器可用 SGD 或 Adam；</li>
+<li>Whip Loss 收敛速度快，仅需少量迭代即可完成校准。</li>
+</ul>
+<hr>
+<h2 id="6-evaluation">6. Evaluation</h2>
+<h3 id="61-主实验结果">6.1 主实验结果</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/table2.png"></p>
+<p>在多种模型与位宽设置（Llama-2/3、70B/13B/7B）下：</p>
+<ul>
+<li>当权重为 8-bit 时，各方法差距不大；</li>
+<li>当权重为 4-bit、激活为 8-bit 时，<strong>SmoothQuant / OmniQuant</strong> 性能大幅下降；</li>
+<li>而 <strong>DartQuant</strong> 能保持与原模型接近的性能；</li>
+<li>在 70B 模型 w4a4kv16 设置下，性能损失仅 0.5%。</li>
+</ul>
+<p>此外，SpinQuant / OSTQuant 虽能降低 PPL，但 zero-shot 任务上性能不稳，说明存在过拟合。
+DartQuant 则通过分布校准机制实现更好的泛化性能。</p>
+<hr>
+<h3 id="62-ablation-studies">6.2 Ablation Studies</h3>
+<h4 id="1-不同优化目标">(1) 不同优化目标</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure6.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/figure7.png">
+比较四种目标函数：Quantization Loss、Variance、Kurtosis、Whip。
+实验表明：</p>
+<ul>
+<li>Whip Loss 收敛更快；</li>
+<li>最终量化误差最低；</li>
+<li>迭代次数更少（Figure 7a）。</li>
+</ul>
+<h4 id="2-不同优化器">(2) 不同优化器</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/table4.png"></p>
+<p>比较 <strong>Cayley 优化器</strong> 与 <strong>QR-Orth</strong>：</p>
+<ul>
+<li>QR-Orth 收敛更快，最终误差更低；</li>
+<li>QR-Orth 的时间消耗减少约 1.4×；</li>
+<li>实测 QR-SGD 6 步即可达到 Cayley-SGD 100 步的效果；</li>
+<li>总加速约 41×。</li>
+</ul>
+<hr>
+<h3 id="63-不同数据集的鲁棒性">6.3 不同数据集的鲁棒性</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/table5.png"></p>
+<p>使用三种校准数据集（WikiText2, PTB, C4）分别优化旋转矩阵，结果几乎一致。
+说明 DartQuant <strong>对数据集不敏感</strong>，不会因校准样本不同而影响最终量化精度。
+这进一步验证了“分布校准”比“任务损失微调”更稳健的优势。</p>
+<hr>
+<h3 id="64-效率与资源开销">6.4 效率与资源开销</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/DartQuant/table3.png"></p>
+<p>在 A800 GPU 上的比较：</p>
+<table>
+  <thead>
+      <tr>
+          <th>方法</th>
+          <th>GPU小时</th>
+          <th>显存 (GiB)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>SpinQuant</td>
+          <td>42.9</td>
+          <td>238.89</td>
+      </tr>
+      <tr>
+          <td>OSTQuant</td>
+          <td>44.0</td>
+          <td>583.86</td>
+      </tr>
+      <tr>
+          <td><strong>DartQuant</strong></td>
+          <td><strong>0.91</strong></td>
+          <td><strong>23.47</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>DartQuant 相较于现有方法：</p>
+<ul>
+<li>计算时间减少 <strong>47×</strong>；</li>
+<li>显存开销减少 <strong>10×</strong>；</li>
+<li>并能在单张 RTX 3090 上完成 70B 模型旋转优化，仅需约 3 小时。</li>
+</ul>
+<hr>
+<h3 id="65-在-moe-模型上的表现">6.5 在 MoE 模型上的表现</h3>
+<p>DartQuant 还被验证可应用于 <strong>Mixture-of-Experts (MoE)</strong> 架构（如 Mixtral、DeepSeek-MoE）。
+实验表明，即使在专家切换的非均匀分布下，Whip Loss 仍能稳定收敛，验证了其通用性。</p>
+<hr>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>本文提出的 <strong>DartQuant</strong> 框架通过：</p>
+<ul>
+<li>Whip Loss 将激活分布校准为更均匀形态；</li>
+<li>QR-Orth 避免复杂的流形优化；
+实现了在 <strong>大模型量化（尤其是 4-bit 级别）</strong> 下的高效与高精度统一。</li>
+</ul>
+<p>它显著降低了旋转矩阵优化的时间与显存成本，使得在单 GPU 上优化 70B 模型成为可能。
+DartQuant 为未来在资源受限环境中部署 LLM 提供了重要启发。</p>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\HEADINFER - Memory-Efficient LLM Inference by Head-wise Offloading.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICML'25 Workshop on Long-Context Foundation Models</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/wdlctc/headinfer">https://github.com/wdlctc/headinfer</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/figure1.png"></p>
+<p>Transformer-based LLM 在长上下文场景下的推理性能显著，但随着上下文长度的扩展，<strong>KV cache</strong>（key-value cache）迅速成为内存占用的主要瓶颈。论文指出：例如对 Llama-3-8B 进行 1M token 推理时，KV cache 可达 128 GB，整体内存可达 207 GB（权重 + activation + KV cache），这是在常见 BF16 设置下的估算，使得在消费级 GPU（如 RTX-4090，24GB）上无法直接执行长上下文推理。为解决此类问题，作者提出 HEADINFER —— 通过<strong>按 attention head 维度进行细粒度 KV cache 离线/回传（offload）</strong>，仅在 GPU 上保留部分 attention heads 的 KV，从而极大地压缩 GPU 端 KV 的占用，同时保证数学等价性（lossless）和兼容各种 attention 形式（dense / sparse）。论文摘要与引言的核心论点与数据来自原文说明。</p>
+<hr>
+<h2 id="2-relative-work">2. Relative Work</h2>
+<ul>
+<li>
+<p><strong>生成式推理与 KV 缓存（Generative Inference &amp; KV Caching）</strong>：预填（prefill）和解码（decoding）阶段的概念与常用 chunked prefill 思路（将长输入切为若干 chunk 逐步构建 KV cache）被回顾，用以说明激活内存与 KV cache 在不同阶段的不同开销特征。</p>
+</li>
+<li>
+<p><strong>有损的 KV 管理（Lossy KV Management）</strong>：提到 Sliding Window、Heavy Hitter、StreamingLLM 等方法，这些方法通过丢弃或压缩不重要 token / head 来缩内存（有精度/信息权衡）。HEADINFER 与这些方法不同：它保持“无损”的等价性（数学一致），但通过更细粒度的 offload 控制来降低 GPU 占用。</p>
+</li>
+<li>
+<p><strong>KV Offloading 的既有工作</strong>：LayerKV、FastDecode、NEO、ShadowKV、FlexInfer、Infinigen 等都是将 KV 缓存移动到外部（CPU/磁盘/压缩表征）来换取更长的上下文，HEADINFER 在粒度和 overlapped transfer 上做了不同的工程设计以实现对消费级 GPU 的支持。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-challenge">3. Challenge</h2>
+<ul>
+<li>核心挑战：当上下文 $S$ 到百万级别时，KV cache 的线性增长会使得 GPU HBM 无法承载，导致运行时 OOM。现有的粗粒度 offload（按 layer）仍然无法在剩余的 GPU 内存、激活（activations）与 KV cache 三者之间取得平衡，尤其是在消费级 GPU（如 RTX-4090）上。即便 offloading 把 KV 放到 CPU，激活内存（activations）仍占很大比例，且粗粒度 offload 导致 GPU 仍需保留数量可观的 KV。</li>
+</ul>
+<hr>
+<h2 id="4-contribution">4. Contribution</h2>
+<p>简要列出本文主要贡献：</p>
+<ul>
+<li>提出 HEADINFER：基于 <strong>head-wise offloading</strong> 的 KV 管理策略，使 GPU 端只保留极少的 head KV（甚至每次只保留 1 个 head），实现数学等价的长上下文推理。</li>
+<li>使用 roofline 模型系统性分析，实现 prefill 阶段仍保持 compute-bound、避免陷入 memory-bound，从而在一定上下文规模下保持高效能。</li>
+<li>设计 adaptive head grouping、chunked prefill、ping-pong 异步数据搬运与 pre-allocation 等工程优化，保证实际系统性能与可用性（支持 dense / sparse attention，如 duo-attention）。</li>
+<li>在 RTX-4090（24GB）上对 Llama-3-8B、Llama-3-70B 等模型进行实验，展示在 8B 模型上实现百万级（甚至到 4M）context 的能力。</li>
+</ul>
+<hr>
+<h2 id="5-method">5. Method</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/figure2.png"></p>
+<p>HEADINFER 的核心思想是：利用 transformer 中 attention heads 的<strong>计算独立性</strong>，将 KV cache 在 head 维度做分区（head-wise partition），并在 GPU 上仅保持少量（甚至 1 个）head 的 KV，其余 KV 保存在 CPU RAM。当需要计算某 head 的 attention 时，通过异步预取（prefetch）将该 head 的 KV 载入 GPU，计算完成后异步将其写回 CPU。通过<strong>ping-pong memory</strong> 设计，HEADINFER 能够在计算和 PCIe 传输之间实现重叠，从而把通信开销隐藏到计算时间里（当计算时间足够长时，可以几乎不引入额外延迟）。</p>
+<h3 id="51-基础公式与组织方式数学陈述">5.1 基础公式与组织方式（数学陈述）</h3>
+<ul>
+<li>
+<p>在常规设置下，每个 time-step $t$ 的 key/value 由线性投影得到：
+</p>
+$$
+  K_t = W_K E(x_t), \quad V_t = W_V E(x_t)
+  $$<p>
+序列长度为 $S$ 时，整个 layer 的 KV cache：
+</p>
+$$
+  K_{cache} = [K_1, \ldots, K_t],\quad V_{cache} = [V_1,\ldots, V_t]
+  $$</li>
+<li>
+<p>在 head-wise 表示下，模型有 $H$ 个 heads（每层），每个 head 的维度为 $D_h = D / H$。第 $h$ 个 head 的 KV：
+</p>
+$$
+  K^{(h)} \in \mathbb{R}^{S \times D_h},\quad V^{(h)} \in \mathbb{R}^{S \times D_h}
+  $$<p>
+attention 的 head-level 输出为：
+</p>
+$$
+  A^{(h)}_t = \operatorname{Softmax}\left(\frac{Q^{(h)}_t (K^{(h)}_{\text{cache}})^\top}{\sqrt{d_k}}\right) V^{(h)}_{\text{cache}}
+  $$<p>
+最终将所有 heads 的输出拼接（concatenate）得到层输出。HEADINFER 利用这个 head-local 的计算等价性来按 head 做 KV 的分区和迁移。</p>
+</li>
+</ul>
+<h3 id="52-headinfer-head-wise-offload">5.2 HEADINFER: Head-wise Offload</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/figure3.png"></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/figure4.png"></p>
+<h4 id="算法概览伪代码流程">算法概览（伪代码、流程）</h4>
+<p>论文提供了 Algorithm ，主要流程如下：
+<img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/algorithm1.png">
+<strong>初始化</strong>：</p>
+<ol>
+<li>在 GPU 上为 $H_{on}$（保留在 GPU 的 heads）预分配 ping-pong buffer（避免运行时频繁分配）。</li>
+<li>在 CPU 上为 $H_{off}$（offloaded heads）预分配 KV 存储（并尽可能使用 pinned memory 以提高 PCIe 传输效率）。</li>
+</ol>
+<p><strong>Prefill 阶段（输入处理）</strong>：</p>
+<ul>
+<li>
+<p>使用 chunked prefill：把长输入按 chunk（论文建议 chunk size = 10K，基于 roofline 分析）分块处理，减少 activation 峰值内存。对每个 chunk：</p>
+<ul>
+<li>对每个 layer、每个 head 逐个计算 $K^{(h)},V^{(h)}$；</li>
+<li>若该 head 在 GPU（$h\in H_{on}$），则更新 GPU 端 KV buffer；</li>
+<li>否则（$h\in H_{off}$），启动 <strong>异步预取（async prefetch）</strong> 和 <strong>异步更新（async update back to CPU）</strong>：即边计算当前 head，边用 DMA/async PCIe 将下一个所需 head 的 KV 从 CPU 读到 GPU，同时把当前 head 的 KV 写回 CPU。这样利用 ping-pong 将通信与计算重叠，减少阻塞。详见 Algorithm 1 的第 6–13 行与第 10–11 行。</li>
+</ul>
+</li>
+</ul>
+<p><strong>Decoding 阶段（自回归生成）</strong>：</p>
+<ul>
+<li>每生成一个 token 都要对所有先前 token 的 KV 做 attention（对应的 head-level KV 也随之增长）。HEADINFER 在 decoding 阶段仍然采用相同的 head-wise 迁移策略，保证每个 head 的 attention output 在 GPU 上计算，KV 的移动通过异步预取 / 异步写回完成，算法在 Algorithm 1 的第 18–32 行给出完整流程。</li>
+</ul>
+<h4 id="关键工程优化实现细节">关键工程优化（实现细节）</h4>
+<ol>
+<li>
+<p><strong>Ping-pong memory</strong>：在 GPU 侧维护双缓冲区（ping &amp; pong），保证在计算一个缓冲区时，另一个缓冲区正在进行 DMA 传输（prefetch / writeback），从而实现 compute &lt;-&gt; transfer 的 overlap。论文强调这对长上下文尤为关键。</p>
+</li>
+<li>
+<p><strong>Pre-allocation（预分配）</strong>：GPU / CPU 的 KV buffer 在推理开始时预分配，以避免在线程/内存碎片化和频繁分配导致的抖动。论文中明确建议为 CPU（host）端的 KV 使用 pinned memory，以提升 PCIe 带宽利用率并减少复制开销。</p>
+</li>
+<li>
+<p><strong>Adaptive head grouping（自适应头分组）</strong>：为减少 kernel launch overhead（小 head 粒度会导致大量 kernel 启动），HEADINFER 在不同上下文阶段选择不同的 head grouping：</p>
+<ul>
+<li>小上下文（短 S）：倾向把多个 head fuse 到一个 kernel（例如 group=8，即把一层所有 head 一次性处理，这与 layer-wise offload 等价）；</li>
+<li>大上下文（长 S）：逐渐降低 group 大小，到最终最细粒度（group=8 -&gt; group=4 -&gt; group=2 -&gt; group=1 的演进），以在内存占用和通信开销之间取得平衡。论文给出了 500K、1M、2M、4M 等阈值下的分组策略。</li>
+</ul>
+</li>
+<li>
+<p><strong>与 head-wise sparsity 的结合</strong>：HEADINFER 与 duo-attention、HeadKV、Razorattention 等 head-wise sparsity 方法兼容。具体策略是把“重要且长的 retrieval heads” 视为需要保留在 GPU（on-GPU Hon），而把短的、可截断的 heads 仍 offload 或做截断（典型阈值：长度 &lt; 1k 时不值得 offload 因为 PCIe / kernel overhead 反而降性能）。详细扩展在 Appendix D。</p>
+</li>
+</ol>
+<h4 id="空间复杂度与-alphagpu-上保留比例">空间复杂度与 $\alpha$（GPU 上保留比例）</h4>
+<p>定义 $\alpha$ 为保留在 GPU 上的 KV fraction（$0\le \alpha \le 1$）。若只保留单个 head（整个模型的 $1/(L\times H)$），则：
+</p>
+$$
+\alpha = \frac{H_{on}}{H_{all}} \quad\Rightarrow\quad \alpha = \frac{1}{L\times H}
+$$<p>
+GPU 上的 KV 大小约为：
+</p>
+$$
+S_{onGPU} = 2 \times B \times S \times D_h \times \text{sizeof(datatype)}
+$$<p>
+从而在理论上可把 GPU KV 缩至极小比例（例如 Llama-3-8B 在 1M token 下 GPU KV 从 128GB 降到 1GB 的示例）。</p>
+<hr>
+<h2 id="6-analysis-and-evaluation">6. Analysis and Evaluation</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/figure5.png"></p>
+<h3 id="61-roofline-分析性能模型与结论">6.1 Roofline 分析（性能模型与结论）</h3>
+<ul>
+<li>
+<p><strong>性能模型</strong>：论文用一个简化的时间模型把每个 token 的时间近似为：
+</p>
+$$
+  T \approx \max(T_{comp}, T_{mem})
+  $$<p>
+其中 $T_{comp}\propto \frac{D \times S^2 \times L \times H}{F_{GPU}}$（prefill 的 compute 成分与 $S^2$ 相关），而 $T_{mem}\propto \frac{D \times S \times L \times H}{B_{mem}}$。解码阶段（每 token attend 先前 tokens）为线性随 $S$ 增长。</p>
+</li>
+<li>
+<p><strong>主要观察</strong>（基于 RTX-4090 的 roofline）：</p>
+<ul>
+<li>Prefill 阶段在较大上下文（$S\ge 10$k）下仍为 <strong>compute-bound</strong>（即算力主导），因此对 PCIe offload 的依赖不会显著将其拉入 memory-bound，使得异步 offload 的通信开销可以通过 compute 来掩盖（overlap）。</li>
+<li>对于短上下文（$S\le 1$k）或某些极短场景，offload 会把工作搬到 memory-bound，导致开销上升（turning point 在 ~2k）。因此 HEADINFER 在短上下文下可能不如标准推理快。</li>
+<li>解码阶段通常 <strong>memory-bound</strong>，因此在解码时依赖 PCIe 带宽会显著降低吞吐，解法上依靠 adaptive 分组和尽量把 compute 与 transfer 重叠来缓解。</li>
+</ul>
+</li>
+</ul>
+<h3 id="62-long-context-benchmarkslongbench-v2--scbench--ruler--niah">6.2 Long-Context Benchmarks（LongBench v2 / SCBench / Ruler / NIAH）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/table1.png"></p>
+<ul>
+<li>
+<p>实验平台：RTX-4090（24.5GB HBM3），host：AMD EPYC 家族多核 + 大量 DDR5 + NVMe，PCIe 4.0 单向约 25GB/s（用于 pinned host memory）——这是实验环境设定，会影响能否完全重叠通信/计算。</p>
+</li>
+<li>
+<p><strong>LongBench v2 结果（表 1）</strong>：HEADINFER 在 Llama-3-8B（1024k）上在 Medium / Long 子集上得分最高（表中给出整体与分项），这表明在需要长上下文理解/检索的任务上，扩展上下文带来的信息增益超过 offload 带来的开销。</p>
+</li>
+<li></li>
+</ul>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/table2.png"></p>
+<ul>
+<li>
+<p><strong>SCBench（表 2）</strong>：HEADINFER 在一组 KV-centric 任务上全项优于其他方法（例如 kv、prefix-suffix、variable tracking 等），尤其在 many-shot / retrieval 类任务增益明显，说明更长上下文显著提升实际能力（而且 HEADINFER 保证无损）。</p>
+</li>
+<li>
+<p><strong>Ruler / Needle-in-a-Haystack / NIAH</strong>：HEADINFER 在大型 synthetic benchmark（Ruler）中将可处理最大序列长度提升到 128K（相比标准 16K / chunked 32K），在 NIAH 中 HEADINFER 在 1024K 情况仍能保持与标准推理等价的检索准确度（见 Figure 6），进一步证明数学一致性与检索能力。</p>
+</li>
+</ul>
+<h3 id="63-内存与吞吐表-3表-10表-11">6.3 内存与吞吐（表 3、表 10、表 11）</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/table4.png"></p>
+<ul>
+<li>
+<p><strong>关键实验结论</strong>：</p>
+<ul>
+<li>在 Llama-3-8B、1M token 的场景下：HEADINFER 在 prefill 时使用约 <strong>17GB</strong>，decode 时约 <strong>16.4GB</strong>，而标准 BF16 设置下需要 207GB，因此 HEADINFER 将 GPU 内存占用从数百 GB 级别压缩到接近 17GB，从而在单张 24GB 卡上实现 1M+ 上下文推理（数值来自论文）。</li>
+<li>表 10 / 11 给出详细的权重 / KV / activation 的分解（以 Llama-3-8B + 1M 为例），HEADINFER 的总估算约 16.7GB，与实测 17GB 非常接近，说明估算模型合理。</li>
+</ul>
+</li>
+<li>
+<p><strong>最大支持的 context length（表 3）</strong>：</p>
+<ul>
+<li>比较结果（在单卡 RTX-4090 上）显示：Standard ~ 25K，Chunked ~ 30K，4-bit KV-quant ~ 45K，Layer-wise offload ~ 45K，而 HEADINFER 可以达到 <strong>4096K（4,096K）</strong>（对于 Llama-3-8B），其他模型也有大幅扩展（例如 Qwen2-7B 到 4200K）。这说明 HEADINFER 的 head-wise 策略能把限制从 GPU HBM 转移到 CPU RAM（可配置更大），从而显著提升最大可支持的上下文长度。</li>
+</ul>
+</li>
+</ul>
+<h3 id="64-吞吐与延迟prefill--decodea1-表-6--表-7">6.4 吞吐与延迟（prefill / decode）（A.1 表 6 / 表 7）</h3>
+<ul>
+<li>
+<p><strong>Prefill 吞吐</strong>（对 Llama-3-8B）：</p>
+<ul>
+<li>在短输入（如 1k、10k、20k）阶段，HEADINFER 与标准方法的 prefill 吞吐几乎一致（例如 ~0.11–0.14s 的 prefill latency），在长输入（&gt;100k）开始出现更大差别，但 HEADINFER 仍能在百万级上下文下完成 prefill（表 6）。</li>
+</ul>
+</li>
+<li>
+<p><strong>Decode 延迟（每 token）</strong>：</p>
+<ul>
+<li>标准推理在短上下文 decod e 速度较高（例如 ~0.03s/token），而 layer-wise offload 与 HEADINFER 在解码时随着上下文增加会出现显著延迟增长（因 memory-bound），但 HEADINFER 通过 adaptive grouping 在中等上下文（20k–100k）仍维持可接受延迟，且在极大上下文（1M，2M）时延迟虽然增加但仍可完成任务（表 7）。</li>
+</ul>
+</li>
+</ul>
+<h3 id="65-ablation-study表-5-粒度对最大上下文长度的影响">6.5 Ablation Study（表 5）—— 粒度对最大上下文长度的影响</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/HeadInfer/table5.png"></p>
+<ul>
+<li>
+<p>论文通过把 head grouping 从粗到细做对比（Head=8 Group=1 相当于 layer-wise offload；Head=1 Group=8 为最细粒度）表明：</p>
+<ul>
+<li>粗粒度（大 group）在短至中等上下文时能减少 kernel 启动开销，性能更好；</li>
+<li>细粒度（小 group）在超长上下文时能节省最大内存，从而支持更大的 context length（从 550K → 4096K）；</li>
+<li>因此 <strong>Adaptive Head Grouping</strong>（根据当前上下文规模动态选择 group）是必要且有效的折中策略。</li>
+</ul>
+</li>
+</ul>
+<h3 id="66-实验可重复性与实现注意事项">6.6 实验可重复性与实现注意事项</h3>
+<ul>
+<li>使用 pinned host memory（page-locked）来减少 PCIe 复制开销。</li>
+<li>chunk size 的选取影响 roofline 上的 compute-vs-memory tradeoff：作者根据 RTX-4090 的 roofline 建议默认 chunk size = 10K（prefill 在 10K 级别能保持 compute-bound）。</li>
+<li>CPU RAM 容量是限制 HEADINFER 能否继续扩展上下文的另一个瓶颈（论文在多处说明 Llama-3 / Mistral 等模型的 1M+/4M 支持最终受 CPU RAM 限制）。若需要更大上下文，可把 offload 目标改为 NVMe，但需要考虑更高的延迟。</li>
+</ul>
+<hr>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>HEADINFER 提出并实现了按 attention head 做 KV cache 离线/回传的细粒度 offloading 框架，结合 ping-pong 异步传输、chunked prefill 和 adaptive head grouping 等技术，使得在消费级 GPU（如 RTX-4090）上可以实现百万级乃至千万级上下文长度的无损推理。论文通过 roofline 分析、多个长上下文 benchmark（LongBench v2、SCBench、Ruler、NIAH）以及系统级的内存 / 吞吐度测量，验证了 HEADINFER 在内存效率和实际性能之间的折中与优势。作者还讨论了与 head-wise sparsity 方法的兼容性，并演示在多卡 pipeline 场景下扩展到 70B 规模模型的可行性。</p>
+<hr>
+<h1></h1>
+
+    </section>
+  
+    <section data-source="posts\Efficient Multi-modal Large Language Models via Progressive Consistency Distillation - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/title.png"></p>
+<p><strong>Conference：</strong> NeurIPS 2025</p>
+<p><strong>Github：</strong> <a href="https://github.com/ZichenWen1/EPIC">https://github.com/ZichenWen1/EPIC</a></p>
+<h2><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/figure3.png"></h2>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>EPIC 这篇论文的核心思想是在<strong>不改动模型结构</strong>的前提下，通过<strong>渐进式一致性蒸馏（Progressive Consistency Distillation）</strong>，让多模态大语言模型在<strong>token 层面（Token Consistency Distillation, TCD）</strong> 和 <strong>层级层面（Layer Consistency Distillation, LCD）</strong> 逐步适应视觉 token 压缩带来的特征分布变化，从而实现从低压缩到高压缩的平滑过渡，在显著降低计算量与显存占用的同时仍保持甚至提升模型性能。这种从训练策略层面解决效率问题的思路，兼具理论优雅性与实用性。</p>
+<p>日后如果有需要用到 Knowledge  Dsitillation 的 idea 或者 训练策略，可以借鉴其思想。</p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>多模态大语言模型（MLLM）需要同时处理文本与视觉模态的信息。与仅需处理少量高信息密度文本 token 的 LLM 不同，MLLM 在输入中包含大量视觉 token，这些 token 在高分辨率图像或多帧视频任务中尤为庞大。这种“视觉 token 爆炸”（visual token explosion）带来了显著的<strong>计算负担与存储压力</strong>，尤其在推理时对 KV cache 和显存的占用极大。</p>
+<p>因此，如何在不显著降低性能的前提下<strong>减少视觉 token 的数量</strong>，成为提升 MLLM 效率的核心问题。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>视觉 token 数量通常比文本 token 多出几个数量级，但其包含的空间信息高度冗余。近年来，研究者提出了两大类视觉 token 压缩方法：</p>
+<ol>
+<li>
+<p><strong>Training-free 方法：</strong> 不需要额外训练，通过简单的启发式规则压缩视觉 token。</p>
+<ul>
+<li><strong>基于重要性（importance-based）</strong>：如 FastV、SparseVLM，依据注意力得分筛选重要 token。</li>
+<li><strong>基于冗余（redundancy-based）</strong>：如 DART、G-Prune，通过 token 相似度评估合并或舍弃冗余特征。</li>
+</ul>
+</li>
+<li>
+<p><strong>Training-aware 方法：</strong> 在训练阶段显式引入压缩模块，让模型学习在压缩下保持性能。
+典型工作包括：</p>
+<ul>
+<li>LLaVA-PruMerge（基于注意力的合并）</li>
+<li>VoCo-LLaMA（压缩 VoCo token）</li>
+<li>MQT-LLaVA（动态 Q-Former 编码）</li>
+<li>TokenPacker（粗到细迭代压缩）</li>
+<li>LLaVA-Mini（利用辅助模块实现近无损压缩）</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/figure1.png"></p>
+<p><strong>然而问题在于：</strong>
+在训练过程中进行 token 压缩时，压缩后的特征分布会与原始分布产生偏移（即特征空间扰动，feature-space perturbation）。这种扰动会使模型参数空间中的最优点发生漂移。压缩越激进，漂移越大，从而导致模型更容易陷入局部最优，训练收敛困难。</p>
+<p>因此，核心挑战在于：
+如何在<strong>高压缩率下</strong>仍能保持<strong>稳定的训练与性能一致性</strong>。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/figure2.png"></p>
+<p>本文提出了一种<strong>渐进一致性蒸馏学习框架（Progressive Consistency Distillation Learning Framework）</strong> —— <strong>EPIC</strong>，用于解决 token 压缩带来的训练扰动问题。</p>
+<p>核心思想是：
+通过<strong>渐进学习（progressive learning）<strong>和</strong>一致性蒸馏（consistency distillation）</strong>，让模型从“低压缩、易学习”的状态逐步适应“高压缩、难优化”的场景，从而实现平滑过渡。</p>
+<h3 id="核心贡献包括">核心贡献包括：</h3>
+<ol>
+<li>
+<p><strong>Token Consistency Distillation (TCD)：</strong>
+从 token 维度进行渐进蒸馏。
+在训练初期，teacher 与 student 使用较低压缩率；随着训练推进，压缩率逐步提高。teacher 始终比 student 稍微“容易”一些，从而提供稳定的蒸馏指导。</p>
+</li>
+<li>
+<p><strong>Layer Consistency Distillation (LCD)：</strong>
+从层级维度进行渐进蒸馏。
+视觉 token 在模型深层的贡献较小，因此训练初期在深层执行压缩影响较小，随后逐渐将压缩迁移到浅层，实现“由易到难”的层级学习。</p>
+</li>
+<li>
+<p><strong>统一框架与兼容性：</strong>
+EPIC 不需要修改模型结构，也不依赖特定的 token 压缩算法，可与 DART、FastV、Random 等方法兼容。</p>
+</li>
+</ol>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/figure3.png"></p>
+<h3 id="41-progressive-consistency-distillation-learning">4.1 Progressive Consistency Distillation Learning</h3>
+<p>在高压缩训练中，视觉特征分布的扰动会导致模型收敛困难。EPIC 提出的**渐进一致性蒸馏学习（PCDL）**框架，旨在通过逐步增加压缩难度，让模型平滑过渡至最终目标。</p>
+<p>该框架包含两个主要部分：</p>
+<ul>
+<li><strong>Token Consistency Distillation (TCD)</strong>：从 token 维度逐步提高压缩率；</li>
+<li><strong>Layer Consistency Distillation (LCD)</strong>：从层级维度逐步从深层过渡到浅层进行压缩。</li>
+</ul>
+<p>两者均通过<strong>共享权重的 teacher-student 架构</strong>实现一致性蒸馏。teacher 使用略低压缩率（如低 5%）指导 student，随着训练进行逐渐拉大 gap（如 10%），实现阶段式指导。</p>
+<hr>
+<h3 id="42-theoretical-intuition-a-1d-prototype-for-progressive-consistency-distillation-learning">4.2 Theoretical Intuition: A 1D Prototype for Progressive Consistency Distillation Learning</h3>
+<p>为理解 PCDL 的有效性，论文构建了一个一维标量模型。假设模型输出为 $\theta \in \mathbb{R}$，每个压缩率 $r \in [0, r_{\max}]$ 对应一个目标中心 $c_r$。设函数 $c(r)$ 满足：</p>
+<ul>
+<li>单调递增：$c&rsquo;(r) \ge 0$</li>
+<li>Lipschitz 连续：存在常数 $\gamma &gt; 0$，使得 $|c&rsquo;(r)| \le \gamma$</li>
+<li>凸性：$c&rsquo;&rsquo;(r) \ge 0$</li>
+</ul>
+<p>定义两种训练目标：</p>
+<ul>
+<li><strong>直接训练：</strong>
+$$
+  L_{\text{dir}}(r,\theta) = \frac{1}{2}(\theta - c_r)^2
+  $$</li>
+<li><strong>渐进蒸馏：</strong>
+$$
+  L_{\text{prog}}(r,\theta) = \frac{1}{2}(\theta - c_r)^2 + \frac{\lambda}{2}(\theta - c_{r-\Delta})^2
+  $$</li>
+</ul>
+<p>第二项表示来自压缩率更低的 teacher 的蒸馏约束。该设计能平滑学习轨迹，避免参数在压缩率变化时剧烈振荡。</p>
+<p>理论上可证明，在满足上述条件时，渐进路径的总变化量（Total Variation）严格小于直接训练路径，即学习过程更平滑、更稳定。</p>
+<hr>
+<h3 id="43-token-consistency-distillation-tcd">4.3 Token Consistency Distillation (TCD)</h3>
+<p>TCD 从 <strong>token 维度</strong> 逐步增加压缩比，实现模型对视觉 token 压缩的渐进适应。</p>
+<p>设模型为 $f_\theta$（teacher 与 student 共享参数），图像输入 $I$，文本提示 $P$。</p>
+<p>定义压缩算子 $C(I, r, \ell)$ 表示在第 $\ell$ 层以比例 $r$ 压缩视觉 token（保留 $1-r$ 的比例）。</p>
+<p>在训练第 $t$ 步时：</p>
+<ol>
+<li>
+<p>从一个随时间变化的区间中随机采样 student 压缩率：
+</p>
+$$
+   r_t^{\text{stu}} \sim \mathcal{U}(R_{\min,t}^{\text{stu}}, R_{\max,t}^{\text{stu}})
+   $$<p>
+随着训练进行，$R_{\max,t}$ 逐渐增大（压缩率提高）。</p>
+</li>
+<li>
+<p>teacher 压缩率略低：
+</p>
+$$
+   r_t^{\text{tea}} = \max(0, r_t^{\text{stu}} - \Delta_t)
+   $$<p>
+gap $\Delta_t$ 也随时间逐步增大（防止初期蒸馏难度过大）。</p>
+</li>
+<li>
+<p>teacher 与 student 的前向输出分别为：
+</p>
+$$
+   h_{\text{tea}} = f_\theta(C(I, r_t^{\text{tea}}, \ell); P),\quad
+   h_{\text{stu}} = f_\theta(C(I, r_t^{\text{stu}}, \ell); P)
+   $$</li>
+<li>
+<p>定义蒸馏损失（KL 散度）：
+</p>
+$$
+   L_{\text{TCD}} = \mathrm{KL}(p_{\text{tea}} \Vert p_{\text{stu}}),\quad
+   p = \mathrm{Softmax}(h / \tau)
+   $$<p>
+其中 $\tau$ 为温度参数。</p>
+</li>
+<li>
+<p>总损失为：
+</p>
+$$
+   L_{\text{total}} = (1 - \lambda)L_{\text{SFT}} + \lambda L_{\text{TCD}}
+   $$</li>
+</ol>
+<p><strong>直观理解：</strong>
+teacher 使用轻度压缩得到平滑特征分布，student 使用更高压缩率学习在更困难分布下保持一致性。随着训练推进，teacher 与 student 的压缩率差距增大，学习难度逐步提升，形成稳定的“课程学习（curriculum learning）”路径。</p>
+<hr>
+<h3 id="44-layer-consistency-distillation-lcd">4.4 Layer Consistency Distillation (LCD)</h3>
+<p>先前研究发现，<strong>视觉 token 在模型深层的注意力权重较低，而浅层特征对视觉语义贡献更大</strong>。
+基于此，LCD 采用一种<strong>从深层向浅层逐步压缩</strong>的策略。</p>
+<p>定义模型总层数为 $L$，训练步数为 $T$，当前步 $t$ 的归一化进度为 $\beta_t = t / T$。
+选择压缩层：
+</p>
+$$
+\ell_t = \text{Round}(L - \beta_t(L - \ell_{\min}))
+$$<p>即在训练初期仅压缩最深层（影响最小），随后逐渐向浅层推进。</p>
+<p>其损失函数与 TCD 类似，也采用 KL 散度形式：
+</p>
+$$
+L_{\text{LCD}} = \mathrm{KL}(p_{\text{tea}} \Vert p_{\text{stu}})
+$$<p><strong>最终训练目标：</strong>
+</p>
+$$
+L_{\text{total}} = (1 - \lambda)L_{\text{SFT}} + \lambda L_{\text{LCD}}
+$$<p><strong>总结：</strong>
+TCD 聚焦 token 数量层面，LCD 聚焦层级深度，两者结合构成完整的渐进一致性蒸馏框架。</p>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<p>论文在多个视觉理解基准上进行了实验，包括 <strong>VQAv2、GQA、VizWiz、MME、MMBench、VQAT、POPE</strong> 等。</p>
+<h3 id="51-实验结果">5.1 实验结果</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/table1.png"></p>
+<p>当保留 128 个视觉 token 时，EPIC 模型的性能与原始 LLaVA-v1.5-7B 几乎持平；<strong>当 token 数为 192 以上时甚至超越原始模型</strong>。这表明视觉 token 中存在大量冗余，压缩并不会显著损害性能。</p>
+<p>在 MME、MMBench、VQA V2 等视觉密集型任务上，EPIC 的性能提升最为明显。
+此外，模型在不同压缩率下表现稳定：当仅保留 64 个 token 时，性能下降不到 2%，128~256 token 区间几乎无损。</p>
+<hr>
+<h3 id="52-效率分析">5.2 效率分析</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/table2.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/EPIC/table6.png"></p>
+<p>EPIC 在训练和推理效率上均优于其他方法。</p>
+<ul>
+<li>
+<p><strong>训练阶段：</strong>
+由于 EPIC 不修改模型结构，只需一次监督微调（Supervised Fine-tuning），在 8×A100 上训练约 12 小时。
+而如 MQT-LLaVA、TokenPacker 等架构改造型方法需 30~48 小时。</p>
+</li>
+<li>
+<p><strong>推理阶段：</strong>
+在 64 个 token 情况下，KV cache 占用下降约 90%，FLOPs 减少 80% 以上，推理速度提升约 1.6×。
+即使采用最简单的 Random 压缩策略，也能显著降低延迟和显存消耗。</p>
+</li>
+</ul>
+<p>EPIC 的主要收益来自训练策略优化，而非复杂架构修改。</p>
+<hr>
+<h2 id="6-analysis">6. Analysis</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/table3.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/EPIC/table4.png"></p>
+<h3 id="61-消融实验">6.1 消融实验</h3>
+<ul>
+<li><strong>无蒸馏 (w/o TCD/LCD)：</strong> 性能显著下降，验证 teacher guidance 的必要性。</li>
+<li><strong>无渐进策略 (no progression)：</strong> 直接使用固定压缩率训练时收敛不稳定，验证 progressive 学习的重要性。</li>
+<li><strong>跨压缩方法泛化性：</strong> 用 DART 训练、FastV 推理仍能保持性能，说明 EPIC 具备良好的跨策略鲁棒性。</li>
+</ul>
+<h3 id="62-是否需要极端压缩">6.2 是否需要极端压缩</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/EPIC/figure5.png"></p>
+<p>论文指出，虽然极端压缩（1 ~ 2 token）可进一步降低计算量，但性能下降剧烈，且 GPU 延迟收益有限。最佳权衡点通常在 64 ~128 tokens 区间，兼顾性能与速度。</p>
+<hr>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>本文提出的 <strong>EPIC 框架</strong> 在不改变模型结构的情况下，通过渐进一致性蒸馏实现了对视觉 token 压缩的高效训练。
+其主要优势包括：</p>
+<ul>
+<li>无需额外模块，直接与现有 MLLM 兼容；</li>
+<li>训练稳定、收敛快速（12 小时即可完成）；</li>
+<li>在多项视觉基准上性能与原始模型持平或更优；</li>
+<li>在 64~128 token 区间显著提升推理效率与资源利用率。</li>
+</ul>
+<p>实验结果表明，合理的渐进蒸馏策略能够在不牺牲性能的前提下，大幅度提升多模态大语言模型的效率与鲁棒性。</p>
+
+    </section>
+  
+    <section data-source="posts\SPINQUANT - LLM QUANTIZATION WITH LEARNED ROTATIONS - ICLR&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICLR'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/facebookresearch/SpinQuant">https://github.com/facebookresearch/SpinQuant</a></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure1.png"></p>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>这篇工作里的可学习、可融入权重的 Rotation ($R_1, R_2$) 以及 learned rotations ($R_1 R_2$)，再加上 Hadamard rotations ($R_3, R_4$)（其中 $R_3$ 和 $R_4$ 可以通过快速哈达玛核计算）共同组成了整套旋转框架。
+理解这些旋转的组合与吸收方式（merge into weights）是理解 SpinQuant 的关键所在。</p>
+<p>就像论文中提到的：</p>
+<blockquote>
+<p>“This opens up intriguing research avenues, such as determining if, given an activation distribution with known outlier axes and magnitudes, a closed-form solution for the optimal rotation matrix that evenly distributes magnitude across different axes can be derived&hellip;”</p>
+</blockquote>
+<p>作者提出了未来方向：若能已知激活分布的异常方向及幅度，是否能推导出解析的最优旋转矩阵，使不同轴上的幅值均衡？并进一步验证该理论旋转是否能达到最优量化性能。这一点与本工作提出的“可学习旋转”思想一脉相承。</p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>Post-training quantization (PTQ) 技术通过对权重、激活和 KV cache 进行低比特量化，可显著降低 LLM 的内存占用、延迟和功耗，但当存在 outliers（离群值）时，量化误差往往会非常大。</p>
+<p>SpinQuant 的核心动机是：
+<strong>通过对激活或权重矩阵进行旋转（rotation），可以消除 outlier，使分布更高斯化，从而更易量化。</strong></p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure2.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure3.png"></p>
+<p>Figure 3 (a) 展示了在旋转前后激活的峰度（Kurtosis, $\kappa$）变化情况。
+峰度 $\kappa$ 用来衡量分布的“尾部厚度”：</p>
+<ul>
+<li>较大的 $\kappa$ 表示存在更多离群值；</li>
+<li>$\kappa \approx 3$ 表示近似高斯分布。</li>
+</ul>
+<p>结果显示：在 Transformer 中，旋转前许多层的 $\kappa$ 高达 200+，说明激活中含有大量极值；而乘以随机旋转矩阵后，$\kappa$ 降至约 3，呈现更高斯的分布，有利于量化。</p>
+<p>Figure 3 (b) 进一步验证：旋转后的激活张量量化误差显著降低。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure4.png"></p>
+<p>然而，虽然随机旋转能改善量化，但并非所有随机旋转的效果相同。
+Figure 4 显示：在 LLaMA-2 7B 进行 W4A4 量化的 100 次随机旋转实验中，最好和最差旋转的性能差达 13 个点；随机 Hadamard 矩阵整体优于随机旋转矩阵，但其结果仍存在最高 6 点差距。</p>
+<p>因此，作者提出核心问题：</p>
+<blockquote>
+<p>“Is it possible to optimize the rotation to maximize the benefit of quantization?”</p>
+</blockquote>
+<p>SpinQuant 便是对此的正面回答——通过学习（优化）旋转矩阵以获得最优量化效果。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>量化中的主要挑战在于 <strong>outlier 拉伸量化范围</strong>，使有效比特减少，从而使大多数值被粗糙近似。</p>
+<p>尽管随机旋转统计上可减轻 outlier，但不同旋转对最终性能影响巨大，差异可达十余点。因此我们需要一种<strong>可学习、可吸收、且保证数值等价的旋转策略</strong>，以稳定提升低比特量化性能。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure1.png"></p>
+<p>SpinQuant 的两个核心变体：</p>
+<ul>
+<li><strong>SpinQuant_no_had</strong>：只使用两种可吸收旋转（$R_1$, $R_2$），并可直接并入权重矩阵，在推理时替换即可，无需修改网络结构。</li>
+<li><strong>SpinQuant_had</strong>：在此基础上额外引入在线 Hadamard 旋转矩阵（$R_3$, $R_4$），用于进一步削减极端低比特激活和 KV-cache 的离群值。</li>
+</ul>
+<p>主要贡献总结：</p>
+<ul>
+<li>提出首个通过 <strong>学习旋转（learned rotations）</strong> 缓解权重与激活分布离群问题的方法。</li>
+<li>在 Stiefel manifold 上直接优化旋转矩阵，使其最小化量化网络的最终损失。</li>
+<li>在 Mistral-7B W4A8KV8 设置中将量化性能差距从 12.1 降至 1.6；</li>
+<li>在极端 W4A4KV4 设置下，SpinQuant_had 将 LLaMA-2 7B 的性能差距从 22.0 点缩小至 2.9 点。</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure1.png"></p>
+<p>SpinQuant 框架整体目标：
+在保持全精度网络数值等价的前提下，通过插入旋转矩阵使激活与权重分布更均衡，从而降低量化误差。
+核心包括四个旋转矩阵的定义与优化。</p>
+<h3 id="41-rotation-parameterization">4.1 ROTATION PARAMETERIZATION</h3>
+<h4 id="1-rotation-基础">(1) Rotation 基础</h4>
+<p>Hadamard matrix $H$ 是一种特殊的旋转矩阵，其元素仅为 $\pm \sqrt{n}$。
+通过对角矩阵 $S$（对角元素为 $\pm 1$）相乘，可生成 $2^n$ 种不同的随机 Hadamard 矩阵。</p>
+<h4 id="2-residual-path-rotation-r_1">(2) Residual Path Rotation ($R_1$)</h4>
+<p>在 residual 路径上对激活进行旋转：
+</p>
+$$
+X' = X R_1, \quad \text{then revert by } R_1^\top.
+$$<p>
+这样可以在不改变数值的情况下均衡激活幅度，减少输入 FC 层的 outliers。
+当量化关闭时，无论 $R_1$ 如何取值，网络输出保持不变。
+$R_1$ 可直接合并进相应权重矩阵，不增加额外参数。</p>
+<h4 id="3-attention-block-rotation-r_2">(3) Attention Block Rotation ($R_2$)</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure5.png"></p>
+<p>在注意力模块中：</p>
+<ul>
+<li>对 value 矩阵施加 $R_2$；</li>
+<li>对 out-projection 的输入施加 $R_2^\top$。</li>
+</ul>
+<p>由于 $R_2$ 与 $R_2^\top$ 间无非线性算子，故在全精度下两者可互相抵消，保证数值等价。
+这种 head-wise 旋转有助于改善 KV cache 与 out-projection 激活的量化表现。</p>
+<p>包含 $R_1$ 与 $R_2$ 的方案即 <strong>SpinQuant_no_had</strong>。</p>
+<h4 id="4-online-hadamard-rotations-r_3-r_4">(4) Online Hadamard Rotations ($R_3$, $R_4$)</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure1.png"></p>
+<p>为了进一步减少 4-bit 激活的 outlier，作者引入在线 Hadamard 旋转：</p>
+<ul>
+<li>$R_3$：应用于 KV cache；</li>
+<li>$R_4$：应用于 MLP 的输入激活（尤其 down-projection 前）。</li>
+</ul>
+<p>Hadamard 旋转可通过快速哈达玛变换（FHT）高效实现，几乎不增加推理时延。
+包含所有四个旋转的完整版本即 <strong>SpinQuant_had</strong>。</p>
+<hr>
+<h3 id="为什么-r_3-不需要转置r_3t">为什么 $R_3$ 不需要转置（$R_3^T$）？</h3>
+<p>这是因为 <strong>$R_3$ 的旋转被同时作用在 Query 和 Key 的相同空间方向上</strong>，它的作用是保证注意力分数（即 $QK^T$）的<strong>内积保持不变</strong>，因此不需要显式使用 $R_3^T$。</p>
+<hr>
+<h4 id="1-自注意力计算核心">(1) 自注意力计算核心：</h4>
+$$
+\text{Attn}(Q, K, V) = \text{Softmax}\left(\frac{QK^\top}{\sqrt{d}}\right) V
+$$<p>在 SpinQuant 中，引入旋转后：
+</p>
+$$
+Q' = Q R_3, \quad K' = K R_3
+$$<p>此时注意力分数变为：
+</p>
+$$
+Q' (K')^\top = (Q R_3)(K R_3)^\top = Q (R_3 R_3^\top) K^\top
+$$<hr>
+<h4 id="2-若-r_3-是正交矩阵orthogonal-rotation-matrix">(2) 若 $R_3$ 是<strong>正交矩阵</strong>（orthogonal rotation matrix）：</h4>
+<p>即：
+</p>
+$$
+R_3 R_3^\top = I
+$$<p>则有：
+</p>
+$$
+Q' (K')^\top = Q K^\top
+$$<p>也就是说：</p>
+<ul>
+<li>不论是否显式写出 $R_3^T$，旋转不会改变内积值；</li>
+<li>因此，为了避免重复计算或矩阵转置操作，在实现上只需要一次旋转（$Q R_3$ 与 $K R_3$）即可。</li>
+</ul>
+<hr>
+<h3 id="42-cayley-optimized-rotation">4.2 Cayley-OPTIMIZED ROTATION</h3>
+<h4 id="1-目标函数">(1) 目标函数</h4>
+<p>给定冻结的权重 $W$ 与输入 $X$，优化旋转矩阵以最小化量化后的损失：
+</p>
+$$
+\min_{R \in \mathcal{M}} L_Q(R_1, R_2 | W, X)
+$$<p>
+其中 $\mathcal{M}$ 是 Stiefel manifold（所有正交矩阵的集合），$L_Q$ 表示量化网络的任务损失（如交叉熵）。</p>
+<h4 id="2-优化方法cayley-sgd">(2) 优化方法：Cayley SGD</h4>
+<p>采用 Cayley SGD（Li et al., 2020）在流形上更新旋转矩阵：
+</p>
+$$
+R' = \Delta_R(Y) R = (I - \frac{\alpha}{2} Y)^{-1} (I + \frac{\alpha}{2} Y) R
+$$<p>
+其中 $Y^\top = -Y$，$Y$ 由梯度 $G = \nabla_R L_Q$ 投影后得到：
+</p>
+$$
+\hat{G} = G R^\top - \frac{1}{2} R R^\top G R^\top, \quad Y = \hat{G} - \hat{G}^\top
+$$<p>
+该更新规则保证若 $R$ 为正交矩阵，则 $R&rsquo;$ 仍正交，即保持 $R&rsquo;^\top R&rsquo; = I$。
+相较普通 SGD，计算复杂度约为其两倍。</p>
+<h4 id="3-实际优化过程">(3) 实际优化过程</h4>
+<ul>
+<li>网络权重保持冻结，仅优化 ${R_1, R_2}$；</li>
+<li>旋转矩阵参数量仅占总权重的约 0.26%；</li>
+<li>优化使用 800 个 WikiText2 样本，100 次迭代即可收敛；</li>
+<li>初始化使用随机 Hadamard 矩阵；</li>
+<li>Cayley 优化结果稳定且优于所有随机初始化的旋转。</li>
+</ul>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-experimental-settings">5.1 Experimental Settings</h3>
+<p>优化参数：</p>
+<ul>
+<li>优化器：Cayley SGD；</li>
+<li>学习率从 1.5 线性衰减至 0；</li>
+<li>迭代次数：100；</li>
+<li>数据：WikiText-2 的 800 个样本；</li>
+<li>优化后再用 GPTQ 对旋转后的权重进行量化（128 个样本，seq len=2048）。</li>
+</ul>
+<p>训练耗时：
+LLaMA-3 1B/3B/8B：13/18/30 分钟；
+LLaMA-2 7B/13B：25/30 分钟；
+LLaMA-2 70B：约 3.5 小时；
+Mistral-7B：16 分钟。</p>
+<h3 id="52-main-results">5.2 Main Results</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table1.png"></p>
+<ul>
+<li><strong>SpinQuant_no_had</strong>：仅通过 $R_1$、$R_2$ 学得的旋转即可在 W4A8 设置下显著提升性能（如 Mistral 7B 提升 10.5 点）。
+对 LLaMA3-8B（W4A8）提升 4.1 点，距 FP 仅 1.0 点。</li>
+<li><strong>SpinQuant_had</strong>：在激活极低比特 (A4/KV4) 情况下进一步改善，例如 LLaMA-2 7B/13B/70B W4A4KV4 分别仅落后 FP 2.9/1.4/1.7 点，领先旧方法 15~20 点。</li>
+</ul>
+<p>SpinQuant_no_had 的实现简单，仅需替换旋转权重即可推理，无需改 forward。
+SpinQuant_had 则需在推理时增加 Hadamard kernel（约 8% 延迟开销），但可在极端量化场景显著提升精度。</p>
+<hr>
+<h3 id="53-ablation-studies">5.3 Ablation Studies</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table2.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table3.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table4.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table5.png"></p>
+<p>Ablation 分析表明：</p>
+<ul>
+<li>使用 Cayley 优化学习到的旋转优于任何随机初始化；</li>
+<li>Hadamard 初始化最稳定；</li>
+<li>旋转学习在不同随机种子下方差极小；</li>
+<li>对比 RTN（round-to-nearest）量化方式，SpinQuant 仍显著领先。</li>
+</ul>
+<hr>
+<h3 id="54-illustrative-analysis-of-the-rotation-efficacy">5.4 Illustrative Analysis of the Rotation Efficacy</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/figure6.png"></p>
+<p>论文通过二维示例直观解释旋转的意义：
+若激活向量 $x = [x_1, x_2]$，其中 $x_1$ 较大，则量化范围由 $x_1$ 决定，$x_2$ 的精度受限。
+旋转 45° 后可使两个分量幅值均衡，提高整体量化精度。</p>
+<p>在三维场景中，如 $x_1$ 的幅值为 $x_2, x_3$ 的四倍，通过合理旋转可将极值分布从 $[2, 0.5, 0.5]$ 调整为近似均衡的 $[1, 1, 1.414]$，从信息熵角度提升量化效率。
+这说明<strong>学习旋转</strong>能自动发现最优的能量分布方向。</p>
+<hr>
+<h3 id="55-speed-measurement">5.5 SPEED MEASUREMENT</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpinQuant/table6.png"></p>
+<p>在 MacBook M1 Pro CPU 上测得：</p>
+<ul>
+<li>W4A8 模型相比 W16A16 提速约 3 倍；</li>
+<li>加入在线 Hadamard 旋转仅增加约 8% 延迟。</li>
+</ul>
+<p>因此，SpinQuant_no_had 适用于一般量化任务（高效无额外延迟），而 SpinQuant_had 适合极端低比特场景（略慢但精度更高）。</p>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>SpinQuant 提出了一个新的量化框架，通过学习旋转矩阵在不改变全精度网络输出的情况下有效减少 outliers，使得权重、激活和 KV cache 的 4-bit 量化在保持高精度的同时获得显著加速。</p>
+<p>核心特性：</p>
+<ul>
+<li><strong>旋转不改变全精度输出（rotation invariance）</strong>；</li>
+<li><strong>Cayley 优化保持正交性</strong>；</li>
+<li><strong>兼容现有 GPTQ、AWQ 等量化框架</strong>；</li>
+<li><strong>在多个模型与设置下达到 SOTA 表现</strong>。</li>
+</ul>
+<p>SpinQuant 展示了一个全新的研究方向——<strong>基于旋转的量化优化</strong>，并为未来探索“解析最优旋转矩阵”的闭式解提供了启发。</p>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\ViSpec - Accelerating Vision-Language Models with Vision-Aware Speculative Decoding - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25</strong></p>
+<p><strong>GitHub:</strong> <a href="https://github.com/KangJialiang/ViSpec">https://github.com/KangJialiang/ViSpec</a></p>
+<hr>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>个人感觉这篇工作是将Eagle应用于VLM， 并针对VLM带来的问题进行了解决。</p>
+<p>但这篇工作也是需要training，构造数据集和进行训练花销还是挺大的， 好奇能否有更efficient甚至是training-free的method来实现Vision-Aware Speculative Decoding。</p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>Speculative Decoding（推测解码）是一种在大型语言模型（LLM）中被广泛采用的推理加速技术。然而，其在视觉语言模型（Vision-Language Models, VLMs）中的应用仍然非常有限，已有方法的加速收益通常不足 <strong>1.5×</strong>。<br>
+随着多模态能力逐渐成为大规模模型的核心能力，这一加速差距变得愈发显著。</p>
+<p>ViSpec 的核心动机在于突破当前 VLM 加速的瓶颈：现有推测式解码方法主要针对纯文本推理设计，在视觉输入冗余较高的多模态场景下，小型草稿（draft）模型在生成过程中难以高效处理图像特征，从而限制了整体加速效率。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>目前针对 Vision-Language Models 的 Speculative Decoding 工作非常少。仅有的尝试[7] 在 LLaVA-7B 上应用了一个小型仅语言模型的 draft 模型，获得了大约 <strong>1.5×</strong> 的加速。当他们将 image encoder 融入小型多模态草稿模型中时，加速效果并未显著提升，主要原因包括：</p>
+<ol>
+<li><strong>图像信息冗余较高</strong>：大量重复或低信息密度的视觉块（patch）对小模型造成干扰；</li>
+<li><strong>多模态处理复杂性高</strong>：视觉 token 的嵌入维度高、数量多，导致 draft 模型计算成本上升而收益有限。</li>
+</ol>
+<p>这些问题说明：在现有的 speculative decoding 框架中，草稿模型无法充分理解和整合图像特征信息。因此，作者需要一个 <strong>能高效处理视觉与语言双模态特征并保持高预测精度</strong> 的专门框架。ViSpec 即是在此背景下提出。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/figure1.png"></p>
+<p>ViSpec 旨在解决小型 draft 模型在视觉冗余与上下文一致性方面的弱点。作者观察到，大型 VLM 能逐层过滤图像中冗余信息而保持语义理解，但小模型无法做到这一点。<br>
+为解决这一问题，ViSpec 提出了 <strong>Vision-Aware Speculative Decoding</strong> 框架，核心贡献如下：</p>
+<ul>
+<li><strong>提出 ViSpec 框架</strong>：首个为视觉语言模型专门设计的 speculative decoding 结构，结合视觉感知机制进行加速。</li>
+<li><strong>双重集成机制（Dual Integration Mechanisms）</strong>：
+<ul>
+<li><em>Attention Integration</em>：将压缩后的视觉表示融入 draft 模型的注意力层；</li>
+<li><em>Feature Augmentation</em>：将全局视觉特征向量注入所有文本 token，增强多模态一致性。</li>
+</ul>
+</li>
+<li><strong>多阶段训练策略（Two-Stage Training Strategy）</strong>：扩展现有多模态数据集以包含长响应（long-response）任务，结合 multi-token prediction 提升 draft 模型泛化。</li>
+<li><strong>实证验证</strong>：在四个主流 VLM（LLaVA-1.6 7B/13B, Qwen2.5-VL 3B/7B）上进行实验，首次实现 <strong>显著加速（最高 3.22×）</strong> 的 VLM speculative decoding。</li>
+</ul>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<h3 id="41-overcoming-redundancy--image-embedding-compression">4.1 Overcoming Redundancy — Image Embedding Compression</h3>
+<p>在 speculative decoding 框架中，小型 draft 模型通常较浅（如单层 Transformer）。然而，这种浅模型难以处理包含成千上万个冗余图像 patch 的长输入序列。<br>
+首先作者形式化地说明这一现象：</p>
+<p>设输入为包含 $R + 1$ 个嵌入的序列 $e_1, e_2, &hellip;, e_{R+1} \in \mathbb{R}^d$，其中 $R$ 个是冗余图像 token（即 $e_{r_1} = e_{r_2} = &hellip; = e_{r_R} = s$），仅一个是真实有效的不同 token $e_u = t$。<br>
+在单层自注意力模型中，若忽略位置编码，输出为：</p>
+$$
+y_i = \sum_{j=1}^{R+1} \alpha_{ij} v_j, \quad \alpha_{ij} = \frac{\exp(q_i k_j^\top)}{\sum_{k=1}^{R+1} \exp(q_i k_k^\top)}
+$$<p>当 $R \to \infty$ 时，冗余 token 的加权项主导分母，真实 token 的注意力权重 $\alpha_{iu} \to 0$，
+导致输出近似为冗余特征的平均：</p>
+$$
+y_i \approx W_v s
+$$<p>因此 draft 模型在大量冗余视觉输入下几乎无法感知有用信息。理论上，一个深度为 $(K + 1)$ 的网络才能处理复杂度为 $(K)$ 的嵌套特征层级 [28]，意味着浅层 draft 模型无法提取有效视觉语义。</p>
+<hr>
+<h3 id="vision-adaptor-模块详解q-former-inspired">Vision Adaptor 模块详解（Q-Former-Inspired）</h3>
+<p>ViSpec 的核心创新之一是 <strong>Vision Adaptor 模块</strong>，其灵感来源于 <strong>BLIP-2</strong> 中的 <em>Q-Former</em> 架构。
+该模块的目标是：<strong>在保证视觉语义完整的前提下，将上千视觉 token 压缩成少量高信息量的 token 表示</strong>，
+从而显著提升 speculative decoding 的推理效率，使草稿模型（draft model）既“轻”又“懂图像”。</p>
+<hr>
+<h4 id="模块总体结构说明">模块总体结构说明</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/figure3.png"></p>
+<p>该模块由一个轻量级的 <strong>Transformer Encoder</strong> 组成，包含固定数量的可学习 <strong>query 向量（learnable queries）</strong>，其运行流程如下：</p>
+<ul>
+<li>
+<p><strong>输入（Input）</strong>：<br>
+主模型视觉编码器（Vision Encoder）提取的原始视觉嵌入序列</p>
+$$
+  V_{1:r} = E_v(I) \in \mathbb{R}^{r\times d}
+  $$<p>其中：</p>
+<ul>
+<li>$I$：输入图像；</li>
+<li>$r$：图像 patch 数量（通常上千个）；</li>
+<li>$d$：每个 patch 的嵌入维度。</li>
+</ul>
+</li>
+<li>
+<p><strong>查询（Q）</strong>：<br>
+一组固定可学习参数矩阵</p>
+$$
+  Q = [q_1, q_2, \ldots, q_m] \in \mathbb{R}^{m\times d}
+  $$<p>每个 query 相当于模型学习到的“视觉聚焦点（visual query）”，用于主动捕捉图像的不同语义区域。</p>
+</li>
+<li>
+<p><strong>键值（K, V）</strong>：<br>
+均来自视觉编码器输出的特征序列 $V_{1:r}$。</p>
+</li>
+<li>
+<p><strong>输出（Output）</strong>：<br>
+模块最终生成：</p>
+<ol>
+<li>一组压缩后的视觉 token $C_{1:m}$，数量远小于原始视觉 token；</li>
+<li>一个全局视觉特征向量 $g$，作为全图语义摘要（Global Visual Feature）。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h4 id="数学表达式">数学表达式</h4>
+<p>整个压缩过程可形式化地写为：</p>
+$$
+C, g = \text{VisionAdaptor}(V_{1:r}) = \text{TransformerEncoder}(Q, K = V, V = V)
+$$<p>该式揭示了 Vision Adaptor 的计算核心：
+查询 Q 主动“检索” Key/Value（即视觉特征 V）中的关键信息，通过自注意力机制生成紧凑的高层视觉表示。</p>
+<hr>
+<h4 id="query-based-selective-attention-机制">Query-Based Selective Attention 机制</h4>
+<p>整个压缩机制基于交叉注意力（Cross-Attention）：</p>
+<ol>
+<li>
+<p><strong>准备输入</strong>：</p>
+<ul>
+<li>$Q$：可学习 Query 向量；</li>
+<li>$V_{1:r}$：视觉特征序列（同时为 Key 和 Value）。</li>
+</ul>
+</li>
+<li>
+<p><strong>计算注意力分布</strong>：<br>
+每个 Query 对所有视觉 patch 执行加权聚合：</p>
+$$
+   A = \text{softmax}\left(\frac{QW_q (VW_k)^\top}{\sqrt{d}}\right)
+   $$<p>其中：</p>
+<ul>
+<li>$W_q, W_k, W_v$ 为线性投影矩阵；</li>
+<li>$A \in \mathbb{R}^{m \times r}$ 为注意力权重矩阵。</li>
+</ul>
+</li>
+<li>
+<p><strong>信息聚合</strong>：<br>
+Query 通过注意力分布从所有视觉 patch 中聚合特征：</p>
+$$
+   C = A (V W_v)
+   $$<p>得到一组压缩后的视觉 token 表示 $C_{1:m}$。</p>
+</li>
+<li>
+<p><strong>全局视觉特征提取（Global Feature）</strong>：</p>
+$$
+   g = \text{MLP}\left(\text{mean}(C_{1:m})\right)
+   $$</li>
+</ol>
+<hr>
+<h4 id="模块功能总结">模块功能总结</h4>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">模块阶段</th>
+          <th style="text-align: left">输入</th>
+          <th style="text-align: left">处理方式</th>
+          <th style="text-align: left">输出</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Vision Encoder</td>
+          <td style="text-align: left">图像 \(I\)</td>
+          <td style="text-align: left">转换为高维嵌入序列 \(V_{1:r}\)</td>
+          <td style="text-align: left">\(r\times d\) 的视觉 token</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Vision Adaptor</td>
+          <td style="text-align: left">Learnable Queries \(Q\)、Key/Value \(V\)</td>
+          <td style="text-align: left">Attention 聚合</td>
+          <td style="text-align: left">压缩视觉 token \(C_{1:m}\) + 全局特征 \(g\)</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Integration</td>
+          <td style="text-align: left">将 \((C_{1:m}, g)\) 融入 Draft 模型注意力与隐藏状态</td>
+          <td style="text-align: left">全模态融合</td>
+          <td style="text-align: left">多模态输入草稿模型，供 speculative decoding 用</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h4 id="图示解读figure-3">图示解读（Figure 3）</h4>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/figure3.png"></p>
+<p>图示流程如下：</p>
+<ol>
+<li>
+<p><strong>左侧</strong>：输入图像经视觉编码器得到一系列 patch 特征 $(v_0, v_1, v_2, \ldots, v_r)$。</p>
+</li>
+<li>
+<p><strong>中间</strong>：少量 learnable queries $(q_0, q_1, \ldots, q_m)$ 进入 transformer encoder，与 $(v_i)$ 执行 cross-attention。</p>
+</li>
+<li>
+<p><strong>右侧输出</strong>：</p>
+<ul>
+<li>压缩视觉 token $(c_0, c_1, \ldots, c_m)$：输入至 Draft Model 解码器注意力层；</li>
+<li>全局视觉特征 $(g_v)$：注入到每一个生成 token 的隐藏状态中，用于增强视觉一致性。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="42-addressing-lost-in-the-middle--global-visual-feature-integration">4.2 Addressing Lost-in-the-Middle — Global Visual Feature Integration</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/figure2.png"></p>
+<p>虽然压缩视觉 token 能确实缩短序列，但在长文本生成任务中会导致“<strong>Lost in the Middle</strong>”问题 [21]：浅层模型在长上下文中难以保持视觉一致性，尤其图像信息被文本 token 掩盖时。</p>
+<p>为解决这个问题，ViSpec 引入 <strong>Global Visual Feature Injection（全局视觉特征注入）</strong> 机制，使 draft 模型在整个生成过程中持续访问视觉上下文。</p>
+<p>作者从 Vision Adaptor 输出中提取全局视觉特征向量 $g$，并将其加入到每个文本 token 的隐藏状态中：</p>
+$$
+f^{aug}_t = f_t + W_g g
+$$<p>其中：</p>
+<ul>
+<li>$f_t$：原始文本隐藏状态；</li>
+<li>$g$：全局视觉特征；</li>
+<li>$W_g$：可学习线性变换矩阵。</li>
+</ul>
+<p>此机制确保模型始终在全局视觉语义下进行 token 预测，从而提升草稿模型在长响应中的一致性与语义粘性。</p>
+<hr>
+<h3 id="43-dataset-generation-and-training">4.3 Dataset Generation and Training</h3>
+<p>由于公开的多模态数据集很少包含带长响应的样本，作者提出了一个高效的数据生成策略：</p>
+<ul>
+<li>
+<p><strong>数据扩展</strong>：在传统任务（如 VQA、Image Captioning）中修改提示词（prompt）以诱导目标 VLM 生成更长的回答，例如：</p>
+<ul>
+<li><em>“请详细解释你的答案。”</em></li>
+<li><em>“描述图像时，请给出完整细节描述。”</em></li>
+</ul>
+</li>
+<li>
+<p><strong>自动合成数据</strong>：通过目标模型生成高质量长响应，不需要人工标注。</p>
+</li>
+</ul>
+<p>此外，ViSpec 引入采样（sampling）与 <strong>multi-token prediction (MTP)</strong> 模式以增强鲁棒性。该机制打破了目标与草稿模型隐藏状态之间的一一对应关系，防止“偷看”问题，并让草稿模型学习自纠错。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/figure4.png"></p>
+<p>该图是论文中的训练机制示意，对比了 <strong>EAGLE</strong>、<strong>Greedy-based 训练</strong> 和 <strong>ViSpec 的多 token 预测训练</strong> 三种方案，分为 (a)、(b)、(c) 三部分。</p>
+<hr>
+<h4 id="a-eagle-trainingtext-only-模式"><strong>(a) EAGLE Training：Text-only 模式</strong></h4>
+<p>EAGLE 框架在纯文本任务中使用目标模型（target LLM）的隐藏状态 $f$ 来指导草稿模型的输出 $\hat{f}$。
+其监督信号依赖目标模型在教师强制（teacher forcing）下的确定性 token 生成。</p>
+<p>例如，当目标句子为 “How can I help you?” 时：</p>
+<ul>
+<li>若目标模型生成的 token 为 “may” 而非 “can”，则隐藏状态 $f_{How}$ 含有噪声。</li>
+<li>草稿模型可以通过 $(f_{How}, e_{can})$ 的联合建模学习“纠错性”预测，这种随机噪声反而起到了 regularization 作用。</li>
+</ul>
+<hr>
+<h4 id="b-greedy-target-only-训练无-multi-token-prediction"><strong>(b) Greedy Target-only 训练（无 Multi-Token Prediction）</strong></h4>
+<p>若使用目标模型的<strong>确定性（greedy）输出</strong>并仅用单步预测训练，草稿模型就无法纠错。<br>
+此时草稿模型的输入隐藏状态与监督目标一一对应：</p>
+$$
+(f_{How}, e_{may}) \rightarrow f_{may}
+$$<p>这种 one-to-one 关系会导致草稿模型陷入“shortcut 学习”——它只需模仿目标模型输出，而不学习上下文动态。<br>
+实际上，这相当于单步版 Medusa，没有考虑多 token 预测结构。</p>
+<hr>
+<h4 id="c-vispec-trainingvision-aware--multi-token-prediction"><strong>(c) ViSpec Training：Vision-Aware + Multi-Token Prediction</strong></h4>
+<p>ViSpec 在 (a)、(b) 的基础上提出更鲁棒的训练策略：</p>
+<ol>
+<li>
+<p><strong>加入随机采样 (Temperature Sampling)</strong><br>
+在数据合成阶段改变采样温度，使目标模型输出多样化，打破 $(f)$ 与输出 token 的一一对应关系；</p>
+</li>
+<li>
+<p><strong>引入 Multi-Token Prediction (MTP)</strong><br>
+Draft 模型一次预测多个后续 token，模拟 speculative decoding 的多步验证过程，提高泛化；</p>
+</li>
+<li>
+<p><strong>引入 Draft 自身状态 ($f′$)</strong><br>
+ViSpec 在训练时不仅参考目标模型的隐藏状态 $(f)$，还引入 Draft 模型自己的隐藏状态 $(f′)$，使其学会自我纠错；</p>
+</li>
+<li>
+<p><strong>Loss 函数</strong></p>
+$$
+   \mathcal{L} = \text{CrossEntropy}(p_i, \hat{p}_i)
+   $$<p>其中：</p>
+<ul>
+<li>$p_i$：目标模型预测分布；</li>
+<li>$\hat{p}_i$：ViSpec draft 模型预测分布；</li>
+<li>损失通过多 token 同时累积，使 draft 学习长依赖关系。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h4 id="三种训练方式对比详细解释">三种训练方式对比详细解释</h4>
+<h3 id="a-eagle-的-text-only-训练"><strong>(a) EAGLE 的 text-only 训练</strong></h3>
+<ul>
+<li>
+<p><strong>做法：</strong>
+EAGLE 的目标模型（target model）只用文本训练。
+有时目标模型会犯错，比如：</p>
+<ul>
+<li>真实答案（ground truth）：<strong>“can”</strong></li>
+<li>模型输出：<strong>“may”</strong></li>
+</ul>
+</li>
+<li>
+<p><strong>含义：</strong>
+模型的隐藏状态 $f_{\text{How}}$（对应“how”这个词）会被当作<strong>带噪声的数据增强</strong>。
+因为 draft 模型看到的输入是：
+$[f_{\text{How}}, e_{\text{can}}]$
+其中 $f_{\text{How}}$ 来自目标模型、带有误差；
+$e_{\text{can}}$ 是正确 token 的 embedding。
+所以 draft 模型通过这种“错中带对”的训练，可以<strong>学会纠错能力</strong>（corrective behavior）。</p>
+</li>
+</ul>
+<p><strong>直观理解：</strong></p>
+<blockquote>
+<p>模型有时猜错了词（may vs can），draft 模型看到这种错误配对后学会“哦，原来这种隐藏状态其实应该是 can”，从而学会在推理时自我修正。</p>
+</blockquote>
+<h3 id="b-贪心greedy训练--没有多-token-预测"><strong>(b) 贪心（greedy）训练 + 没有多 token 预测</strong></h3>
+<ul>
+<li>
+<p><strong>做法：</strong>
+在这种训练方式里，target model 用<strong>贪心策略</strong>（每次只选最高概率的 token）生成序列。
+draft model 的输入是：
+$[f_{\text{How}}, e_{\text{may}}]$
+输出监督是：
+$[f_{\text{may}}]$</p>
+</li>
+<li>
+<p><strong>结果：</strong>
+因为生成过程是确定性的，<strong>输入和输出是一一对应的</strong>（one-to-one）。
+同时，隐藏状态 $f_{\text{may}}$ 已经包含了几乎全部信息，所以监督信号不依赖之前的输入。</p>
+</li>
+<li>
+<p><strong>问题：</strong>
+这会让训练过程退化为“单步预测”（single-step），相当于只是在学一个 token 的 Medusa（参考 [2]）。</p>
+</li>
+</ul>
+<p><strong>缺点：</strong></p>
+<blockquote>
+<p>draft 模型无法学习上下文间的复杂纠错关系，也不会形成鲁棒的预测能力。</p>
+</blockquote>
+<h3 id="c-vispec-的训练方式"><strong>(c) ViSpec 的训练方式</strong></h3>
+<ul>
+<li>
+<p><strong>改进 1：随机采样打破一一对应关系</strong>
+ViSpec 在训练时采用 <strong>采样（sampling）</strong>，而不是贪心生成。
+这样不同的 token（及其隐藏状态）就不再严格一一对应，打破了 (b) 的单一映射问题。</p>
+</li>
+<li>
+<p><strong>改进 2：引入 draft 模型自己的隐藏状态</strong>
+除了 target model 的隐藏状态 $f$，ViSpec 还把 <strong>draft model 自己的隐藏状态 $f′$</strong> 也作为输入。
+当 target model 偏离 ground truth 时，$f′$ 能像 (a) 的带噪声特征一样，帮助 draft model 学会纠错。</p>
+</li>
+</ul>
+<p><strong>效果：</strong></p>
+<blockquote>
+<p>draft 模型通过这种方式<strong>自我学习如何纠错（self-correction）</strong>，而不需要额外的人造纠错数据集。</p>
+</blockquote>
+<h4 id="总结对比表">总结对比表：</h4>
+<table>
+  <thead>
+      <tr>
+          <th>方法</th>
+          <th>输入来源</th>
+          <th>是否打破一一对应</th>
+          <th>是否有纠错信号</th>
+          <th>训练效果</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>(a) EAGLE text-only</td>
+          <td>$ ( f_{\text{target}}, e_{\text{GT}} ) $</td>
+          <td>✅ 是</td>
+          <td>✅ 来自噪声 $ f $</td>
+          <td>学会纠错</td>
+      </tr>
+      <tr>
+          <td>(b) Greedy (no MTP)</td>
+          <td>$ ( f_{\text{target}}, e_{\text{pred}} ) $</td>
+          <td>❌ 否</td>
+          <td>❌ 无纠错</td>
+          <td>退化为单步预测</td>
+      </tr>
+      <tr>
+          <td>(c) ViSpec</td>
+          <td>\( ( f_{\text{target}}, f'_{\text{draft}}, e_{\text{sample}} ) \)</td>
+          <td>✅ 是</td>
+          <td>✅ 自监督纠错</td>
+          <td>学会自纠错</td>
+      </tr>
+  </tbody>
+</table>
+<h4 id="一句话总结">一句话总结：</h4>
+<blockquote>
+<p>EAGLE 依靠目标模型的错误隐状态来“教” draft 模型纠错；
+贪心训练退化成死记单步预测；
+ViSpec 通过采样+自隐藏状态输入，让 draft 模型在训练中自然学会纠错，无需人工干预。</p>
+</blockquote>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<p>作者在四个主流 Vision-Language Models 上进行了全面实验：</p>
+<ul>
+<li><strong>LLaVA-v1.6-Vicuna-7B</strong></li>
+<li><strong>LLaVA-v1.6-Vicuna-13B</strong></li>
+<li><strong>Qwen2.5-VL-3B-Instruct</strong></li>
+<li><strong>Qwen2.5-VL-7B-Instruct</strong></li>
+</ul>
+<p>并与两种主流基线方法进行比较：<strong>Medusa [2]</strong> 与 <strong>EAGLE-2 [16]</strong>。</p>
+<h3 id="实验配置"><strong>实验配置</strong></h3>
+<ul>
+<li><strong>环境</strong>：单机 GPU（80GB 显存），训练阶段使用 8×GPU 并行。</li>
+<li><strong>优化器</strong>：AdamW，学习率分别为 $3\times10^{-6}$，batch size = 8。</li>
+<li><strong>最大序列长度</strong>：2048。</li>
+</ul>
+<h3 id="评估指标"><strong>评估指标</strong></h3>
+<ul>
+<li><strong>Average Acceptance Length (τ)</strong> ：每次推测阶段接受的平均 token 数；</li>
+<li><strong>Speedup Ratio</strong>：标准自回归解码与推测解码的推理时间比值。</li>
+</ul>
+<h3 id="benchmark-任务"><strong>Benchmark 任务</strong></h3>
+<p>包括八个多模态任务：</p>
+<ul>
+<li>ScienceQA (SQA)</li>
+<li>MM-Vet</li>
+<li>TextVQA</li>
+<li>MME</li>
+<li>COCO Captions</li>
+<li>VizWiz</li>
+<li>GQA</li>
+<li>SEED-Bench</li>
+</ul>
+<h3 id="主要结果"><strong>主要结果</strong></h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/ViSpec/table1.png"></p>
+<p>ViSpec 显著优于 Medusa 与 EAGLE-2：</p>
+<ul>
+<li>在 LLaVA-7B（T=0）下，ViSpec 在 TextVQA 上实现 <strong>2.90× 加速</strong>；</li>
+<li>在 LLaVA-13B 上获得 <strong>平均 2.38× 加速</strong>；</li>
+<li>在 Qwen2.5-VL 系列上，仍稳定保持 <strong>约 1.8× 加速</strong>；</li>
+<li>最高达 <strong>3.22×（COCO Captions）</strong>。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>ViSpec 是首个成功实现 <strong>视觉语言模型 speculative decoding 显著加速</strong> 的框架。<br>
+通过结合：</p>
+<ul>
+<li>压缩视觉嵌入（vision embedding compression）；</li>
+<li>全局视觉信息注入（global feature injection）；</li>
+<li>长响应数据生成（long-response dataset generation）；</li>
+</ul>
+<p>ViSpec 在多种模型上实现高达 <strong>3.22×</strong> 的推理加速，同时保持生成质量不变。</p>
+
+    </section>
+  
+    <section data-source="posts\SpecEdge - Scalable Edge-Assisted Serving Framework for Interactive LLMs NeurIPs&#39;25 Spotlight.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25 Spotlight</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/kaist-ina/specedge">https://github.com/kaist-ina/specedge</a></p>
+<hr>
+<h2 id="my-thought">My Thought</h2>
+<p>个人感觉这篇工作是将<strong>ICLR25 PEARL: Parallel Speculative Decoding with Adaptive Draft Length</strong>中 大小模型彼此互不等待的协同Speculative Decoding模式放在了云边协同场景下(一般来说Pearl中的大小模型协同需要放在不同的卡上，在单卡场景下没法实现，而云边协同的场景下刚好符合Pearl的研究场景)，用来掩盖和减小 draft 和 target model 的网络通信开销。</p>
+<p>同时也对 多edge draft models 的情况进行了优化，提出<strong>Server-Side Pipeline-Aware Scheduling</strong>来进一步提高target model的利用率。</p>
+<p>这篇工作真正实现上还有许多细节，有时间可以看看开源代码中是否涉及到。</p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>Large language models (LLMs) power many modern applications, but serving them at scale remains costly and resource-intensive. Current server-centric systems overlook consumer-grade GPUs at the edge.</p>
+<blockquote>
+<p>大型语言模型（LLMs）支撑了众多现代智能应用，但其部署和推理成本极高。目前的主流推理系统普遍采用“服务器中心化”架构，忽视了边缘侧日益强大的消费级 GPU 资源。</p>
+</blockquote>
+<p>A compelling opportunity exists to dramatically reduce LLM serving costs by leveraging consumer-grade GPUs at the network edge.
+The GeForce RTX 4090 delivers up to <strong>330.3 TFLOPS (FP16 tensor)</strong>, even exceeding the <strong>312 TFLOPS</strong> of data-center-class A100, while costing <strong>14.43× less</strong>.</p>
+<blockquote>
+<p>RTX 4090 等消费级 GPU 的 FP16 张量算力已超过 A100，但成本仅为其十四分之一。若能在网络边缘充分利用这些 GPU，将可能从根本上改变 LLM 部署的经济性。</p>
+</blockquote>
+<p>然而，现有推理架构（如张量并行、流水线并行）依赖数据中心级高速互连（InfiniBand / NVLink），在广域网 (WAN) 条件下无法有效运行，成为利用边缘资源的主要障碍。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure1.png"></p>
+<h3 id="1传统并行失效">（1）传统并行失效</h3>
+<p>当前主流并行技术（Shoeybi et al., 2019；Aminabadi et al., 2022）在数据中心内部表现良好，但依赖高带宽低延迟互联，难以跨公网运行。
+WAN 环境下传输中间激活状态（如 KV Cache 或特征图）会带来巨量通信开销。</p>
+<h3 id="2split-computing-局限">（2）Split Computing 局限</h3>
+<p>传统 split computing 通过“层切分”在边缘和服务器之间划分网络层，以减少服务器计算或原始输入传输。但对于自回归的 Transformer LLMs 而言，每生成一个 token 都需要一次前向传播与跨端通信，通信轮次与 token 数成正比，延迟巨大。</p>
+<p>因此，需要一种<strong>通信次数少、传输数据量小</strong>的新式协同推理方式。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p>We introduce <strong>SpecEdge</strong>, an edge-assisted inference framework that splits LLM workloads between edge and server GPUs <strong>using a speculative decoding scheme</strong>, exchanging <strong>only token outputs</strong> over the network.</p>
+<blockquote>
+<p>提出 <strong>SpecEdge</strong>：一种利用 <strong>推测式解码（speculative decoding）</strong> 在边缘与服务器间分工的推理框架，仅传输 token 序列，不传输中间激活。</p>
+</blockquote>
+<ul>
+<li>✅ <strong>Proactive edge drafting</strong>：边缘设备在服务器验证期间持续生成 token 候选，以隐藏网络延迟；</li>
+<li>✅ <strong>Pipeline-aware scheduling</strong>：服务器端智能交错多用户请求的验证任务，提高 GPU 利用率。</li>
+</ul>
+<p>实验表明：
+SpecEdge 在相同延迟下实现 <strong>2.22× server throughput</strong>、提升整体成本效率 <strong>1.91×</strong>，并降低 inter-token latency 约 11.24%。</p>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<h3 id="41-disaggregated-llm-decoding">4.1 Disaggregated LLM Decoding</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure2.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure3.png"></p>
+<p>SpecEdge 将 LLM 推理解耦为两个角色：</p>
+<ul>
+<li><strong>Edge GPU (consumer-grade)</strong>：负责 <em>drafting</em>（生成候选 token 树）；</li>
+<li><strong>Server GPU (data-center)</strong>：负责 <em>verification</em>（验证候选并生成最终 token）。</li>
+</ul>
+<p>这种 <strong>disaggregated speculative decoding</strong> 带来两大优势：</p>
+<ol>
+<li><strong>减少通信轮次与数据量</strong>：传统 layer-split 需要每 token 通信一次；SpecEdge 只在每 n 个 token 候选后交互一次；</li>
+<li><strong>提升算/I O 比</strong>：服务器端批量验证多个 token，可在一次前向中复用参数加载，提高算力利用率。</li>
+</ol>
+<p>但此分离引出两大新挑战：</p>
+<ul>
+<li><strong>潜在延迟增加</strong>：draft → verify 若顺序执行，会产生额外网络 RTT；</li>
+<li><strong>服务器空闲风险</strong>：若等待边缘端草稿完成再验证，会造成服务器闲置。</li>
+</ul>
+<p>为解决上述问题，SpecEdge 提出两项核心技术：</p>
+<ol>
+<li><strong>Proactive edge drafting (§ 4.2)</strong> —— 利用“主动生成”掩盖网络延迟；</li>
+<li><strong>Pipeline-aware scheduling (§ 4.3)</strong> —— 通过交错批验证保持服务器高利用率。</li>
+</ol>
+<hr>
+<h3 id="42-proactive-draft-generation-at-the-edge">4.2 Proactive Draft Generation at the Edge</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure4.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure5.png"></p>
+<h4 id="核心思想">核心思想</h4>
+<p>当 edge GPU 生成 n 个候选并发送至 server 验证后，<strong>无需等待返回结果</strong>，而是立即继续向前生成新的候选 token。
+若服务器验证通过且其“bonus token”与边缘提前生成的首个 token 一致（称为 <strong>complete draft alignment</strong>），则这些预生成的 token 可直接接入生成流，无需重新计算，从而实现<strong>计算-通信重叠</strong>、隐藏延迟。</p>
+<p>当服务器验证了边缘端发送的候选 token 并生成下一个 token（bonus token）后，如果这个 bonus token 恰好与边缘端在等待期间主动预测出的第一个 token 一致，那么说明两边的生成路径完全吻合（即 complete draft alignment）。这意味着边缘端之前预生成的那一段 token 就是服务器最终认可的结果，可以直接沿用、无需重新计算，从而让边缘端在等待验证时做的工作不被浪费，实现“边算边传”的计算–通信重叠，显著减少整体生成延迟。</p>
+<h4 id="kv-cache-更新策略">KV Cache 更新策略</h4>
+<ul>
+<li>对于 <strong>aligned path</strong>：Edge 可复用已有 KV Cache，仅增量更新；</li>
+<li>若验证失败或路径分叉，则丢弃 proactive 分支，从服务器返回的 token 序列重新构建 KV Cache。</li>
+</ul>
+<p>此机制保证一致性同时降低冗余计算。</p>
+<h4 id="性能收益模型">性能收益模型</h4>
+<p>SpecEdge 形式化地分析 proactive drafting 的期望收益：</p>
+$$
+E(\text{Gain}) = P_{\text{align}} \cdot P_{\text{match}\mid\text{align}}
+\cdot \Big(\frac{T_{\text{draft}}}{H_{\text{expan}}} - 1\Big)
+$$<ul>
+<li>$P_{\text{align}}$：前 n 个 token 验证通过且与 proactive 路径对齐的概率；</li>
+<li>$P_{\text{match}\mid\text{align}}$：在对齐条件下 server bonus token 与 proactive 首 token 匹配的条件概率；</li>
+<li>$T_{\text{draft}}$：边缘草稿生成时间；</li>
+<li>$H_{\text{expan}}$：proactive 扩展深度。</li>
+</ul>
+<p>若收益为正，则说明重叠计算可有效隐藏通信延迟。</p>
+<h4 id="通信-计算重叠分析">通信-计算重叠分析</h4>
+<p>设网络往返延迟为 $T_{\text{net}}$，服务器验证耗时 $T_{\text{verify}}$，边缘 drafting 耗时 $T_{\text{draft}}$。
+SpecEdge 通过调节 $n$ 与 draft 深度 $k$ ，使得：</p>
+$$
+T_{\text{verify}} \approx T_{\text{draft}} + T_{\text{net}}
+$$<p>从而在时间轴上实现几乎完全重叠，无空闲阶段。</p>
+<h4 id="成功与失败场景">成功与失败场景</h4>
+<ul>
+<li><strong>Complete alignment</strong>：server bonus token 与 proactive 首 token 匹配，直接复用并继续向前。</li>
+<li><strong>Partial alignment 或 divergence</strong>：server 路径与 proactive 树分叉，丢弃 proactive 分支，回退到验证末端。</li>
+<li><strong>统计结果</strong>：论文实测 alignment 成功率随 draft 深度增长递减，通常 2–4 token 深度可在延迟与命中率间取得平衡。</li>
+</ul>
+<hr>
+<h3 id="43-server-side-pipeline-aware-scheduling">4.3 Server-Side Pipeline-Aware Scheduling</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure2.png"></p>
+<p>SpecEdge 将服务器职责限定为 <strong>verification only</strong>。
+此设计释放了大量计算资源，但也带来调度挑战：
+当某个 edge 正在生成新草稿时，服务器可能暂时无任务可处理，出现空闲气泡（bubbles）。</p>
+<h4 id="pipeline-调度机制">Pipeline 调度机制</h4>
+<p>SpecEdge 通过交错不同用户请求的验证任务，<strong>构建跨请求流水线</strong>：</p>
+<ol>
+<li>服务器持续从多个 edge 设备接收已完成的 draft batches；</li>
+<li>对批内所有候选序列并行验证；</li>
+<li>验证完成后立即将结果发回对应 edge；</li>
+<li>服务器转而处理下一批来自其他 edge 的草稿。</li>
+</ol>
+<p>这种交错确保服务器 GPU 几乎持续满载，实现近似“双倍吞吐”。</p>
+<h4 id="动态深度校准">动态深度校准</h4>
+<p>为最大化流水线效率，SpecEdge 实时测量 $T_{\text{verify}}$ 与 $T_{\text{draft}}$，并动态调整 draft 深度 $d$：</p>
+$$
+T_{\text{verify}} \approx T_{\text{draft}} + T_{\text{net}}
+$$<p>若服务器验证过快（$T_{\text{verify}} &lt; T_{\text{draft}} + T_{\text{net}}$），则减少 draft 深度；
+若服务器验证较慢（$T_{\text{verify}} &gt; T_{\text{draft}} + T_{\text{net}}$），则增加 draft 深度，
+以维持两者时长近似匹配，从而实现最佳计算–通信重叠。</p>
+<h4 id="异质请求处理heterogeneous-requests">异质请求处理（Heterogeneous Requests）</h4>
+<p>多用户处于不同生成阶段，序列长度差异大。为并行处理：</p>
+<ol>
+<li><strong>Custom Attention Masking</strong>：为每个序列生成独立注意力掩码，保证仅对有效 token 计算自注意；</li>
+<li><strong>KV Cache Padding</strong>：将所有序列填充至当前批次最长长度，避免频繁调整张量形状。</li>
+</ol>
+<p>这样，服务器可一次性在大 batch 内验证多个不同长度的请求，充分利用 GPU 并行能力而无交叉干扰。</p>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/table1.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure6.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/SpecEdge/figure7to12.png"></p>
+<h3 id="实验设置">实验设置</h3>
+<ul>
+<li>
+<p><strong>模型</strong>：LLaMA-2-13B 与 7B （作为 draft / verify 模型）。</p>
+</li>
+<li>
+<p><strong>边缘 GPU</strong>：RTX 4090（24 GB VRAM）；</p>
+</li>
+<li>
+<p><strong>服务器 GPU</strong>：A100 40 GB；</p>
+</li>
+<li>
+<p><strong>网络条件</strong>：WAN 仿真 10 Gbps 带宽、20–40 ms RTT。</p>
+</li>
+<li>
+<p><strong>比较基线</strong>：</p>
+<ol>
+<li><strong>Server-only inference</strong>（传统单端推理）；</li>
+<li><strong>Split computing baseline</strong>（层切分方案）；</li>
+<li><strong>Local speculative decoding</strong>（单机推测式解码，无分布式）。</li>
+</ol>
+</li>
+</ul>
+<h3 id="主要指标">主要指标</h3>
+<table>
+  <thead>
+      <tr>
+          <th>指标</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td><strong>Throughput</strong></td>
+          <td>单位时间内服务器验证的 token 数</td>
+      </tr>
+      <tr>
+          <td><strong>Latency per token</strong></td>
+          <td>端到端平均 token 延迟</td>
+      </tr>
+      <tr>
+          <td><strong>Cost Efficiency</strong></td>
+          <td>吞吐 ÷ 成本（以美元计）</td>
+      </tr>
+      <tr>
+          <td><strong>Server Utilization</strong></td>
+          <td>GPU 占用率</td>
+      </tr>
+      <tr>
+          <td><strong>Alignment Success Rate</strong></td>
+          <td>完全对齐概率</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="结果分析">结果分析</h3>
+<ol>
+<li>
+<p><strong>Throughput ↑ 2.22×</strong>：
+由于服务器专注批验证且持续满载，吞吐翻倍；</p>
+</li>
+<li>
+<p><strong>Latency ↓ 11.24 %</strong>：
+Proactive drafting 成功率约 73 %，能有效隐藏 RTT；</p>
+</li>
+<li>
+<p><strong>Cost Efficiency ↑ 1.91×</strong>：
+边缘端硬件成本低，整体推理成本大幅下降；</p>
+</li>
+<li>
+<p><strong>Server Utilization 接近 98 %</strong>：
+Pipeline aware 调度避免了空闲；</p>
+</li>
+<li>
+<p><strong>Scalability</strong>：
+随 edge 数量增加，性能线性提升直至网络饱和。</p>
+</li>
+</ol>
+<h3 id="消融实验ablation">消融实验（Ablation）</h3>
+<table>
+  <thead>
+      <tr>
+          <th>模块</th>
+          <th>Throughput 变化</th>
+          <th>Latency 变化</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>– Proactive Drafting</td>
+          <td>↓ 35 %</td>
+          <td>↑ 18 %</td>
+      </tr>
+      <tr>
+          <td>– Pipeline Scheduling</td>
+          <td>↓ 42 %</td>
+          <td>↑ 10 %</td>
+      </tr>
+      <tr>
+          <td>– Both</td>
+          <td>↓ 63 %</td>
+          <td>↑ 28 %</td>
+      </tr>
+  </tbody>
+</table>
+<blockquote>
+<p>两个模块缺一不可：主动草稿负责降低延迟，流水线调度保证吞吐。</p>
+</blockquote>
+<h3 id="sensitivity-study">Sensitivity Study</h3>
+<ul>
+<li><strong>Draft Depth d</strong>：过浅 → alignment 低；过深 → 无效草稿浪费 GPU；最佳 d≈4；</li>
+<li><strong>Network RTT</strong>：延迟越大，SpecEdge 相对优势越明显；</li>
+<li><strong>Edge/Server 比</strong>：1:4 至 1:6 可实现吞吐最优平衡。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>We have presented <strong>SpecEdge</strong>, an edge-assisted LLM inference framework leveraging user-side consumer GPUs for drafting candidate tokens, while the server focuses on final verification.</p>
+<blockquote>
+<p>SpecEdge 通过仅传输最终 token 输出，在典型 WAN 环境下实现高效的分布式 LLM 推理。
+边缘端的 <strong>Proactive Drafting</strong> 最大化利用本地算力并隐藏网络延迟；
+服务器端的 <strong>Pipeline-aware Scheduling</strong> 保证 GPU 持续饱和并显著提升吞吐。</p>
+</blockquote>
+<p>实验结果表明：SpecEdge 在保证交互延迟可接受的前提下，
+可使服务器吞吐提高 2.22×，运营成本降低 1.91×。</p>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\Ada-KV - Optimizing KV Cache Eviction by Adaptive Budget Allocation for Efficient LLM Inference - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/title.png"></p>
+<p><strong>Conference</strong>: <strong>NeurIPS'25</strong></p>
+<p><strong>Github</strong>: <a href="https://github.com/FFY0/AdaKV">https://github.com/FFY0/AdaKV</a></p>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>这篇工作的idea在各个head之间adaptive 分配 budget, 直觉上就能知道这种设计是有效的，实验也验证了这一点。</p>
+<p>比较惊喜的是作者实现了With efficient CUDA kernel implementations来解决variable-sized cache elements across attention heads，从而来真正实现了计算加速，以及其他KV Cache工作在也实现了对AdaKV集成，再次证明了其作为通用增强模块的价值。</p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>大型语言模型（LLM）在各个领域表现出色，但由于长序列推理所需的不断增长的键值（KV）cache，面临着效率挑战。LLM 的广泛应用推动了其处理扩展序列能力的发展。例如，GPT 支持长达 128K 的序列，Claude3 支持 200K，Gemini-Pro-1.5 甚至支持高达 2M 个 token。然而，这种 token 长度的增长带来了显著的挑战，尤其是在推理过程中cache大小的急剧膨胀。对于一个 8B 的 LLM，处理一个 2M token 的序列可能需要高达 256GB 的cache，这严重影响了 GPU 内存效率和计算运行时效率。</p>
+<p>现有的 KV cache驱逐方法通常在所有注意力head上<strong>均匀分配</strong>压缩预算，忽略了每个head独特的注意力模式。如 <strong>Figure 1a</strong> 所示，不同head的注意力集中度（concentration）差异巨大：一些head（sparse heads）的注意力高度集中在少数几个 token 上，而另一些head（dispersed heads）的注意力则分布得更广。这种均匀分配导致了效率低下——要么在稀疏集中的head上浪费cache预算，要么在分散分布的head上造成显著的驱逐损失。</p>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure1.png"></p>
+<h2 id="2-relative-work">2. Relative Work</h2>
+<h3 id="21-cache-eviction-methods">2.1 Cache Eviction Methods</h3>
+<p>cache驱逐方法主要分为两类：滑动窗口驱逐和 Top-k 驱逐。</p>
+<ul>
+<li><strong>滑动窗口方法</strong>（如 StreamingLLM）简单地保留初始cache元素和滑动窗口内的元素，但这种无差别的驱逐会显著降低生成质量。</li>
+<li><strong>Top-k 驱逐方法</strong>（如 H2O, SnapKV, Pyramid）基于注意力权重识别并保留 <code>k</code> 个关键cache元素。然而，现有 Top-k 方法通常在不同head上<strong>均匀分配</strong>总预算。Ada-KV 通过<strong>自适应预算分配</strong>来增强这些方法。</li>
+</ul>
+<h3 id="22-sparse-attention-methods">2.2 Sparse Attention Methods</h3>
+<p>稀疏注意力方法与 KV cache驱逐在根本上不同：前者保留所有cache，但在计算时只选择性地使用关键子集，因此<strong>不减少内存占用</strong>。而 KV cache驱逐直接移除非关键条目，从而减小内存占用。这两种技术是正orthogonal的，未来可以结合使用。</p>
+<h2 id="3-contribution">3. Contribution</h2>
+<ul>
+<li><strong>自适应预算分配</strong>：这篇工作指出了当前 KV cache驱逐方法的一个关键限制：均匀预算分配忽略了各个head的独特注意力模式。为此，这篇工作提出了 Ada-KV，这是<strong>首个</strong>head级别的自适应预算分配策略，通过提高各个head的预算利用率，带来更高效的cache驱逐。</li>
+<li><strong>理论分析</strong>：这篇工作为cache驱逐建立了一个理论框架，定义了驱逐损失并推导了其上界。该框架解释了先前方法的优化目标，指导了 Ada-KV 的设计，实现了有原则的自适应预算分配。</li>
+<li><strong>具体实现</strong>：高效的 CUDA 内核实现，Ada-KV 具有即插即用的兼容性，可以集成到现有方法中。这篇工作在 Ruler 和 LongBench 的 29 个数据集上，在问答感知（question-aware）和问答不可知（question-agnostic）两种场景下都证明了其显著的性能提升。</li>
+</ul>
+<h2 id="4-method">4. Method</h2>
+<p>Ada-KV 的核心思想是：<strong>将所有head的注意力权重“拉平”成一个大的列表，然后在这个全局列表中选出权重最大的 <code>B</code> 个元素。每个head <code>i</code> 分配到的预算 $B_i^*$ 就等于其权重在全局 Top-B 中出现的次数</strong>。这确保了总预算被分配给了全局最重要的cache元素，从而最小化了理论上的驱逐损失上界。</p>
+<h3 id="41-理论基础驱逐损失的上界">4.1 理论基础：驱逐损失的上界</h3>
+<p>论文首先为 KV Cache 驱逐建立了一个理论框架。</p>
+<ul>
+<li>
+<p><strong>符号定义</strong>:</p>
+<ul>
+<li>考虑一个包含 <code>h</code> 个注意力head的多head自注意力层。</li>
+<li>对于第 <code>i</code> 个head，其注意力权重向量为 $A_i \in \mathbb{R}^{1 \times n}$，其中 <code>n</code> 是当前上下文长度。</li>
+<li>驱逐决策由一个指示变量 $I_i \in \mathbb{R}^{1 \times n}$ 表示，其中 $I_{ij} = 1$ 表示保留第 <code>j</code> 个 KV cache元素，否则为 0。</li>
+<li>第 <code>i</code> 个head的预算为 $B_i$，满足 $\sum_{j=1}^{n} I_{ij} = B_i$。整个层的总预算为 $B = \sum_{i=1}^{h} B_i$。</li>
+<li>驱逐前后的自注意力输出分别为 <code>y</code> 和 $\hat{y}$。</li>
+</ul>
+</li>
+<li>
+<p><strong>驱逐损失 (Eviction Loss)</strong>: 定义为驱逐前后输出的 L1 距离：
+</p>
+$$
+    L1 \text{ Eviction Loss} = \|y - \hat{y}\|_1
+    $$</li>
+<li>
+<p><strong>上界推导</strong>: 论文证明了该损失存在一个上界 $\epsilon$：
+</p>
+$$
+    L1 \text{ Eviction Loss} \leq \epsilon = 2hC - 2C \sum_{i=1}^{h} \sum_{j=1}^{n} I_{ij} A_{ji}
+    $$<p>
+其中 $C = \max{|V_i W_i^O|_{\infty}}$ 是一个常数。</p>
+</li>
+<li>
+<p><strong>对现有方法的解释</strong>: 这个上界揭示了现有 Top-k 驱逐方法的优化目标。为了最小化 $\epsilon$，需要最大化 $\sum_{i} \sum_{j} I_{ij} A_{ji}$，即在每个head <code>i</code> 内部，选择注意力权重 $A_{ji}$ 最大的 <code>Bi</code> 个元素保留。这正是 Top-k 驱逐策略。</p>
+</li>
+</ul>
+<h3 id="42-自适应预算分配策略-ada-kv">4.2 自适应预算分配策略 (Ada-KV)</h3>
+<p><strong>Algorithm 1</strong> 描述了 Ada-KV 的核心分配逻辑。
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/algorithm1.png"></p>
+<p><strong>Algorithm 1: Ada-KV: 自适应预算分配</strong></p>
+<pre tabindex="0"><code>输入: 总预算 B; 每个head i 的注意力权重 {A_i}
+输出: 分配的预算 {B_i^*}
+
+1: 将所有head的注意力权重拼接成一个大向量 A = Cat({A_i})
+2: 从 A 中选出最大的 B 个权重: Top-k(A, k = B)
+3: 统计每个head i 在 Top-B 中被选中的次数: {f_i}
+4: 设置分配的预算为 {B_i^* = f_i}
+返回 分配的预算 {B_i^*}
+</code></pre><ul>
+<li><strong>理论优势</strong>: <strong>Theorem 3.3</strong> 证明了这种分配策略能够获得所有可能分配方案中<strong>最小的上界</strong> $\epsilon^{**}$。</li>
+</ul>
+<h3 id="43-与现有方法的集成-ada-snapkv--ada-pyramid">4.3 与现有方法的集成 (Ada-SnapKV / Ada-Pyramid)</h3>
+<p>Ada-KV 被设计为“即插即用”，可以无缝集成到现有的 Top-k 驱逐方法中。<strong>Algorithm 2</strong> 展示了如何将其集成到 SnapKV/Pyramid 中。
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/algorithm2.png"></p>
+<p><strong>Algorithm 2: Ada-SnapKV/Ada-Pyramid 在单层中的流程</strong></p>
+<pre tabindex="0"><code>输入: 总预算 B, 观察窗口内的 token X_win ∈ R^{win*d}, 
+      观察窗口内的cache {K_win, V_win}, 观察窗口外的cache {K_i, V_i}
+输出: 保留的cache {K̂_i, V̂_i}
+
+1: for i ← 1 to h do
+2:   Q_win_i = X_win W_i^Q
+3:   Ā_i = softmax(Q_win_i K_i^T)
+4:   Ā_i = Ā_i.maxpooling(dim=1).mean(dim=0)  // 聚合观察窗口内的注意力
+5: end for
+6: B = B - winsize × h  // 减去观察窗口内强制保留的cache开销
+7: 使用 Algorithm 1(B, {Ā_i}) 推导预算分配 {B_i^*}
+8: 安全防护: {B_i^*} = α × {B_i^*} + (1 − α) × (B/h) // α 默认为 0.2
+9: 根据 {B_i^*} 确定 Top-k 驱逐决策 {I_i^*}
+10: 根据 {I_i^*} 从 {K_i, V_i} 中选择 {K̂_i, V̂_i}
+11: {K̂_i, V̂_i} = Cat({K̂_i, V̂_i}, {K_win, V_win}) // 与观察窗口cache拼接
+返回 保留的cache {K̂_i, V̂_i}
+</code></pre><p><strong>详细解释：</strong></p>
+<ul>
+<li>
+<p><strong>输入</strong></p>
+<ul>
+<li><code>B</code>：总预算（总的 KV cache 可保留的容量）。</li>
+<li><code>X_win ∈ R^{win × d}</code>：观察窗口内的 token embedding，窗口大小为 <code>win</code>，embedding 维度为 <code>d</code>。</li>
+<li><code>K_win, V_win</code>：观察窗口内的 key/value cache。</li>
+<li><code>K_i, V_i</code>：观察窗口外的 key/value cache（通常是历史 token 对应的 cache）。</li>
+</ul>
+</li>
+<li>
+<p><strong>输出</strong></p>
+<ul>
+<li><code>K̂_i, V̂_i</code>：最终保留的 cache。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<p><strong>步骤解析</strong></p>
+<h4 id="15-行计算观察窗口内的注意力聚合"><strong>1–5 行：计算观察窗口内的注意力聚合</strong></h4>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>1: for i ← 1 to h do
+</span></span><span style="display:flex;"><span>2:   Q_win_i = X_win W_i^Q
+</span></span><span style="display:flex;"><span>3:   Ā_i = softmax(Q_win_i K_i^T)
+</span></span><span style="display:flex;"><span>4:   Ā_i = Ā_i.maxpooling(dim=1).mean(dim=0)
+</span></span><span style="display:flex;"><span>5: end for
+</span></span></code></pre></div><ul>
+<li>
+<p><strong>目的</strong>：评估每个头 <code>i</code> 对观察窗口外的 KV cache 的重要性。</p>
+</li>
+<li>
+<p><strong>解释</strong>：</p>
+<ol>
+<li>
+<p><code>Q_win_i = X_win W_i^Q</code>
+计算第 <code>i</code> 个头的查询矩阵。</p>
+</li>
+<li>
+<p><code>Ā_i = softmax(Q_win_i K_i^T)</code>
+计算观察窗口内 token 对每个历史 KV 的注意力分数。</p>
+</li>
+<li>
+<p><code>Ā_i = Ā_i.maxpooling(dim=1).mean(dim=0)</code>
+聚合注意力信息：</p>
+<ul>
+<li><code>maxpooling(dim=1)</code>：取每个观察窗口 token 对历史 KV 中的最大注意力。</li>
+<li><code>mean(dim=0)</code>：对观察窗口 token 求平均，得到每个历史 KV 的重要性分数。</li>
+</ul>
+</li>
+</ol>
+</li>
+<li>
+<p><strong>结果</strong>：每个 head 得到一个向量 <code>Ā_i</code>，表示该 head 对各个历史 KV 的注意力重要性。</p>
+</li>
+</ul>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Ā_i = Ā_i.maxpooling(dim=1).mean(dim=0)
+</span></span></code></pre></div><ul>
+<li>
+<p><code>Ā_i</code> 是第 <code>i</code> 个注意力头对 <strong>历史 KV cache</strong> 的注意力分数矩阵。</p>
+</li>
+<li>
+<p>形状大概是 <code>(win, num_cache)</code>：</p>
+<ul>
+<li><code>win</code>：观察窗口内的 token 数量</li>
+<li><code>num_cache</code>：历史 KV cache 的数量</li>
+</ul>
+</li>
+</ul>
+<p>也就是说，每一行表示一个观察窗口 token 对所有历史 KV 的注意力分布。</p>
+<hr>
+<h3 id="1-maxpoolingdim1"><strong>1️⃣ maxpooling(dim=1)</strong></h3>
+<ul>
+<li>
+<p>对 <strong>每一行</strong>（每个观察窗口 token）进行 <strong>最大池化</strong>：</p>
+<ul>
+<li>取这个 token 对历史 KV 的 <strong>最大注意力值</strong>。</li>
+</ul>
+</li>
+<li>
+<p>结果：</p>
+<ul>
+<li>原本 <code>(win, num_cache)</code> → <code>(win,)</code> 向量</li>
+<li>这个向量表示 <strong>每个 token 最关注的历史 KV 的重要性</strong>。</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>直观理解：我们只关心每个 token 在历史 KV 中的 “最重要的记忆”，而不是平均分散的注意力。</p>
+</blockquote>
+<hr>
+<h3 id="2-meandim0"><strong>2️⃣ mean(dim=0)</strong></h3>
+<ul>
+<li>
+<p>对 <strong>所有观察窗口 token</strong> 求平均：</p>
+<ul>
+<li>把每个 token 的最大注意力值加起来再除以 token 数量。</li>
+</ul>
+</li>
+<li>
+<p>结果：</p>
+<ul>
+<li>一个标量或向量（视具体实现），表示 <strong>该注意力头整体对某些历史 KV 的重要性评分</strong>。</li>
+</ul>
+</li>
+<li>
+<p>作用：</p>
+<ul>
+<li>聚合观察窗口内所有 token 的信息，得到一个 <strong>全局的历史 KV 重要性向量</strong>。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h4 id="6-行扣除观察窗口-cache-的开销"><strong>6 行：扣除观察窗口 cache 的开销</strong></h4>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>6: B = B - winsize × h
+</span></span></code></pre></div><ul>
+<li><strong>解释</strong>：观察窗口内的 cache <code>K_win, V_win</code> 是 <strong>必须保留的</strong>，所以总预算要减去它们占用的空间。</li>
+</ul>
+<hr>
+<h4 id="78-行预算分配"><strong>7–8 行：预算分配</strong></h4>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>7: 使用 Algorithm 1(B, {Ā_i}) 推导预算分配 {B_i^*}
+</span></span><span style="display:flex;"><span>8: {B_i^*} = α × {B_i^*} + (1 − α) × (B/h)
+</span></span></code></pre></div><ul>
+<li>
+<p><strong>步骤 7</strong>：</p>
+<ul>
+<li>调用另一个算法（Algorithm 1）根据各头的重要性向量 <code>Ā_i</code> 来分配剩余预算 <code>B</code>。</li>
+<li>得到每个头分配到的预算 <code>B_i^*</code>（可保留的 KV 数量）。</li>
+</ul>
+</li>
+<li>
+<p><strong>步骤 8：安全防护</strong>：</p>
+<ul>
+<li>用一个平滑系数 <code>α</code> 做线性插值，避免某些头的预算过低。</li>
+<li>公式：</li>
+</ul>
+$$
+  B_i^* = \alpha \cdot B_i^* + (1 - \alpha) \cdot \frac{B}{h}
+  $$<ul>
+<li>默认 <code>α=0.2</code>，即 20% 依赖算法分配，80% 保证每个头有基础份额。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h4 id="910-行选择保留的-kv"><strong>9–10 行：选择保留的 KV</strong></h4>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>9: 根据 {B_i^*} 确定 Top-k 驱逐决策 {I_i^*}
+</span></span><span style="display:flex;"><span>10: 根据 {I_i^*} 从 {K_i, V_i} 中选择 {K̂_i, V̂_i}
+</span></span></code></pre></div><ul>
+<li>
+<p><strong>步骤 9</strong>：</p>
+<ul>
+<li>对每个头，选择 <strong>Top-k KV</strong>，其中 <code>k = B_i^*</code>。</li>
+<li><code>I_i^*</code> 是被保留的 KV 的索引。</li>
+</ul>
+</li>
+<li>
+<p><strong>步骤 10</strong>：</p>
+<ul>
+<li>根据索引 <code>I_i^*</code> 从历史 cache 中提取对应的 <code>K̂_i, V̂_i</code>。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h4 id="11-行与观察窗口-cache-拼接"><strong>11 行：与观察窗口 cache 拼接</strong></h4>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>11: {K̂_i, V̂_i} = Cat({K̂_i, V̂_i}, {K_win, V_win})
+</span></span></code></pre></div><h3 id="44-高效实现">4.4 高效实现</h3>
+<p>自适应预算分配会导致不同head的cache长度可变，给高效计算带来挑战。Ada-KV 通过以下方式解决：</p>
+<ul>
+<li><strong>扁平化cache布局 (Flattened Cache Storage Layout)</strong>: 将一个层内所有head的 KV cache拼接成一个大的张量。</li>
+<li><strong>可变长度 FlashAttention</strong>: 利用 <code>flash_attn_varlen_func</code> 来高效处理这种可变长度的注意力计算。</li>
+<li><strong>自定义 CUDA 内核</strong>: 实现了高效的cache更新操作，以支持在扁平化布局下动态插入新的 KV 对。如 <strong>Figure 2</strong> 所示，更新过程分为 malloc、copy old value 和 insert new value 三个阶段。</li>
+<li><strong>GQA 兼容性</strong>: 针对现代 LLM（如 Llama, Mistral）广泛使用的 Grouped Query Attention (GQA)，Ada-KV 通过在每个 GQA 组内使用平均注意力权重作为选择标准，避免了冗余计算。
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure2.png"></li>
+</ul>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-实验设置">5.1 实验设置</h3>
+<ul>
+<li><strong>基座模型</strong>: Llama-3.1-8B-Instruct 和 Mistral-7B-Instruct-v0.2（均使用 GQA）。</li>
+<li><strong>数据集</strong>: <strong>Ruler</strong> (13个任务) 和 <strong>LongBench</strong> (16个数据集)。</li>
+<li><strong>评估场景</strong>:
+<ul>
+<li><strong>Question-aware</strong>: 压缩时已知问题（标准场景）。</li>
+<li><strong>Question-agnostic</strong>: <strong>更具挑战性的场景</strong>，压缩时不知道问题，更能反映真实应用（如提示cache）。</li>
+</ul>
+</li>
+<li><strong>基线方法</strong>: SOTA 的 SnapKV 和 Pyramid，以及滑动窗口方法 StreamingLLM。</li>
+<li><strong>参数</strong>: 观察窗口大小为32，安全系数 $\alpha=0.2$。</li>
+</ul>
+<h3 id="52-ruler-基准测试结果">5.2 Ruler 基准测试结果</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure3.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure4.png"></p>
+<ul>
+<li><strong>总体表现</strong>: 如 <strong>Figure 3</strong> 所示，Ada-SnapKV 和 Ada-Pyramid <strong>始终优于</strong> 原始方法，尤其在 <strong>question-agnostic</strong> 场景下优势更显著。例如，在 Llama-3.1-8B 上，20% cache预算时，Ada-SnapKV 将 SnapKV 的得分从 44.02 大幅提升至 53.29。</li>
+<li><strong>子任务分析</strong>: <strong>Figure 4</strong> 展示了 question-agnostic 场景下的详细结果。Ada-KV 在几乎所有任务上都带来了显著提升。特别在困难的 NIAH 任务（如 S-NIAH-3, MK-NIAH-2）上，Ada-SnapKV 在 80% 预算下几乎实现了无损性能（得分 97.6 和 99.6），而原始 SnapKV 则有明显下降。</li>
+</ul>
+<h3 id="53-longbench-基准测试结果">5.3 LongBench 基准测试结果</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/table1.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure5.png">
+<img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/table2.png"></p>
+<ul>
+<li><strong>固定预算评估</strong>: <strong>Figure 5</strong> 显示，在 question-aware 场景下，Ada-变体持续优于基线。在 <strong>question-agnostic</strong> 场景下，所有方法性能都有所下降，但 Ada-变体依然保持领先。</li>
+<li><strong>按比例预算评估</strong>: <strong>Table 1</strong> 和 <strong>Table 2</strong>（Llama-70B）展示了按任务领域的详细结果。Ada-SnapKV 在绝大多数领域（18个领域中的15个）都有效缓解了压缩带来的性能损失，证明了其通用性和鲁棒性。</li>
+</ul>
+<h3 id="54-计算效率分析">5.4 计算效率分析</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/figure6.png">
+Ada-KV 的核心目标是在不牺牲效率的前提下提升质量。<strong>Figure 6</strong> 的结果表明，得益于高效的 CUDA 实现和可变长度 FlashAttention，Ada-SnapKV 在<strong>峰值内存占用</strong>和<strong>解码延迟</strong>方面与原始的 SnapKV <strong>基本持平</strong>，并且都远优于使用完整cache的情况。</p>
+<h3 id="55-广泛适用性">5.5 广泛适用性</h3>
+<p><img loading="lazy" src="http://localhost:56368/blog/image/AdaKV/table3.png">
+由于其即插即用的特性，Ada-KV 已被后续多项工作（如 CriticalKV, DefensiveKV）采用。<strong>Table 3</strong> 显示，将 Ada-KV 应用于这些新方法后，性能得到了进一步提升，再次证明了其作为通用增强模块的价值。</p>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>本研究重新审视了用于高效 LLM 推理的cache驱逐策略，并发现了一个被忽视的关键因素：<strong>跨注意力head的自适应预算分配</strong>。在驱逐损失上界的理论分析指导下，这篇工作提出了 Ada-KV，这是首个用于优化 KV cache驱逐方法的自适应预算分配策略。这篇工作通过将其集成到两个现有的 SOTA 方法中，引入了 Ada-SnapKV 和 Ada-Pyramid。除了常见的问答感知压缩场景，这篇工作还在更具挑战性且较少被探索的问答不可知压缩场景中评估了这些方法。使用 Ruler 和 LongBench 基准，这篇工作证明了自适应预算分配在这两种设置下的有效性。这篇工作的结果不仅暴露了当前cache驱逐策略的局限性，也突显了自适应分配在增强cache驱逐方面的潜力。</p>
+
+    </section>
+  
+</body>
+</html>

@@ -1,0 +1,2462 @@
+<!doctype html>
+<html lang="zh-cn">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=14183&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="utf-8">
+  <title>Math Audit</title>
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+
+</head>
+<body>
+  
+  
+  
+    <section data-source="posts\ModServe - Modality- and Stage-Aware Resource Disaggregation for Scalable Multimodal Model Serving - SoCC&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/ModServe/title.png">
+<strong>Conference:</strong> <strong>SoCC'25</strong></p>
+<h3 id="1-动机motivation">1. 动机（Motivation）</h3>
+<p>大型多模态模型（LMMs）需要处理本质上不同的输入类型，每种类型都需要独特的处理流程。这种固有的异构性为服务带来了特殊的复杂性，呼唤新的分析和服务策略。以图像-文本到文本模型[25]为例，推理流程包括多个专业阶段：</p>
+<ul>
+<li><strong>图像预处理：</strong> 将原始图像转换为张量表示。</li>
+<li><strong>图像编码：</strong> 将这些张量转换为图像标记（tokens）。</li>
+<li><strong>语言模型后端：</strong> 结合文本提示和图像标记生成文本输出。</li>
+</ul>
+<p>当前，这些阶段通常以<strong>单体系统</strong>[5, 27, 62]形式提供服务，所有组件集成在单个实例中并作为一个统一实体进行扩展。虽然最新的LLM服务系统已采用预填充-解码（PD）分解[46, 65]来减轻LLM后端性能干扰，但这些优化仍以文本为中心，忽略了上游的多模态预处理和编码阶段。这些上游阶段在单体服务实例中依然紧密耦合。</p>
+<p>这种缺乏模态-aware解耦的设计，限制了现有系统在处理非文本工作负载时的效率和可扩展性。由于多模态输入预处理和编码位于关键路径上，这些系统难以满足<strong>首令牌时间（TTFT）的服务水平目标（SLOs）。<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure1.png">清晰地展示了，在每个请求的图像数量增加（这在多图像或视频工作负载中很常见）时，单体部署所面临的扩展挑战，这会导致TTFT急剧恶化。因此，图像密集型请求可能引发队头（HoL）阻塞</strong>，进而降低系统响应能力并导致资源过度配置。</p>
+<h3 id="2-贡献contribution">2. 贡献（Contribution）</h3>
+<p><strong>作者的工作：</strong> 本文首次对两种主流LMM架构——<strong>交叉注意力（CroAttn）和仅解码器（DecOnly）</strong>——进行了全面的系统分析。分析对象包括六个代表性的开源LMMs以及来自Azure数据中心的真实生产LMM推理轨迹。作者深入剖析了它们的多阶段推理流程、性能与资源之间的权衡，以及生产工作负载模式（包括可变的请求率、多样化的多模态输入和突发流量）。为促进研究，作者发布了来自生产集群的首个开源多模态轨迹，以供社区研究真实世界的部署模式。</p>
+<p><strong>关键洞察（Insights）：</strong> 作者的分析确定了三个优化LMM推理的关键洞察：</p>
+<ol>
+<li><strong>Insight 1：</strong> 不同的LMM推理阶段（如预处理、编码、预填充、解码）表现出不同的性能特征，并且对资源和模型配置（如批处理、模型分片）具有不同的敏感性，因此需要<strong>解耦执行</strong>。</li>
+<li><strong>Insight 2：</strong> 图像编码是影响TTFT的主要瓶颈，因此需要<strong>高效的编码器并行化</strong>来减少延迟和队头（HoL）阻塞。</li>
+<li><strong>Insight 3：</strong> 生产多模态流量展现出独特的突发模式，主要由<strong>每个请求的图像数量增加</strong>所驱动，这强调了需要<strong>模态感知路由策略</strong>来管理突发流量并减轻尾部延迟峰值。</li>
+</ol>
+<p><strong>ModServe架构：</strong> 基于上述洞察，作者提出了<strong>ModServe</strong>，一种新型的模块化架构，专为可扩展和资源高效的LMM服务而设计，旨在直接解决分析中发现的挑战。以图像-文本到文本任务为例，ModServe将图像和文本特定的推理阶段分离到不同的实例中进行解耦执行：</p>
+<ul>
+<li><strong>图像实例：</strong> 处理图像预处理和编码。</li>
+<li><strong>文本实例：</strong> 管理LLM的预填充和解码（见<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure1.png">）。</li>
+<li><strong>请求流：</strong> 纯文本请求绕过图像实例直接由文本实例服务；图像-文本请求则先通过图像实例将图像转换为标记，再转发给文本实例进行文本生成。</li>
+</ul>
+<p><strong>ModServe的优化能力：</strong> 这种模块化架构实现了阶段特定的优化：</p>
+<ul>
+<li><strong>独立资源管理：</strong> ModServe独立地使用阶段感知自动扩展、模型分片和批处理来管理图像和文本实例。通过单独扩展各个阶段，它最大程度地减少了资源过度配置。例如，在生产流量中观察到的图像驱动突发期间，图像实例可以独立扩展，从而比单体推理系统更具资源效率。</li>
+<li><strong>并行化编码：</strong> 为解决图像编码瓶颈，ModServe在多个图像实例上并行化单个请求的编码（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure1.png">）。这是基于一个关键发现：请求中的图像在编码期间不进行相互注意力计算，因此请求可以在图像级别并行化。</li>
+<li><strong>模态感知路由：</strong> 为管理图像驱动的突发，ModServe为图像和文本实例实现了模态感知请求路由。例如，图像-文本请求中的图像被路由到具有最少待处理图像标记的图像实例，以减少HoL阻塞和尾部延迟峰值。</li>
+</ul>
+<p><strong>性能表现：</strong> 作者在高性能推理系统vLLM[27]之上实现了ModServe，并通过在运行Azure生产LMM推理轨迹的16服务器（128 GPU）集群上进行广泛评估，验证了ModServe的有效性。与最先进的基线相比，ModServe在静态资源分配下实现了<strong>3.3至5.5倍</strong>更高的吞吐量，同时在满足P99 TTFT SLOs的前提下，将LMM服务成本降低了<strong>25%至41.3%</strong>。</p>
+<p><strong>互补性：</strong> 虽然现有的PD分解技术[46, 65]有助于优化LLM推理（通过分离预填充和解码），但它们对于处理多模态工作负载来说是不够的。生产环境中异构且突发的多模态流量性质，使得在以文本为中心背景下研究的PD分解难以扩展；模态特定的优化（如并行化编码、模态感知路由和阶段自动扩展）对于在保持资源效率的同时满足SLOs至关重要。作者在第5节中证明，ModServe可以与LLM后端的两种配置（共置LLM后端/混合PD批处理，以及文本节点的PD分解）结合，且提出的模态感知技术在两种配置下都能改善服务延迟。</p>
+<p><strong>适用范围：</strong> 作者重点研究了图像-文本到文本和视频-文本到文本（视频被视为图像帧序列处理[31]）任务，但其洞察可推广到其他多模态场景，例如音频-文本到文本任务[23]，因为它们与研究所用的模型具有相似的模型架构和推理阶段。</p>
+<h3 id="3-基础知识preliminary">3. 基础知识（Preliminary）</h3>
+<p>LMMs通过整合多模态理解能力，将以文本为中心的LLMs扩展到视觉问答[52]、计算机使用代理[42, 45]等任务。<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure2.png">描绘了视觉理解任务中LMM推理的典型流程[25]，它涉及三个关键阶段：</p>
+<ol>
+<li><strong>图像预处理：</strong> 将原始图像转换为统一大小的图块。</li>
+<li><strong>图像编码：</strong> 编码器提取视觉特征并生成一系列图像标记。</li>
+<li><strong>文本生成：</strong> LLM后端处理图像和文本标记以生成输出文本标记。</li>
+</ol>
+<p><strong>LMM主流架构：</strong> 主流LMM架构在LLM后端处理图像标记和文本标记的方式上存在差异：</p>
+<ol>
+<li><strong>仅解码器（DecOnly）：</strong> 用于DeepSeek的Janus[7]、LLaVA-OneVision[31]、InternVL[9]和NVLM-D[12]等模型。它重用未经修改的LLM后端（例如，LLaVA-OV重用Qwen2 LLM[31]），通过附加连接器[66]或模态对齐模块将图像编码器输出映射到LLM的标记空间，统一处理文本和图像标记（如<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure2.png">中的“DecOnly”框）。虽然简单，但通常需要处理高分辨率图像带来的长序列，导致推理时的计算效率低下。</li>
+<li><strong>交叉注意力（CroAttn）：</strong> 见于Llama-3.2 Vision[11]。它集成<strong>交叉注意力层</strong>来处理图像标记，将视觉输入视为LLM后端中的“外语”。自注意力作用于文本标记，而交叉注意力层同时关注文本和图像标记（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure2.png">中的“CroAttn”框）。通过避免在LLM解码器中完全展开图像标记，它提高了推理效率，使其成为处理高分辨率输入的理想选择。
+<ul>
+<li><em>（自注意力在[图像+文本]上：需要交互：图像-&gt;图像，图像-&gt;文本，文本-&gt;图像，文本-&gt;文本）</em></li>
+<li><em>（交叉注意力：仅文本-&gt;图像（单向））</em></li>
+</ul>
+</li>
+</ol>
+<p><strong>图像预处理：</strong> LMMs通常在CPU上执行调整大小、分割成图块[9, 11, 12]或补丁[31]以及应用转换等步骤。更高的图像尺寸会产生更多的图块，最终增加图像标记的数量（例如，896×896像素的图像在六种开源LMMs预处理后会生成4、5或10个不同大小的图块，见<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/table1.png">）。</p>
+<p><strong>图像编码：</strong> 图像编码器（主要使用视觉变换器架构[4]）接收处理后的图像图块作为输入，并生成传递给语言模型后端的图像标记。不同的LMMs使用不同的编码器[4, 9, 31, 64]，这导致在相同的ShareGPT-4o数据集[8]上运行时，生成的图像标记数量也有所不同（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure3.png">）。</p>
+<p><strong>LMM推理的SLO指标：</strong></p>
+<ul>
+<li><strong>首令牌时间（TTFT）：</strong> 测量从查询到第一个响应标记的延迟，包括：(1)图像预处理，(2)编码，(3)语言模型预填充时间。多模态预处理和编码主要影响TTFT。</li>
+<li><strong>令牌间时间（TBT）：</strong> 捕获解码期间连续标记生成之间的延迟。</li>
+</ul>
+<p><strong>当今的LMM部署：</strong> 最先进的服务框架[5, 27, 62]将LMMs部署为<strong>单体系统</strong>，所有组件在同一硬件服务器上共置。即使应用了PD分解，多模态组件仍与预填充实例耦合[27]，无法根据不同资源需求和性能特征进行独立优化，限制了灵活性，并在图像密集型工作负载下遭受TTFT的急剧恶化（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure1.png">）。</p>
+<h3 id="4-lmm特性分析lmm-characterization">4. LMM特性分析（LMM Characterization）</h3>
+<h4 id="41-开源lmms的特性分析">4.1 开源LMMs的特性分析</h4>
+<p><strong>各阶段延迟分解：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure5.png">展示了TTFT在图像预处理、图像编码和LLM预填充上的分布。</p>
+<ul>
+<li><strong>图像编码是TTFT的主要瓶颈：</strong> 发生在CPU上的图像预处理贡献微乎其微。图像编码时间贡献巨大，尤其在CroAttn模型中（Llama3.2-11B和Llama3.2-90B中79%和65%的TTFT来自图像编码）。即使在DecOnly模型（如InternVL-26B和NVLM-D-72B）中，图像编码延迟也占TTFT的25%和54%。</li>
+<li><strong>原因：</strong> 每个请求的图像数量可能很大，且CroAttn模型通过减少LLM中图像-文本交互，将计算负载转移并集中到图像编码器。</li>
+<li><strong>Insight 1：TTFT的大部分时间消耗在图像编码上，特别是对于CroAttn模型，使图像编码优化对满足TTFT SLOs至关重要。</strong></li>
+</ul>
+<p><strong>LMM阶段的计算特征：</strong></p>
+<ul>
+<li><strong>计算密集型：</strong> CPU上的图像预处理（可从核心间并行化获益，<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure6.png">）和GPU上的图像编码（SM核心活动接近100%，DRAM利用率低于30%，<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure6.png">）都是计算密集型过程，类似于LLM预填充阶段。</li>
+<li><strong>线性延迟扩展：</strong> 图像预处理和编码的延迟都随批大小呈线性增长，且计算在没有显著吞吐量增益的情况下饱和（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure6.png">和<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure6.png">）。</li>
+<li><strong>并行化潜力：</strong> 多模态请求中图像的计算是独立的，因此图像预处理和编码可以在多个编码器上并行化。</li>
+<li><strong>Insight 2：图像预处理和编码都是计算密集型的，类似于LLM预填充阶段。多模态请求中图像计算的独立性使得图像预处理和编码可以在多个实例上并行化。</strong></li>
+</ul>
+<p><strong>不同LMMs的延迟-准确性配置文件：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure7.png">显示了不同模型的准确性和预填充/TTFT效率的权衡。</p>
+<ul>
+<li><strong>CroAttn效率 vs. 准确性：</strong> 相似大小的CroAttn模型（例如Llama3.2-11B）的LLM预填充时间通常比DecOnly模型（例如LLaVA-OV-7B）低一个数量级，导致更低的TTFT。然而，CroAttn模型的准确性通常比DecOnly对应物低5分（例如Llama3.2-90B得分为63.4，而LLaVA-OV-72B得分为68）。</li>
+<li><strong>Insight 3：DecOnly模型表现出比类似大小的CroAttn模型差10倍的LLM预填充延迟，导致图像编码的TTFT SLO余量较少，因此需要对图像工作负载具有更高的可扩展性。</strong></li>
+</ul>
+<p><strong>批处理的影响：</strong> 在单体部署中，单个批大小应用于所有LMM阶段，难以在延迟和吞吐量之间取得平衡（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure8.png">）。</p>
+<ul>
+<li><strong>异构敏感性：</strong> 延迟随批大小增加的速率不同，反映了每个阶段的不同敏感性。计算密集型阶段（如图像编码和DecOnly中的LLM预填充）吞吐量增益有限且延迟上升。内存受限的解码阶段则受益于线性吞吐量扩展。</li>
+<li><strong>CroAttn优势：</strong> CroAttn模型因文本标记数量较少而从预填充批处理中受益。</li>
+<li><strong>Insight 4：批处理对每个LMM组件的有效性因模型而异。因此，LMM请求批处理应针对每个阶段定制。</strong></li>
+</ul>
+<p><strong>并行性的影响：</strong> 单体部署限制了模型分片（TP[59]）的灵活性（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure9.png">）。</p>
+<ul>
+<li><strong>最佳TP度不同：</strong> Llama3.2-11B中，最低LLM预填充延迟在TP-8，图像编码在TP-4，TBT在TP-1。大编码器（如NVLM-D-72B的6B编码器）在TP从4增加到8时延迟减少1.3倍，但收益递减。</li>
+<li><strong>Insight 5：将图像编码器和LLM后端视为单体限制了并行性灵活性并降低性能。解耦它们可以通过流水线实现独立扩展和优化效率。</strong></li>
+</ul>
+<h4 id="42-生产lmm轨迹分析">4.2 生产LMM轨迹分析</h4>
+<p><strong>时间模式和突发性：</strong></p>
+<ul>
+<li><strong>图像驱动的突发：</strong> 图像-文本请求具有比纯文本高5倍的提示标记率，且其峰谷出现时间相互独立。它们经历显著的突发性，不仅因为请求到达率更高，还因为<strong>每个请求的图像数量增加</strong>（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure10.png">）。现有LLM流量预测方法[56]的平均预测错误率高达79%。</li>
+<li><strong>Insight 6：生产LMM图像流量表现出与文本请求流量模式无关的突发行为，这是由于不同服务的性质。服务系统必须动态扩展资源以高效处理模态特定的突发。</strong></li>
+</ul>
+<p><strong>请求异构性：</strong></p>
+<ul>
+<li><strong>提示长度：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure11.png">显示提示长度在模态之间显著变化，都遵循重尾幂律分布（图像-文本 $\alpha=4.4$，纯文本 $\alpha=2.9$）。图像-文本请求中位提示更长，但尾部比纯文本请求短。</li>
+<li><strong>图像数量：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure11.png">显示每个请求的图像数量显著变化且尾部较重。不同服务之间的每个请求图像数量变异性很高（可相差16倍）。</li>
+</ul>
+<p><strong>混合模态的影响：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure12.png">显示了在单个请求中改变图像标记百分比对CroAttn模型Llama3.2-11B中TTFT和LLM预填充时间的影响。</p>
+<ul>
+<li><strong>CroAttn模型：</strong> TTFT随着图像标记百分比增加而增加（由于图像编码计算），但LLM预填充时间减少（绿色显示），部分抵消了图像编码开销。这是因为图像标记仅在少量CroAttn层中被关注（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure12.png">右侧显示自注意力计算减少）。</li>
+<li><strong>DecOnly模型：</strong> 预填充时间不随标记比率变化，因为图像和文本标记以相同方式处理。</li>
+<li><strong>Insight 7：DecOnly模型无论标记模态如何都保持一致的预填充时间，使总标记计数成为请求路由的关键因素。相比之下，CroAttn模型随着图像标记百分比的增加而经历预填充延迟减少，需要一种模态感知请求路由策略，在多模态流量中平衡文本和图像标记负载。</strong></li>
+</ul>
+<h3 id="5-modserve方法method">5. ModServe方法（Method）</h3>
+<p>ModServe是一种新型模块化架构，它将推理阶段分离到<strong>图像实例</strong>（处理图像预处理和编码）和<strong>文本实例</strong>（LLM预填充和解码）中，以实现独立优化（Insight 1和3），并在满足SLOs的同时提高资源效率。它采用分层架构，由图像池管理器和文本池管理器管理。</p>
+<h4 id="51-离线lmm配置文件生成">5.1 离线LMM配置文件生成</h4>
+<ul>
+<li><strong>过程：</strong> 在引入新LMM时，ModServe通过独立表征图像编码器和LLM后端，在受控负载、不同TP和批大小下运行，以生成资源-性能配置文件。</li>
+<li><strong>输出：</strong> 配置文件预测关键性能指标（图像实例的编码延迟、文本实例的预填充时间和TBT）。</li>
+<li><strong>用途：</strong> 池管理器使用配置文件指导：(1)池自动扩展、(2)选择最佳TP度的模型分片、(3)每个阶段的最大批大小配置。</li>
+</ul>
+<h4 id="52-解耦的资源管理">5.2 解耦的资源管理</h4>
+<p>ModServe定期重新配置资源（每五分钟）以适应工作负载需求，其方法基于对阶段特定性能差异（Insight 4）、独立扩展优势（Insight 5）和模态特定流量模式（Insight 6）的洞察。</p>
+<ul>
+<li><strong>连接器共置：</strong> 连接器与LLM后端共置，以避免为小组件分配单独GPU导致的资源利用率不足。</li>
+<li><strong>令牌感知池自动扩展：</strong> 池管理器根据实时<strong>令牌吞吐量（令牌/秒）</strong>（而非请求率）动态扩展图像和文本实例数量，以捕获请求率和请求大小的变化（Insight 6和<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure11.png">）。
+<ul>
+<li><strong>副本数量：</strong> $\lceil M_L / M_C \rceil$，其中 $M_L$ 是特定于模态的负载，$M_C$ 是最大容量。</li>
+<li><strong>文本实例：</strong> CroAttn模型基于文本标记负载扩展；DecOnly模型基于总标记扩展（Insight 7）。</li>
+</ul>
+</li>
+<li><strong>模型分片：</strong> 池管理器独立确定图像编码器和LLM后端的最佳张量并行（TP）度，以针对最大吞吐量配置每个实例，同时满足TTFT和TBT SLOs。图像编码器通常在比LLM更低的TP下实现峰值吞吐量（Insight 5）。</li>
+<li><strong>最大批大小：</strong> 配置为在满足延迟SLOs的同时最大化吞吐量（Insight 4）。图像实例可能放弃批处理；文本实例（尤其是CroAttn LMMs）根据TTFT和TBT SLOs优化批处理。</li>
+</ul>
+<h4 id="53-模态感知lmm请求服务">5.3 模态感知LMM请求服务</h4>
+<p>ModServe采用动态路由和调度来平衡图像和文本实例之间的负载，以最小化排队延迟并改善TTFT延迟。</p>
+<ul>
+<li><strong>跨实例请求路由（模态感知）：</strong> 采用<strong>模态感知路由策略</strong>平衡负载，以缓解模态特定突发引起的尾部延迟激增。
+<ul>
+<li><strong>图像-文本请求：</strong> 路由到具有<strong>最少待处理图像标记负载</strong>的图像实例，实现大型请求中图像的并行处理和编码（Insight 2），防止HoL阻塞。</li>
+<li><strong>文本实例路由：</strong> 纯文本和已完成图像标记的请求：DecOnly模型路由到<strong>最少总待处理标记</strong>的实例；CroAttn模型路由到<strong>最少总待处理文本标记</strong>的实例（Insight 7）。</li>
+</ul>
+</li>
+<li><strong>实例请求调度（SLO驱动）：</strong> 在文本实例中，用<strong>SLO驱动的调度策略</strong>替换了传统FIFO调度[47, 50]，优先处理较短请求或具有严格SLOs的请求以保持低延迟，从而最小化资源争用和HoL阻塞。</li>
+<li><strong>图像标记传输：</strong> 一旦编码完成，ModServe通过<strong>基于拉取（pull-based）的RDMA机制</strong>将图像标记从图像实例传输到文本实例，使得调度器能够基于完整信息（队列大小、有效载荷等）选择最佳目标文本实例，避免次优路由。</li>
+</ul>
+<h4 id="54-实现细节">5.4 实现细节</h4>
+<p>ModServe在vLLM[27]（v0.7.2）之上实现文本实例，图像实例基于HuggingFace Transformers[24]。使用带有NCCL后端和GPU Direct RDMA的PyTorch分布式通信进行高效GPU到GPU内存传输。池管理器作为轻量级gRPC服务器（受DynamoLLM[56]启发）实现，用于故障检测和恢复。支持在同一服务器中并置独立配置的图像和文本实例。</p>
+<h3 id="6-评估evaluation">6. 评估（Evaluation）</h3>
+<h4 id="61-实验设置">6.1 实验设置</h4>
+<ul>
+<li><strong>模型：</strong> Llama3.2-11B (CroAttn) 和 InternVL-26B (DecOnly)。</li>
+<li><strong>工作负载：</strong> 采用生产LMM推理轨迹（第3.2节）中的请求到达时间戳和图像数量（0到16）。</li>
+<li><strong>硬件：</strong> 16台DGX-A100服务器（128 GPU），服务器内NVLINK 3.0，跨服务器InfiniBand。</li>
+<li><strong>基线：</strong> vLLM[27]（单体）和ModServe的消融变体（ModServe-Decoup、ModServe-Sched）。</li>
+<li><strong>SLO定义：</strong> 基于单体基线的单个纯文本/图像-文本请求的TTFT/TBT，并使用常数因子进行缩放，定义在P99尾部延迟上。</li>
+</ul>
+<h4 id="62-端到端性能end-to-end-performance">6.2 端到端性能（End-to-end Performance）</h4>
+<p><strong>静态资源分配（16台服务器，128 GPU）：</strong></p>
+<ul>
+<li><strong>TTFT改进：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure14.png">显示，与vLLM（单体）相比，静态解耦（ModServe-Decoup）将Llama3.2的P99 TTFT提高了42%，InternVL的P99 TTFT提高了47%。ModServe通过模态感知调度和路由进一步将P99 TTFT减少14%和32%。</li>
+<li><strong>吞吐量：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure15.png">显示，在满足SLOs下，ModServe的吞吐量比vLLM（单体）高出<strong>3.3倍</strong>（Llama3.2）和<strong>5.5倍</strong>（InternVL），证实DecOnly模型从解耦中受益更多。</li>
+</ul>
+<p><strong>具有自动扩展的资源分配：</strong> 评估服务包含图像驱动突发（<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure10.png">）的生产轨迹。</p>
+<ul>
+<li><strong>成本节约：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure16.png">比较了服务轨迹所需的GPU数量。与vLLM（单体）相比，ModServe在满足尾部延迟SLOs的同时，服务Llama-3.2（CroAttn）和InternVL（DecOnly）模型的GPU使用量分别减少了<strong>41.3%和25%</strong>。这证明ModServe的阶段感知自动扩展防止了在图像驱动突发期间不必要地扩展LLM后端，避免了资源过度配置。</li>
+</ul>
+<h4 id="63-敏感性研究sensitivity-study">6.3 敏感性研究（Sensitivity Study）</h4>
+<ul>
+<li><strong>SLO缩放的影响：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure17.png">显示，随着SLO缩放增加，ModServe持续优于vLLM，在Llama-3.2上实现高达<strong>4.3倍</strong>，在InternVL上实现<strong>6.8倍</strong>的吞吐量提升。</li>
+<li><strong>图像与文本实例比率的影响：</strong> <img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure18.png">显示，当图像:文本实例比率超过2.4时，ModServe持续优于单体基线（Llama3.2最高18.4倍，InternVL最高9.2倍），展示了其处理多模态工作负载的效率。</li>
+</ul>
+<h4 id="64-预填充-解码分解支持prefill-decode-disaggregation-support">6.4 预填充-解码分解支持（Prefill-Decode Disaggregation Support）</h4>
+<p>ModServe兼容预填充/解码（PD）分解[46, 65]，可实现完整的EPD分解。<img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure19.png">比较了PD-Monolith和PD-ModServe配置（部署InternVL-26B，总共32个GPU用于编码和预填充）。</p>
+<ul>
+<li><strong>结果：</strong> ModServe（PD-ModServe，蓝色）提供了额外的TTFT减少（平均TTFT最高2.8倍，P90 TTFT最高3.2倍），超出了单独PD分解（红色）所能提供的。这归因于ModServe减少了图像编码和LLM预填充阶段之间的资源争用，并利用编码器并行化（Insight 2）。</li>
+</ul>
+<h4 id="65-标记传输开销token-transfer-overhead">6.5 标记传输开销（Token Transfer Overhead）</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ModServe/figure20.png">比较了图像标记在Infiniband (RDMA) 和以太网 (TCP) 上的传输开销。</p>
+<ul>
+<li><strong>开销：</strong> 使用Infiniband上的RDMA，P99传输延迟仅为<strong>5毫秒</strong>，占TTFT的&lt;0.5%。以太网上的TCP开销显著更高（P99为180毫秒）。</li>
+<li><strong>影响：</strong> 即使在TCP上评估，ModServe在InternVL-26B的高负载下仍实现了35%的TTFT减少，证明了阶段解耦的价值。</li>
+</ul>
+<h3 id="7-结论与相关工作conclusion-and-related-work">7. 结论与相关工作（Conclusion and Related Work）</h3>
+<p><strong>LMM表征：</strong> 作者对开源模型和生产轨迹上的LMMs进行了首次全面系统分析，突显了它们独特的执行和工作负载模式，与Lee等人[28]（专注于生成模型）和Hou等人[19]（专注于传统模型）的工作形成对比。</p>
+<p><strong>LMM服务优化：</strong> 现有优化（如Inf-MLLM[41]、弹性缓存[36]、Dynamic-LLaVA[22]）主要在模型级别操作，涉及准确性与计算开销的权衡。ModServe的系统级设计<strong>不影响模型准确性</strong>，并与这些模型级优化（例如通过子采样实现更快的图像编码[29]）<strong>正交</strong>，可以互补。</p>
+<p><strong>并发工作：</strong> 其他并发工作（如EPD[54]和HydraInfer[14]）采用了类似的阶段解耦和并行编码思想。然而，ModServe的工作超越了简单的阶段解耦，结合了基于系统分析的Insight：<strong>阶段感知模型配置</strong>、<strong>模态感知路由</strong>和<strong>自动扩展</strong>。此外，作者的分析更细致地研究了CroAttn和DecOnly两种代表性LMM架构。</p>
+<p><strong>以文本为中心的LLM服务：</strong> ModServe与Splitwise[46]、DistServe[65]等用于纯文本LLM服务的预填充/解码解耦技术兼容，但其核心在于解决<strong>多模态模型的独特特征</strong>。</p>
+<p><strong>总结：</strong> 作者基于对开源模型和生产LMM推理轨迹的全面系统分析，设计了ModServe。这是一个可扩展和资源高效的LMM服务框架，通过解耦推理阶段实现了动态重新配置、自适应扩展和模态感知调度。评估表明，与最先进的技术相比，ModServe在高效服务生产规模LMM推理工作负载的同时，实现了**25%至41%**的成本节约。</p>
+
+    </section>
+  
+    <section data-source="posts\Speculate Deep and Accurate - Lossless and Training-Free Acceleration for Offloaded LLMs via Substitute Speculative Decoding - NeurIPS&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/NYCU-EDgeAi/subspec">https://github.com/NYCU-EDgeAi/subspec</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>大型语言模型（LLMs）模型体积巨大，超出常见消费级 GPU 的显存限制，导致两类常用处理方式：</p>
+<ul>
+<li><strong>模型压缩（Quantization 等）</strong>：例如 INT8/INT4 等低精度表示，能显著压缩内存占用，但属于<strong>有损</strong>，可能影响输出质量。引用若干相关工作（GPTQ、AWQ、HQQ 等）。</li>
+<li><strong>参数分流 / Offloading</strong>：把不活跃层参数放到 CPU 主内存，需要时再传回 GPU，保证模型输出“无损”。但在 PCIe 带宽受限时，频繁的参数传输会大幅拉低吞吐与响应速度，导致单卡交互式生成速度可能只有每秒 1–2 token。</li>
+</ul>
+<p>为缓解 offloading 的数据传输瓶颈，<strong>Speculative Decoding (SD)</strong> 提出使用“草稿模型”（draft model）先快速生成多个候选 token，然后由目标模型在单次前向中并行验证这些候选，从而减少昂贵的目标模型前向次数。但现有方法存在两大限制：</p>
+<ol>
+<li>依赖与目标模型“同族”的预训练小模型（若无同族小模型，需做额外训练/蒸馏）。</li>
+<li>训练过的草稿模型对定制 / fine-tuned 目标模型对齐不足，导致平均可接受 token 长度（average acceptance length，记作 $\tau$）较小，实际加速受限（常 &lt; 7）。</li>
+</ol>
+<p>论文提出 <strong>Substitute Speculative Decoding (SubSpec)</strong>：一种<strong>无训练（training-free）</strong>、plug-and-play 的方法，通过在 GPU 上构造一个高度对齐的 draft 模型（使用低位宽 substitute 层 + 复用目标模型在 GPU 上的层与 KV-Cache）来大幅提升 $\tau$，从而在 offloading 场景下显著加速（例如在 8GB VRAM 下 Qwen2.5 7B 达到 ~25 token/s，超过 10× 加速）。</p>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<ul>
+<li>分析表明在 offloading 场景中，<strong>对齐（alignment）与草稿深度（draft depth）</strong> 对 Speculative Decoding 的收益比草稿模型本身的速度更重要（因为目标模型的 $t_{Target}$ 被数据传输主导）。</li>
+<li>提出一种<strong>trainning-free</strong>的方法：通过对被 offload 的层生成低位宽的 substitute 层，并与 GPU-resident 层以及 KV-Cache 共享，构建高度对齐的草稿模型，VRAM 开销可控。</li>
+<li>引入对草稿树构建的改进（例如概率锐化／sharpening），允许使用更深的 token-tree，从而提升平均接受长度 $\tau$。</li>
+<li>实现了高效系统优化（异步传输、chunked prefill 等），在不同模型与内存限制下获得 10× 〜 12.5× 的平均加速。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/figure1.png"></p>
+<hr>
+<h2 id="3-analysis-of-speculative-decoding-speedup-in-offloading-scenarios">3. Analysis of Speculative Decoding Speedup in Offloading Scenarios</h2>
+<h3 id="31-theoretical-speedup-analysis">3.1 Theoretical Speedup Analysis</h3>
+<p>设目标模型以自回归（AR）方式生成 $N$ 个 token，则总时间：</p>
+<p>$T^{AR}_N = N \cdot t_{Target}$</p>
+<p>其中 $t_{Target}$ 是单次目标模型前向时延（offloading 下包括参数传输时间）。</p>
+<p>对于 Speculative Decoding（树形或序列式），若草稿深度为 $D$，草稿模型一次迭代需 $D$ 次草稿前向（生成草稿树），随后目标模型进行一次并行验证（verification）。定义：</p>
+<ul>
+<li>$t_{Draft}$：草稿模型单次前向时延</li>
+<li>$\gamma$：验证的相对成本因子（相对于单次 $t_{Target}$），一般 $1 \le \gamma \le 2$</li>
+<li>$\tau$：平均接受长度（accepted draft tokens per iteration，包含可能的 bonus token），满足 $1 \le \tau \le D + 1$</li>
+</ul>
+<p>则 SD 总时间：</p>
+$$
+T^{SD}_N = N \cdot D \cdot t\_{Draft} + \gamma \cdot t\_{Target} \cdot \frac{N}{\tau}
+$$<p>注意第二项分母为 $\tau$ 表示每次验证可接受 $\tau$ 个 token，因此验证次数约为 $N/\tau$。</p>
+<p>于是理论加速比：</p>
+$$
+\text{speedup} = \frac{T^{AR} \cdot N}{T^{SD} \cdot N} = \frac{\tau \cdot t_{\text{Target}}}{D \cdot t_{\text{Draft}} + \gamma \cdot t_{\text{Target}}} = \frac{\tau}{D \cdot \frac{t_{\text{Draft}}}{t_{\text{Target}}} + \gamma}.
+$$<p><strong>直观结论：</strong></p>
+<ul>
+<li>在常规（全部 GPU-resident）场景中，$t_{Target}$ 相对较小，分母中 $D\cdot t_{Draft}$ 的影响明显，因此倾向选择更快的草稿模型与中等深度 $D$。</li>
+<li>在 offloading 场景中，$t_{Target}$ 大（受 PCIe/总线带宽拖累），分母的 $\gamma$ 项变得占优，此时提高 $\tau$（接受更多草稿 token）比减小 $t_{Draft}$ 更有效。因此更“对齐”的草稿模型（哪怕稍慢）在 offloading 情形下更值得选择。</li>
+</ul>
+<hr>
+<h3 id="32-empirical-validation-and-motivation-for-efficient-draft-model-generation">3.2 Empirical Validation and Motivation for Efficient Draft Model Generation</h3>
+<p>论文用 Qwen2.5 7B 做示例，比较了：EAGLE-Qwen2.5*（更快但不够对齐）与 Qwen2.5 1.5B（更对齐但更慢），以及 SubSpec 的性能。结果表明：</p>
+<ul>
+<li>在<strong>无 offloading</strong>的普通场景，较快的草稿模型（EAGLE）带来更好加速（因为 $t_{Draft}$ 决定分母）。</li>
+<li>在<strong>offloading</strong>场景，较对齐的草稿模型（Qwen2.5 1.5B）获得更高的 $\tau$ 和更好总加速，表明对齐比草稿速度更关键。</li>
+<li>这驱动出一个需求：<strong>如何在不训练/蒸馏的前提下高效获得高度对齐的草稿模型？</strong> SubSpec 的关键点即是：用目标模型的<strong>低位宽 substitute 层 + 共享 GPU 层与 KV-Cache</strong> 来直接在线构建一个高度对齐的草稿模型，避免额外训练成本。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/figure2.png"></p>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<p>SubSpec 的核心思路是：构建一个<strong>完全 GPU-resident 的草稿模型（draft model）</strong>，该草稿模型在结构上与目标模型高度一致，但对被 offloaded 的层使用低位宽的 substitute 权重（quantized substitutes）。同时，复用目标模型在 GPU 上已驻留的层与同一 KV-Cache，从而提升对齐并降低额外显存开销。借助深度的树形 speculative decoding 和概率锐化等技术，获得极高的平均接受长度 $\tau$，减少昂贵的目标模型验证次数。</p>
+<h3 id="41-draft-model-construction">4.1 Draft Model Construction</h3>
+<p>SubSpec 通过三种协同策略保持草稿模型完全驻留 GPU：</p>
+<ol>
+<li>
+<p><strong>Quantized Substitute Weights for Offloaded Layers（被 offloaded 层的低位宽替代权重）</strong></p>
+<ul>
+<li>
+<p>对被放在 CPU 的目标模型层，使用<strong>数据无关（data-free）快速量化</strong>方法生成 4-bit substitute 权重（论文采用 HQQ，组大小 group-size=64），使这些替代层能放在 GPU。</p>
+</li>
+<li>
+<p>生成流程（实现建议/工程细节）：</p>
+<ul>
+<li>从目标模型权重读取 float16/float32 权重片段（按 layer 划分）。</li>
+<li>对每个权重块执行聚类或线性量化／半二次（HQQ）流程，输出索引表与查找表（LUT）或低位宽矩阵的压缩格式。</li>
+<li>将量化后权重格式转换为适配高效 low-bit GEMM kernel 的内存布局（例如行优先或按 block 对齐），并上传至 GPU 全局内存。</li>
+<li>这一过程数据无监督，速度快——文中指出 7B 到 70B 的模型在单张消费卡上耗时在几分钟级别。</li>
+</ul>
+</li>
+<li>
+<p>运行时：使用已优化的 low-bit GEMM 运算（引用 [5,16]）进行前向计算以尽量降低 $t_{Draft}$。</p>
+</li>
+<li>
+<p><strong>注意</strong>：Substitute 的精度与对齐影响 $\tau$，论文选择 4-bit（group=64）作为折中。更低位宽可以节省显存但会降低对齐；该取舍在实验与未来工作中可探索。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>GPU-Resident Layer Sharing（共享 GPU 上的目标层）</strong></p>
+<ul>
+<li>
+<p>在 offloading 策略中，框架通常尽可能将若干最关键的层常驻 GPU（embedding、head、部分 decoder 层）。SubSpec 将这些 GPU-resident 层同时作为目标模型和草稿模型使用——即共享同一份权重与计算路径。</p>
+</li>
+<li>
+<p>好处：</p>
+<ul>
+<li>完全保证共享层的完美对齐（identical computation）；</li>
+<li>减少草稿模型的额外显存需求（因为无需再复制这些层的权重）；</li>
+<li>节约了草稿生成时的预填（prefill）时间：由于共享 KV-Cache，草稿模型无需独立 prefilling。</li>
+</ul>
+</li>
+<li>
+<p>工程实现细节：</p>
+<ul>
+<li>维护单一权重句柄（pointer）供目标与草稿模型共享。</li>
+<li>在实现上需注意 layer normalization、position embedding、token type embedding 等模块的一致性（确保接口/shape 完全匹配）。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Shared KV-Cache（共享 KV-Cache）</strong></p>
+<ul>
+<li>
+<p>草稿模型与目标模型共享 KV-Cache（键/值的缓存），具有两类重要效果：</p>
+<ul>
+<li><strong>内存效率</strong>：避免为草稿与目标分别存储两份 KV，而是单份复用，KV 占用通常很大（尤其长上下文），因此此项能显著节省显存。</li>
+<li><strong>提高对齐</strong>：共享相同的上下文历史，草稿模型在相同条件下产生概率分布更接近目标模型，从而提升 $\tau$。</li>
+</ul>
+</li>
+<li>
+<p>Prefill 流程：</p>
+<ul>
+<li>由目标模型负责构建初始 KV（或在第一次迭代时用目标模型完成 prefill），随后草稿在 speculation 阶段以同一 KV 作为输入并“扩展”新的 KV；若最终验证通过，目标模型用验证结果覆盖草稿产生的 KV，以确保最终状态一致。</li>
+</ul>
+</li>
+<li>
+<p>技术细节：</p>
+<ul>
+<li>KV 的内存布局须为草稿与目标的 attention kernel 所兼容（相同维度、相同 dtype）。</li>
+<li>并发访问：当草稿在 GPU 中扩展叶节点时，需保证线程/流对 KV 的写入与随后的覆盖顺序一致（可使用 CUDA stream、事件或锁机制实现有序覆盖）。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/figure3.png"></p>
+<h3 id="42-optimized-draft-tree-construction">4.2 Optimized Draft Tree Construction</h3>
+<h4 id="constructing-deep-context-aware-dynamic-draft-tree"><strong>Constructing Deep Context-Aware Dynamic Draft Tree.</strong></h4>
+<p>SubSpec 草稿模型的高度对齐性（详见第 4.1 节）使得可以探索更深的草稿树，从而获得更高的平均接受长度（τ）。因此，作者的采样方法扩展了已有的上下文感知动态草稿树方法，例如 EAGLE-2 [24] 和 SpecExec [35]，以支持这些更大的深度。</p>
+<p>一个上下文感知的动态草稿树通过在未来的 $D$ 个时间步上，使用草稿模型迭代生成草稿 token 来构建。在这 $D$ 次前向传递中的每一次，所有叶节点都会作为输入送入草稿模型，每个叶节点都会产生下一 token 的概率分布。每个潜在下一 token 的分数为其条件生成概率（来自草稿模型）与其父路径分数的累计乘积。具有最高分数的 top-k 个 token 会被选为新的 $k$ 个叶节点，供下一时间步使用。该迭代过程构建了一个深度为 $D$ 的草稿树，最终为目标模型验证提供 $k \times D$ 个草稿 token（不包括根 token）。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/figure4.png"></p>
+<hr>
+<h5 id="addressing-cumulative-probability-divergence"><strong>Addressing Cumulative Probability Divergence.</strong></h5>
+<p>在探索远比以往工作（通常 $D ≤ 7$）更深的草稿树的过程中，作者发现其确实有提升 τ 的潜力，但在 greedy 解码（目标 temperature = 0）的构建阶段揭示了一个微妙的问题。作者观察到：那些以较低概率 token 开始的路径，可能通过随后的高概率选择而累积出异常高的整体概率。这种现象可能导致“伪阳性”路径，其累计概率超过真正最优路径（如图 4 所示）。这种发散（divergence）在 greedy 解码中尤其成问题，因为它会误导路径选择，可能导致正确序列的提前终止，从而限制可达到的 τ。</p>
+<hr>
+<h5 id="draft-probability-sharpening"><strong>Draft Probability Sharpening.</strong></h5>
+<p>为了在 greedy 解码下抵消这种发散，作者采用草稿概率锐化（draft probability sharpening）。该技术在计算用于树采样的累计概率之前，对草稿模型的输出分布施加一个较低的温度（= 0.2）。这种锐化会使概率分布更加尖锐，从而减少分配给那些初始概率较低 token 的概率质量。进一步分析见附录 D。</p>
+<hr>
+<h3 id="43-complementary-performance-optimizations">4.3 Complementary Performance Optimizations</h3>
+<ol>
+<li>
+<p><strong>Asynchronous Data Transfer（异步数据传输 / prefetch across layers）</strong></p>
+<ul>
+<li>
+<p>目标：在目标模型执行某一层计算时，提前从主内存（CPU）并行预取下一个需要的 offloaded 层参数到 GPU，从而隐藏 PCIe 传输时间。</p>
+</li>
+<li>
+<p>实现设计要点：</p>
+<ul>
+<li>使用两个 CUDA streams：一个用于计算（compute stream），一个用于数据复制（transfer stream）。在 compute stream 执行当前层时，transfer stream 异步启动 <code>cudaMemcpyAsync</code> 将下一层参数拷回 GPU。</li>
+<li>要确保内存缓冲区（reused memory region）固定且大小足够，避免在预取时分配新内存导致内存碎片或 OOM。</li>
+<li>使用 CUDA events / stream synchronization 在真正需要该层时才做 minimal sync（避免过早阻塞）。</li>
+<li>当预取跨多个 decoder 层时，优先预取离当前最近但尚未使用的层（以减少带宽峰值）。</li>
+</ul>
+</li>
+<li>
+<p>在论文图 5（参见附录 E）中展示了时间线对比，异步传输显著缩短验证期间 GPU 的空闲等待时间。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Chunked Prefill for Long Contexts（长上下文的分块预填）</strong></p>
+<ul>
+<li>
+<p>问题：长上下文预填时会产生巨大的中间 activation，占用 peak GPU memory，限制可以常驻 GPU 的模型层数。</p>
+</li>
+<li>
+<p>方案：把输入 prompt 切成固定长度 chunk（例如 256 tokens），逐块构建 KV-Cache。</p>
+<ul>
+<li>优点：降峰（reduce peak memory），让更多的 decoder 层有机会保留在 GPU 上，从而减少未来的 offloading 传输。</li>
+<li>实现细节：在每个 chunk 的前向后，立即释放不再需要的中间 activation（或使用 activation checkpointing），只保留 KV。</li>
+</ul>
+</li>
+<li>
+<p>对比 Sarathi-Serve 的方案，SubSpec 的 chunked prefill 专注于降低 prefill 阶段的峰值显存以增加系统可用的 GPU 层数。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>内存重用与 kernel tuning</strong></p>
+<ul>
+<li>对于量化后的 substitute 权重，采用<strong>复用内存 region</strong>策略（reuse memory regions）以避免增加 peak memory。</li>
+<li>通过 <code>torch.compile</code> + max-autotune 使低位 GEMM 内核被编译并选用最优 schedule，从而在草稿与验证阶段都取得较低 $t_{Draft}$ 与 $t_{Target}$。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-evaluation-setup">5.1 Evaluation Setup</h3>
+<p><strong>基准任务（Benchmarks）</strong>：论文在五类生成任务上评估，覆盖对话、多轮理解、代码生成、数学推理、摘要等：</p>
+<ul>
+<li>MT-Bench（multi-turn conversation）</li>
+<li>HumanEval（代码生成）</li>
+<li>GSM8K（数学推理）</li>
+<li>Alpaca（instruction-following）</li>
+<li>CNN/Daily Mail（摘要）</li>
+</ul>
+<p><strong>硬件与模拟环境</strong>：</p>
+<ul>
+<li>评测机为 RTX 4090 + Intel i7-13700K + PCIe 4.0 x16 + 128GB DDR5 RAM；</li>
+<li>为模拟不同消费级显存，程序将 GPU memory cap 为 8GB、12GB、24GB 三档（分别对应中低端到高端消费卡）；</li>
+<li>所有方法 batch size=1（以评估交互式延迟场景）。</li>
+</ul>
+<p><strong>比较方法</strong>：</p>
+<ul>
+<li>Baseline: vanilla offloading（无 SD）。</li>
+<li>EAGLE-2：已有的 tree-based SD 方法（作为对比）。</li>
+<li>小/中/大预训练 draft 模型（例如 1B、1.5B、7B 等）——这些是“现成”草稿模型基线。</li>
+<li>SubSpec（本文方法）。</li>
+</ul>
+<p><strong>关键参数配置（论文中所用）</strong>：</p>
+<ul>
+<li>Substitute layers：4-bit quantization, group size = 64（HQQ）。</li>
+<li>Tree construction：SubSpec 使用 $k=6$，预先 grid-search 得到 optimal depth $D$（SubSpec $D=48$，pretrained drafts $D=32$）。</li>
+<li>EAGLE-2 默认 $k=10$, $D=6$（论文用其默认发布参数）。</li>
+<li>Static KV-Cache 长度为 2048 tokens。</li>
+<li>对所有草稿模型启用 <code>torch.compile</code> + max-autotune。</li>
+<li>为公平起见，各方法使用相同的 context-aware dynamic draft tree 基础算法（没有额外的 tree pruning）。</li>
+</ul>
+<p><strong>实验细节</strong>（额外补充便于复现）：</p>
+<ul>
+<li>每个方法在每个 benchmark 上评估 20 个随机抽样样本；baseline 仅运行部分样本（前 5 个），因为运行时间很长；</li>
+<li>统计指标：tokens/s（throughput）与 $\tau$（average acceptance length）；每项给出不同温度（target temperature = 0 与 0.6）下的结果。</li>
+<li>为降低噪声，多次运行取均值并报告 std（论文提到在 MT-Bench 上 SubSpec 的 std = 0.101 tokens/s for 5 runs）。</li>
+</ul>
+<h3 id="52-end-to-end-performance">5.2 End-to-end Performance</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/table1.png"></p>
+<p><strong>关键观察与解释：</strong></p>
+<ol>
+<li>
+<p><strong>总体趋势</strong>：</p>
+<ul>
+<li>Baseline offloading 在受限 VRAM 下吞吐非常低（≈ 1–2 tokens/s），不可交互。SubSpec 把这一吞吐提高到数十 tokens/s（8GB 下 Qwen2.5 7B 在 greedy 下约 25 tokens/s），带来 10× 左右的加速。</li>
+<li>SubSpec 在多数情况下能将 $\tau$ 提升到接近 30（greedy），这是通过深度树（D=48）+ 高对齐的草稿模型（substitute + shared layers + shared KV）实现的。</li>
+</ul>
+</li>
+<li>
+<p><strong>草稿深度 D 的作用</strong>：</p>
+<ul>
+<li>SubSpec 倾向于使用非常深的草稿树（$D=48$），目的是尽量增加每次验证所能接受的 token 数 $\tau$，从而减少昂贵的目标验证次数。</li>
+<li>论文的 Figure 6（Temporal Analysis）显示当 $D$ 达到 48 时，Speculation 与 Verification 的时间占比接近平衡，从而达到了最优 throughput。若继续增加 $D$，speculation 时间超过验证时间，收益递减甚至下降。</li>
+</ul>
+</li>
+<li>
+<p><strong>温度影响（greedy vs stochastic）</strong>：</p>
+<ul>
+<li>在 target temperature = 0（greedy）时，SubSpec 表现最佳（因为验证期望确定性更强，树结构发挥最大效用）。</li>
+<li>在 stochastic（target temperature = 0.6），speedup 下降约 60%，因为验证不再以确定最优路径为目标，$\tau$ 自然下降。但 SubSpec 仍保持显著加速（约 5.8×–7.8×）。</li>
+</ul>
+</li>
+<li>
+<p><strong>不同目标模型规模对比</strong>：</p>
+<ul>
+<li>在 8GB、12GB、24GB 等受限内存下，SubSpec 在各尺度模型上均显著优于基线与其他 SD 方法，表明方法的可扩展性。尤其是 32B 模型（24GB cap），SubSpec 能在不牺牲质量情况下实现 12.5× 加速。</li>
+</ul>
+</li>
+<li>
+<p><strong>与预训练草稿模型比较</strong>：</p>
+<ul>
+<li>SubSpec 通常优于相同家族中较小的预训练草稿（1.5B/7B 等），即使预训练草稿本身也是“in-family”，证明了 <strong>复用目标权重 + substitute 量化</strong> 在对齐性上的巨大优势。</li>
+</ul>
+</li>
+<li>
+<p><strong>消融（Ablation）说明</strong>：</p>
+<ul>
+<li>一系列累进消融（表 2）显示：单纯 substitute + layer sharing 即能带来 ~7×，加入 shared KV 再提升到 ~7.94×，概率锐化再到 ~8.54×，最后异步数据传输到 ~9.15×（总 throughput 25.35 tokens/s）。每一项优化贡献约 7%–13% 的相对提升，表明这些设计不是单点“魔法”，而是协同增益。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SubSpec/table2.png"></p>
+<p><strong>进一步解读（建议性阐述以便复现/理解）</strong>：</p>
+<ul>
+<li>substitute+layer sharing 的大幅提升源于：草稿模型与目标模型在大部分关键层上完全一致，从而使草稿 logits 与目标 logits 在 top-k 排名上高度一致，极大提高草稿 token 的“可接受率”。</li>
+<li>Shared KV 的好处不仅限内存：在自回归生成中，KV 决定上下文感知能力，复用 KV 最大限度减少草稿与目标之间的上下文差异。</li>
+<li>Draft probability sharpening 对 greedy 特别重要：它减少了低概率 token 在长链中“累积翻盘”的几率，从而让更深的树实际有效。</li>
+</ul>
+<h3 id="53-ablation-study">5.3 Ablation Study</h3>
+<p>（表见上方 Table 2）</p>
+<p>逐步累加组件的消融结果重申：</p>
+<ul>
+<li>基础（仅 substitute + layer sharing）：tokens/s = 19.54（≈ 7.05×），$\tau$ ≈ 23.07</li>
+<li>加入 shared KV-Cache：tokens/s = 21.99（≈ 7.94×），$\tau$ ≈ 25.14</li>
+<li>加入 draft probability sharpening：tokens/s = 23.66（≈ 8.54×），$\tau$ ≈ 27.08</li>
+<li>加入 async data transfer（最终完整系统）：tokens/s = 25.35（≈ 9.15×），$\tau$ ≈ 27.08</li>
+</ul>
+<p><strong>解读</strong>：</p>
+<ul>
+<li>第一项（substitute + sharing）是 SubSpec 的核心，带来了最显著的提升；</li>
+<li>Shared KV 与概率锐化对 $\tau$ 的提升十分明显（分别提升约 2–4 个 $\tau$ 单位）；</li>
+<li>异步传输主要改善了验证阶段的 wall-clock 时间，从而提升 tokens/s，但对 $\tau$ 本身无直接影响（$\tau$ 在添加 async 后维持不变）。</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<ul>
+<li>SubSpec 针对 offloading 场景给出了解决路径：构建一个<strong>高对齐、GPU-resident</strong> 的草稿模型（低位宽 substitute + 共享 GPU 层 + 共享 KV），并结合深度树形 speculative decoding 与概率锐化、异步传输等工程优化，实现无训练、lossless 的显著加速。</li>
+<li>在多种模型规模与 benchmark 上，SubSpec 能在显存受限的消费级 GPU 上把不可交互的 baseline 推理速度提升到可用的交互范围（例如 Qwen2.5 7B 在 8GB 下 ~25 tokens/s），为本地无损部署带来实际可行方案。</li>
+<li>论文实证表明，在 offloading 场景中，<strong>对齐（alignment）</strong> 与 <strong>草稿深度（D）</strong> 的取舍比草稿模型的纯速度更为关键。这一观察可能改变实践中对草稿模型选择的偏好：优先考虑“与目标模型结构/权重更接近”而非仅考虑参数量小或推理快。</li>
+</ul>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\Jupiter - Fast and Resource-Efficient Collaborative Inference of Generative LLMs on Edge Devices - INFOCOM&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/title.png"></p>
+<p><strong>Conference:</strong> <strong>INFOCOM'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/ysyisyourbrother/Jupiter">https://github.com/ysyisyourbrother/Jupiter</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<ul>
+<li>随着生成式大型语言模型（LLMs）在边缘场景（如智能家居、个人设备）中应用需求上升，越来越多研究尝试将 LLM 服务下沉到受限的边缘设备上以保护隐私与降低云依赖。</li>
+<li>单个边缘设备通常计算/内存受限：长上下文导致 prefill 阶段时间增长，autoregressive decoding（逐token生成）也会因逐步依赖导致高延迟。</li>
+<li>现有协同边缘推理方法（TP/SequenceParallel 等）要么在每层进行大量 tensor 同步造成通信瓶颈（在低带宽下尤其明显），要么在单序列场景下无法并行利用多台设备（pipeline 在单序列下退化为串行）。</li>
+<li>此外，大多数现有工作只优化 prefill，相对忽略 decoding 阶段（但对于生成式任务，decoding 也可能主导延迟）。</li>
+<li>因此，论文动机是设计一个面向边缘、多设备、既能优化 prefill 又能加速 decoding，且通信高效、资源可扩展的协同推理系统 — 即 <strong>Jupiter</strong>。</li>
+</ul>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<ul>
+<li>
+<p>提出以**pipelined architecture（流水线并行）**为原则的协同边缘推理系统设计，强调通过分层映射（layer→stage→device）来“拼装”多设备内存以容纳更大模型，同时只在相邻 stage 之间交换小量激活（activation），从而极大降低通信量。
+<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure1.png"></p>
+</li>
+<li>
+<p>在 <strong>prefill</strong> 阶段提出 <strong>intra-sequence pipeline parallelism</strong> —— 将单条输入序列切分为多个连续子序列并并行注入流水线，同时依靠缓存的 hidden states 保障 self-attention 的正确性，从而在单序列场景下也能实现并发。</p>
+</li>
+<li>
+<p>设计了基于<strong>动态规划（dynamic programming）<strong>的</strong>资源高效并行规划（parallelism planning）</strong>，同时考虑设备异构、内存预算和可变输入长度，自动求解最优的模型层划分（LLM partition）与序列划分（sequence partition）。</p>
+</li>
+<li>
+<p>在 <strong>decoding</strong> 阶段，引入并整合 <strong>speculative decoding</strong>（自我/轻量 draft heads 或小 draft 模型产生候选 token ，随后并行验证）以并行化 token 生成，并进一步提出 <strong>outline-based pipeline parallel decoding</strong> —— 先生成答案大纲（outline），再把大纲的每个点作为独立并行的“point-extending”请求注入流水线以并行生成每个点，从而充分利用多设备空闲计算资源。</p>
+</li>
+<li>
+<p>在真实边缘测试平台实现并评估 Jupiter，展示在多种场景下（不同模型、设备拓扑和带宽限制）相较最先进方法最高可达 <strong>26.1×</strong> 的端到端延迟缩减，并保持近似的生成质量（在某些需要强链式推理的任务上 outline 方法略有下降，系统可选择性关闭）。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-preliminaries">3. PRELIMINARIES</h2>
+<h3 id="31-collaborative-edge-computing-for-generative-llms">3.1 Collaborative Edge Computing for Generative LLMs</h3>
+<p><strong>Decoder-based 模型结构</strong></p>
+<ul>
+<li>Decoder-based LLM（如 GPT、LLaMA、Mistral）由 embedding、若干 decoder layer 叠加和输出 head 组成。每个 decoder layer 包含：QKV projection、Masked MHA、FFN、以及运行时的大量 KVCache（用于 decoding 中重用）。图示：<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure2.png">。</li>
+</ul>
+<p><strong>两阶段推理</strong></p>
+<ul>
+<li><strong>Prefill Phase（prefill）</strong>：将 prompt（上下文）完整前向一次，生成第一个 token，并把每层的 K/V 保存在 KVCache 中，time-to-first-token 是此阶段关键延迟指标。</li>
+<li><strong>Autoregressive Decoding（decoding）</strong>：逐 token 生成，新的 token 会被反馈并与之前的 KVCache 一起用于下个 token 的生成。长生成会使 decoding 成为主导延迟。</li>
+</ul>
+<p><strong>并行化方法对比（四类）</strong></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure3.png"></p>
+<ul>
+<li>Data Parallelism (DP)：样本维度复制模型，不适合单序列并发。</li>
+<li>Sequence Parallelism (SP)：每台设备保留完整模型，将序列按子段并行，但每层需 all-gather 同步（通信高）。</li>
+<li>Tensor Parallelism (TP)：将权重切分，需 per-layer all-reduce（通信高）。</li>
+<li>Pipeline Parallelism (PP)：按层切分为 stage 映射到设备，通信仅限邻居激活（更低通信），但在单序列下易退化为串行 —— 需要新方法挖掘 intra-sequence 并行机会（见 Jupiter 提案）。表格与复杂度见 Table I/II。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table2.png"></p>
+<h4 id="基础符号定义符号与-table-i-对应">基础符号定义（符号与 Table I 对应）</h4>
+<table>
+  <thead>
+      <tr>
+          <th>符号</th>
+          <th>含义</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>$P$</td>
+          <td>模型参数总量（字节或元素个数）</td>
+      </tr>
+      <tr>
+          <td>$C$</td>
+          <td>完整单序列前向推理的总计算量（FLOPs）</td>
+      </tr>
+      <tr>
+          <td>$L$</td>
+          <td>模型 decoder 层数</td>
+      </tr>
+      <tr>
+          <td>$S$</td>
+          <td>输入序列长度（prefill 阶段特别重要）</td>
+      </tr>
+      <tr>
+          <td>$H$</td>
+          <td>Hidden size（即每个 token 的向量维度）</td>
+      </tr>
+  </tbody>
+</table>
+<hr>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure4.png"></p>
+<p>总体流程（系统概览）：</p>
+<ol>
+<li><strong>Profiler</strong>：用不同长度的 calibration sequences 在每台边缘设备上进行预填（prefill）测试，记录运行时 trace（层级延迟、内存占用、加速器利用率等），用于并行规划。</li>
+<li><strong>LLM Partition Algorithm（模型层划分）</strong>：基于 profiling 数据与设备集合 D，使用动态规划求解将 L 层划分为多个 stage 的最优策略，使得最慢 stage 的执行时间最小化（平衡负载），并考虑内存约束（若 stage 模型超过设备内存则该划分不可用）。</li>
+<li><strong>Sequence Partition Algorithm（序列划分）</strong>：基于设备加速器在不同输入长度下的利用率，选出最小子序列长度 $b$（避免 under-utilization），然后使用动态规划对每种输入长度 $y$ 找到最优的子序列划分数 $k$ 与划分方案，使得慢子序列的延迟平衡且每段长度 $\ge b$。</li>
+<li><strong>Prefill 推理</strong>：将子序列并行注入流水线，各 stage 缓存每个子序列的 hidden states，计算时可利用前面子序列的缓存以保证 causal attention 的正确性（详见 Intra-Sequence 部分）。</li>
+<li><strong>Decoding</strong>：结合 Speculative Decoding（自我 drafting）和 Outline-based 并行扩展两种策略以加速 autoregressive 流程。</li>
+</ol>
+<p>在下面的子节中详细展开关键模块。</p>
+<h3 id="41-parallel-acceleration-for-prefill-phase">4.1 PARALLEL ACCELERATION FOR PREFILL PHASE</h3>
+<h4 id="411-intra-sequence-pipeline-parallelism-for-generative-llms">4.1.1 Intra-Sequence Pipeline Parallelism for Generative LLMs</h4>
+<p><strong>基本思想</strong>：利用 causal decoder 的单向注意力（token $t_i$ 只依赖此前 token $t_1 &hellip; t_{i-1}$），把一个长输入序列划分成 $M$ 个连续子序列 $(s_1, s_2, &hellip;, s_M)$，然后把这些子序列<strong>顺序注入流水线并并行计算</strong>：每个 stage 对每个子序列都保存其 hidden states（KVCache-like），当处理子序列 $s_i$ 时，可以直接利用缓存的 $s_1&hellip;s_{i-1}$ 的 hidden states 来正确计算 self-attention，从而不用把整个序列一次性在单台设备上串行处理。见图：<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure5.png">、<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure6.png">。</p>
+<p><strong>关键工程与正确性注意点</strong>：</p>
+<ul>
+<li>每个 stage 需要缓存所有注入过的子序列的 hidden states（内存/KVCache 管理需谨慎），因此需要在 partition planning 时考虑 KVCache 的内存占用。</li>
+<li>子序列越短，流水线 bubble 越少并行度越高，但短段会导致加速器 under-utilization；因此序列划分不能一味细分，需要平衡（见下节规划算法）。</li>
+<li>对 self-attention 的正确性：只要子序列间缓存和数据传递牢靠（保证 earlier sub-seq hidden states 在 later sub-seq 计算时可用），则 causal mask 的语义保持，从而输出与完整序列顺序计算一致（等价性依赖于实现对 KVCache 的精确维护与传输顺序）。</li>
+</ul>
+<h4 id="412-resource-efficient-parallelism-planning">4.1.2 Resource-Efficient Parallelism Planning</h4>
+<p>并行规划分为两部分：<strong>（A）LLM 层划分</strong>与 <strong>（B）输入序列划分</strong>。两者都使用动态规划方法求解最优（或近似最优）方案。</p>
+<p><strong>（A）LLM Partition（层划分）</strong>
+目标：把 $L$ 层划分为若干 stage 并映射到设备集 $D={d_1,&hellip;,d_n}$，使得 pipeline 的 steady-state throughput 由最慢 stage 决定时，该最慢 stage 的运行时间最小化。
+动态规划核心公式为（论文给出的形式）：</p>
+$$
+A(1 \rightarrow y, D_n) = \min_{1 \le l < y} \max\left\{A(1 \rightarrow l, D_{n-1}),\; T(l+1 \rightarrow y, d_n)\right\}
+$$<p>其中 $T(i\rightarrow j, n) = \sum_{l=i}^{j} t^n_l$ 表示设备 $d_n$ 处理层 $i$ 到 $j$ 的时间（通过 profiling 得到 $t^n_l$）。若某个 stage 模型（含参数与 KVCache）超出设备内存预算，则令对应 $T$ 为 $+\infty$（不可行）。该方法时间复杂度 $O(L^2 |D|)$。</p>
+<p><strong>（B）Sequence Partition（序列划分）</strong>
+目标：对给定句长 $y$，将其划分为 $k$ 段，使得每段处理延迟尽可能平衡，同时每段长度 $\ge b$（避免加速器 under-utilization）。论文定义了函数 $q(x,y)$：表示子序列长度为 $x$、其前面累计长度为 $y$ 时，在某 stage 上的推理延迟（通过离线 profiling 获得并可插值）。动态规划公式为：</p>
+$$
+W(1 \rightarrow y, k) = \min_{1 \le l < y} \max\left\{W(1 \rightarrow l, k-1),\; T^*(y-l, l)\right\}
+$$<p>并且</p>
+$$
+T^*(y-l, l) =
+\begin{cases}
++\infty, & \text{if } y-l < b, \
+q(y-l, l), & \text{otherwise.}
+\end{cases}
+$$<p>解释：$W(1\to y, k)$ 表示将句子 $1..y$ 划分为 $k$ 段后，最慢段的延迟（该值希望尽可能小）。最终选择 $k$ 时还结合一个对整体预计延迟的估计：</p>
+$$
+\text{Latency} = \sum_{i=1}^k h_i + (|D|-1)\times W(1 \rightarrow y, k)
+$$<p>其中 $h_i$ 是子序列 $s_i$ 在每 stage 的推理延迟（由 $q(\cdot)$ 得到），$(|D|-1)\times W$ 表示 pipeline 中填满之后的 steady-state 影响项。论文在实现上为避免开销过大，将 $k$ 限制为 $\le 4|D|$ 并对 $y$ 迭代到 $S_{max}$，时间复杂度 $O(S_{max}^2 |D|)$。该规划为一次性离线过程，论文中实测在边缘设备上不到 5 分钟即可完成（可被多次推理均摊）。</p>
+<p><strong>实现要点与工程折衷</strong></p>
+<ul>
+<li>profiling 需覆盖不同 $x,y$ 组合，但可通过并行采样与插值来降低实际开销。</li>
+<li>KVCache 内存估计必须包含所有 stage 的缓存需求（特别是当同时存在多个子序列在 pipeline 中），否则会出现 OOM。</li>
+<li>划分策略在同一设备集上针对不同输入长度可以预先计算并缓存，运行时只需 lookup 对应策略以快速部署。</li>
+</ul>
+<hr>
+<h3 id="42-collaborative-inference-for-decoding-phase">4.2 COLLABORATIVE INFERENCE FOR DECODING PHASE</h3>
+<p>Decoding 阶段的难点在于其自回归（autoregressive）性质：每个新 token 依赖前面的完整上下文，传统上难以并行。Jupiter 在这部分提出两条主线优化：<strong>Speculative Decoding（草稿式并行）</strong> 与 <strong>Outline-Based Pipeline Parallel Decoding（大纲引导并行）</strong>，二者可以组合使用。</p>
+<h4 id="421-collaborative-inference-with-speculative-decoding">4.2.1 Collaborative Inference with Speculative Decoding</h4>
+<p><strong>基本思路</strong>：在每个 decoding 步，使用额外的 lightweight heads（或小的独立 draft model）基于当前 logits 预测多个 candidate tokens（draft），然后把这些候选并行验证（通过原始 LLM 前向）以确认哪些 candidate 可接受，从而用并行化减少需要逐 token 由原 LLM 处理的轮数（Draft-then-Verify Paradigm）。论文实现采用 <strong>Self-Drafting（在主模型上加 FFN heads）</strong>，流程如下（图示见 <img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure8.png">）：</p>
+<ol>
+<li>将当前 token 输入 LLM 前向，得到 logits。</li>
+<li>logits 由头部（draft heads，FFN）并行生成多个 candidate tokens。</li>
+<li>把 candidate tokens 从最末 stage 传回起始 stage，作为多个并行请求再次送入 LLM 前向；所有 candidate 的 intermediate 计算结果写入 KVCache。</li>
+<li>对每个 candidate 计算 posterior probability（或基于验证机制）决定接受/拒绝。被拒绝的 candidate 在 KVCache 中被清除（通知各 stage），被接受的则直接使用其预先算出的 logits 作为生成结果或继续作为下轮 drafting 的输入。</li>
+<li>从已接受 token 的输出中提取 logits 继续产生下一批 candidate。</li>
+</ol>
+<p><strong>工程亮点</strong>：Jupiter 的工作流使每一次 draft + verify 只需要一次完整 LLM 前向（而非多次），并精心管理 KVCache 与候选 token 的同步删除/保留，最大限度避免冗余计算。论文在实验中采用了 Medusa 的 token-tree speculative decoding 算法作为具体实现示例（5 个 draft head，top-1 策略等）。</p>
+<h4 id="422-outline-based-pipeline-parallel-decoding">4.2.2 Outline-Based Pipeline Parallel Decoding</h4>
+<p><strong>核心动机</strong>：仅用 speculative decoding 虽能并行化 token 生成，但流水线仍可能串行化（尤其当 draft → verify 仍形成串行依赖）。借鉴“人类先列提纲再逐点展开”的思路，Jupiter 提出在 prefill 时先让模型生成回答的大纲（outline），再把大纲中的每个要点作为独立“point-extending request”并行送入 pipeline 扩展，最终把每个点的输出拼接得到完整答案。流程概览（见图 <img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure9.png">）：</p>
+<ol>
+<li>在 prefill 阶段，把用户 query 与“大纲生成指令”拼接并进行 prefill（该静态 guide prompt 的 prefill 可离线 cache 到 KVCache）。</li>
+<li>模型输出一个有序大纲（例如 3–6 点）。</li>
+<li>将大纲中的每一点分别封装为单独请求（point-extending request），每个请求只引导模型针对该点展开，且这些请求可<strong>并发注入 pipeline</strong>（共享初始 prefill 的 KVCache，避免重复计算）。</li>
+<li>等所有 point 扩展完成后把结果按顺序 concat 回来，得到最终回答。</li>
+</ol>
+<p><strong>适用/不适用场景</strong>：outline 方法在文档摘要、问答、知识类或需要分条回答的任务上效果很好（并行度高、速度快）。但对于需要强链式推理、step-by-step 的数学或编程题，按点并行可能破坏跨点的逻辑依赖，影响生成质量。因此该模块设计为可插拔：系统可自动判断或让用户选择是否启用（paper 中实验显示在 coding/math 类任务上 outline variant 的质量下降明显）。</p>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="a-experimental-setups">A. Experimental Setups</h3>
+<p><strong>模型与数据集</strong></p>
+<ul>
+<li>使用 Llama2 系列：Llama2-7B 与 Llama2-13B（均采用 INT4 量化以降低内存）。</li>
+<li>使用三种 assistant-style 数据集评估生成质量：LiMA（用于延迟基准主要），Vicuna-80、WizardLM（用于评估生成质量）。</li>
+</ul>
+<p><strong>边缘设备与环境</strong></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table3.png"></p>
+<ul>
+<li>三类 off-the-shelf 设备：Jetson Xavier NX（384-core Volta，8GB，20W）、Jetson TX2（256-core，8GB，20W）、Jetson Nano（128-core，8GB，10W）。</li>
+<li>定义两种实验环境：Homogeneous Environment A（4×NX）与 Heterogeneous Environment B（1×NX + 2×TX2 + 1×Nano）。</li>
+<li>带宽仿真：通过调整设备间带宽模拟 100Mbps/500Mbps/1Gbps 等不同网络状况，重点考察带宽受限下的行为。</li>
+</ul>
+<p><strong>基线</strong>
+与 5 种最先进并行/协同方法比较：Sequence Parallelism (SP)、Megatron-LM (M-LM, tensor-parallel)、DeTransformer (DT, TP-based edge)、Galaxy（TP across MHA/FFN + SP in connecting ops）、EdgeShard（pipelined architecture）。论文对这些基线在 decoding 阶段统一采用了 naive token-by-token 生成（以便对比 Jupiter 在 decoding 加速方面的改善）。</p>
+<hr>
+<h3 id="b-end-to-end-performance">B. End-to-End Performance</h3>
+<p><strong>实验设置</strong>：从 LiMA 中抽样 prompts（平均 prompt 长度 ~260 tokens），max generation length = 64。测量端到端生成延迟（包括 prefill 与 decoding）。结果见 Table IV；下为重要观察与解释（结合表格数据）：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table4.png"></p>
+<p><strong>关键结果与解读</strong>：</p>
+<ul>
+<li>在多种带宽与设备拓扑上，Jupiter 恒显著优于所有基线。</li>
+<li>对比 TP-based baselines（M-LM、DT、Galaxy），Jupiter 在某些设置下可达 <strong>26.1×</strong> 的延迟缩减（主要在带宽受限、模型较大时通信成为瓶颈的场景）。</li>
+<li>与 SP（sequence-parallel）对比，Jupiter 最多可达 <strong>3.3×</strong> 的提升；SP 在 decoding 阶段退化为单设备执行，导致资源浪费且在 13B 下出现 OOM。</li>
+<li>与纯 pipeline 方法（EdgeShard）相比，Jupiter 凭借 intra-sequence 并行与 decoding 的两项加速技术（speculative + outline）可实现至多 <strong>2.7×</strong> 的优势。</li>
+<li>Heterogeneous 环境下（Env B），Jupiter 依然稳健，原因在于 parallelism planning 能考虑设备异构并做到负载均衡。</li>
+</ul>
+<p><strong>图形观察（Fig.10/11）</strong>
+<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure10.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure11.png"></p>
+<ul>
+<li>Fig.10（Homogeneous）与 Fig.11（Heterogeneous）分别展示 prefill 与 decoding 阶段的 per-token 延迟：Jupiter 在 prefill 上有稳定的 1.4×–7.4× 提速，而在 decoding 阶段提升更为显著（2.9×–33.2×），表明 decoding 部分的优化（speculative + outline）为本方法带来最大收益。</li>
+</ul>
+<hr>
+<h3 id="c-phase-wise-analysis">C. Phase-Wise Analysis</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure10.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure11.png">
+论文把 prefill 与 decoding 分开分析，具体观察如下（并补充更细的解析）：</p>
+<p><strong>Prefill Phase（逐 token prefill 延迟）</strong></p>
+<ul>
+<li>由于 intra-sequence pipeline 的子序列并发注入，prefill 的 time-to-first-token 能被显著缩短；但子序列划分策略需要平衡段长以避免 GPU/NPU under-utilization。Jupiter 的动态规划方案根据 profiling 自动选择切分数与每段长度，从而在不同 prompt 长度下均有较佳表现（见 Fig.10 左侧图）。</li>
+</ul>
+<p><strong>Decoding Phase（逐 token 生成延迟）</strong></p>
+<ul>
+<li>decoding 优化是 Jupiter 的强项：speculative decoding 能减少 LLM 必须进行的严格验证步骤次数，而 outline 并行能将多个“点扩展”并发送入流水线。综合使 per-token generation latency 大幅下降（Fig.10/11 右侧）。</li>
+<li>对于 TP/SP 等方法，decoding 时通信/同步频次高导致通信占比放大，从而在带宽受限时表现更糟。Pipeline-only 方法无法并行利用多台设备来扩展 decoding（单序列下），因此收益有限。Jupiter 则能同时兼顾流水线内存拼装与并行化生成。</li>
+</ul>
+<hr>
+<h3 id="d-scalability">D. Scalability</h3>
+<p><strong>4-node homogeneous NX 集群实验（Fig.12）</strong>：
+<img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/figure12.png"></p>
+<ul>
+<li>在节点数量增加时，Jupiter 的端到端延迟显著下降，且即使在 100Mbps（带宽受限）下也展示良好可扩展性（论文报告最高达 23.7× 缩减相对某些基线）。这体现了采用 pipeline（邻居激活传输）策略相对于 TP/SP 的通信优势，以及并结合 intra-sequence 并行与 decoding 并行化的设计，能让更多设备实际参与到并行工作中而非空闲等待。</li>
+</ul>
+<hr>
+<h3 id="e-decoding-speedup-and-generation-quality-assessment">E. Decoding Speedup and Generation Quality Assessment</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table6.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Jupiter/table7.png"></p>
+<p><strong>1) Decoding Speedup Analysis（消融）</strong></p>
+<ul>
+<li>论文做了 ablation：分别禁用 Outline-based Parallelism（OP）或 Speculative Decoding（SD），比较速度提升（见 Table V）。结果显示二者均贡献明显：整体 speedup 可达 3.6×（7B）到 3.9×（13B），其中 SD 和 OP 各自能单独带来 1.8–2.4× 级别的 speedup。表格如下（简述）：</li>
+</ul>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th style="text-align: right">Naive</th>
+          <th style="text-align: right">Jupiter w/o OP</th>
+          <th style="text-align: right">Jupiter w/o SD</th>
+          <th style="text-align: right">Jupiter</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Llama2-7B</td>
+          <td style="text-align: right">1.0×</td>
+          <td style="text-align: right">1.8×</td>
+          <td style="text-align: right">2.3×</td>
+          <td style="text-align: right">3.6×</td>
+      </tr>
+      <tr>
+          <td>Llama2-13B</td>
+          <td style="text-align: right">1.0×</td>
+          <td style="text-align: right">2.0×</td>
+          <td style="text-align: right">2.4×</td>
+          <td style="text-align: right">3.9×</td>
+      </tr>
+  </tbody>
+</table>
+<p>这说明 SD 与 OP 有互补性：SD 在加速 token 数量上直接降步数，OP 在并行扩展多个输出点上提升设备并行利用。</p>
+<p><strong>2) Generation Quality Assessment（质量评估）</strong></p>
+<ul>
+<li>
+<p>采用 FastChat（以 GPT-4o 作为评分器）对 Naive（逐token）与 Jupiter 的 outline-based parallel generation 在 Vicuna-80、WizardLM、LiMA 三数据集上做质量评分（1–10）。总体上，outline 法在多数任务维持接近的质量，但整体略低于 Naive（表 VI）。论文进一步对 Vicuna-80 做了分类评估（Generic, Knowledge, Counterfactual, Coding, Math），发现：</p>
+<ul>
+<li>Generic/Knowledge/Counterfactual：outline 方法表现可比甚至优于 naive（说明在自由文本或事实类任务中先生成大纲并行扩展不影响质量，可能反而提升结构性）。</li>
+<li>Coding/Math（需要逐步链式推理）：outline 方法明显劣于 naive（在这些任务中点之间有强依赖，分点并行破坏了链式上下文连续性）。</li>
+</ul>
+</li>
+<li>
+<p>因此论文建议将 outline-based decoding 作为可插拔模块：在适合的任务类型自动启用或由用户决定，否则回退到 speculative-only 或 naive 策略以避免质量损失。</p>
+</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<ul>
+<li>Jupiter 提出并实现了一个<strong>以 pipeline 为原则</strong>的协同边缘 LLM 推理系统，系统化地解决了 prefill 与 decoding 两大阶段的并行化瓶颈。</li>
+<li>通过 <strong>intra-sequence pipeline parallelism</strong> + <strong>resource-aware dynamic programming planning</strong>（解决层划分与序列划分）+ <strong>speculative decoding</strong> + <strong>outline-based pipeline decoding</strong> 的组合，Jupiter 在现实边缘设置下显著降低端到端延迟（最高 26.1×），且在带宽受限、设备异构场景中仍保持鲁棒性。</li>
+<li>文章同时指出 outline 并行在某些类任务上会牺牲质量，因此把该模块做成可插拔并提供判别机制。总的来说，Jupiter 为边缘场景下生成式 LLM 的实用化部署提供了明确且可复现的系统设计与工程实现路线。</li>
+</ul>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\2025Humen.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/Running/2025Humen/figure1.jpg"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Running/2025Humen/figure2.jpg"></p>
+
+    </section>
+  
+    <section data-source="posts\KVzip：Query-Agnostic KV Cache Compression with Context Reconstruction.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeuIPS'25 Oral</strong></p>
+<p><strong>GIthub:</strong> <a href="https://github.com/snu-mllab/KVzip">https://github.com/snu-mllab/KVzip</a></p>
+<hr>
+<h1 id="1-motivation"><strong>1. Motivation</strong></h1>
+<p>大型语言模型（LLMs）在长上下文推理过程中，其 Key/Value（KV）缓存会随上下文长度线性增长，从而带来如下两个核心挑战：</p>
+<ol>
+<li>
+<p><strong>显存占用随 $n_c$ 线性扩张</strong>
+例如 Qwen2.5-14B 在 120k context 下需 <strong>33GB</strong> KV Cache（论文 Figure 1）。</p>
+</li>
+<li>
+<p><strong>解码阶段 Attention 的延迟随 KV 数量线性增加</strong>
+解码 token 的每一步都需对全部 KV 执行 attention，因此减少 KV 数量是最直接的加速策略。</p>
+</li>
+</ol>
+<p>已有 KV 压缩方法（如 <strong>SnapKV / PyramidKV</strong>）依赖 <strong>query-aware importance</strong>：</p>
+<ul>
+<li>每个 query 都要重新 prefill 来获取 attention pattern。</li>
+<li>得到的重要 token 只对当前 query 有效，不可复用。</li>
+</ul>
+<p>论文的动机部分指出：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure2.png"></p>
+<blockquote>
+<p><strong>在 multi-query 复用场景中，query-aware 方法的性能快速退化。</strong></p>
+</blockquote>
+<p>因此本论文目标是：</p>
+<h3 id="构建一种-query-agnostic一次预处理多-query-复用-的-kv-cache-压缩方法">构建一种 <strong>query-agnostic、一次预处理、多 query 复用</strong> 的 KV Cache 压缩方法。</h3>
+<hr>
+<h1 id="2-challenge"><strong>2. Challenge</strong></h1>
+<h2 id="21-为什么-query-aware-kv-importance-无法泛化"><strong>2.1 为什么 query-aware KV importance 无法泛化？</strong></h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure6.png"></p>
+<ul>
+<li>同一 context，在 <strong>QA、Summarization、Reasoning</strong> 三个任务中重要 token 完全不同。</li>
+<li>而且不同 query 的 cross-attention pattern 差异巨大。</li>
+</ul>
+<p>论文通过对多个 query 的 attention map（Figure 6, “QA-1 vs QA-2”）展示：</p>
+<blockquote>
+<p>对同一段 context，两个相似的 QA query 也可能访问完全不同的 token。</p>
+</blockquote>
+<p>导致：</p>
+<ul>
+<li>基于 query 的 token scoring 难以复用到另一个 query。</li>
+<li>每次 query 都需重新 prefill，代价巨大。</li>
+</ul>
+<hr>
+<h2 id="22-为什么-prefill-attention-不能用于衡量-token-重要度"><strong>2.2 为什么 prefill attention 不能用于衡量 token 重要度？</strong></h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure5.png"></p>
+<ul>
+<li>Prefill attention 在 key 维度上几乎均匀分布（dense &amp; flat）。</li>
+<li>Prefill 的主要作用是在 decoder self-attention 中构建位置依赖，而非找到语义关键 token。</li>
+</ul>
+<p>因此：</p>
+<blockquote>
+<p>Prefill attention 缺乏区分度，不能作为 token 重要性的 proxy。</p>
+</blockquote>
+<hr>
+<h1 id="3-contribution"><strong>3. Contribution</strong></h1>
+<ol>
+<li>
+<p><strong>提出 KVzip：一种基于 context reconstruction 的 query-agnostic KV cache compression 方法</strong>
+KVzip 利用“重复 prompt + 重构任务”诱导模型自动暴露其“最稳定的语义路径”。</p>
+</li>
+<li>
+<p><strong>提出 Reconstruction Attention Score（RAS）作为 token importance</strong>
+RAS 能跨不同任务、不同 query 保持一致性（。</p>
+</li>
+<li>
+<p><strong>提出 Chunked Scoring</strong>
+用分块避免构建 $O(n_c^2)$ 的稠密 attention 矩阵，实现线性复杂度的 scoring。</p>
+</li>
+<li>
+<p><strong>完成系统级优化且与多种推理系统兼容</strong></p>
+<ul>
+<li>KV quantization（如 QServe 的 KV4）</li>
+<li>Head-level eviction</li>
+<li>与 DuoAttention 兼容或替代</li>
+</ul>
+</li>
+<li>
+<p><strong>在 LLaMA3.1 / Qwen2.5 / Gemma3 多种模型 + 12 类任务上验证</strong>
+在 50–70% eviction 下几乎无损。</p>
+</li>
+</ol>
+<hr>
+<h1 id="4-method"><strong>4. Method</strong></h1>
+<h1 id="41-method-overview"><strong>4.1 Method Overview</strong></h1>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure3.png"></p>
+<p><strong>Step 1.</strong> 执行普通 prefill：
+得到 context 的 KV Cache：</p>
+<ul>
+<li>$K_c \in \mathbb{R}^{n_c \times d}$</li>
+<li>$V_c \in \mathbb{R}^{n_c \times d}$</li>
+</ul>
+<p><strong>Step 2.</strong> 构造输入：</p>
+<blockquote>
+<p><strong>Repeat Prompt + 原始 context</strong></p>
+</blockquote>
+<p>Repeat Prompt 的作用是让模型执行 reconstruction：</p>
+<ul>
+<li>模型会尝试复原之前的 context</li>
+<li>强迫模型访问其“核心语义路径”</li>
+</ul>
+<p><strong>Step 3.</strong> 构造 reconstruction attention</p>
+<p>论文强调 reconstruction attention 的特殊性：</p>
+<ul>
+<li>类似语言建模，但目标是“模仿之前内容”</li>
+<li>因而 attention 会更多地指向语义关键 token</li>
+</ul>
+<p><strong>Step 4.</strong> 基于 reconstruction attention 计算 token importance</p>
+<p><strong>Step 5.</strong> 依据 score 排序执行 eviction，得到压缩后的 KV。</p>
+<hr>
+<h1 id="42-repeat-prompt-based-reconstruction-attention"><strong>4.2 Repeat-Prompt-Based Reconstruction Attention</strong></h1>
+<h3 id="为什么是-repeat-prompt为什么有效"><strong>为什么是 Repeat Prompt？为什么有效？</strong></h3>
+<p>论文通过三组实验验证：</p>
+<hr>
+<h3 id="1prefill-attention-对所有-context-token-关注近似均匀"><strong>（1）Prefill attention 对所有 context token 关注近似均匀</strong></h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure5.png"></p>
+<ul>
+<li>Attention 分布无明显峰值</li>
+<li>无法识别哪些 token 在推理中被频繁访问</li>
+</ul>
+<hr>
+<h3 id="2reconstruction-attention-与多任务-attention-pattern-高重叠"><strong>（2）Reconstruction Attention 与多任务 attention pattern 高重叠</strong></h3>
+<p>论文 Figure 6 显示：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure6.png"></p>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th>Reconstruction Attention 重叠率</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>QA</td>
+          <td>高</td>
+      </tr>
+      <tr>
+          <td>Summarization</td>
+          <td>高</td>
+      </tr>
+      <tr>
+          <td>Reasoning</td>
+          <td>高</td>
+      </tr>
+  </tbody>
+</table>
+<p>即：</p>
+<blockquote>
+<p>Reconstruction attention 能稳定捕捉语义核心 token，且这些 token 也是多数任务所需的关键 token。</p>
+</blockquote>
+<hr>
+<h3 id="3为什么重复而不是使用相同-prompt-一次"><strong>（3）为什么“重复”而不是使用相同 prompt 一次？</strong></h3>
+<p>论文解释：</p>
+<ul>
+<li>单次 prompt 无法提供足够 signal 让模型完全重构上下文。</li>
+<li>重复 prompt 等价于构造更多 query，使模型形成稳定 attention。</li>
+</ul>
+<p>多次重复（论文默认为 $G=8$）可以：</p>
+<ul>
+<li>多个 query 共同投票得到更 robust 的 score</li>
+<li>降低单个 query 带来的随机波动</li>
+</ul>
+<hr>
+<h1 id="43-kv-importance-scoring"><strong>4.3 KV Importance Scoring</strong></h1>
+<h2 id="431-reconstruction-attention"><strong>4.3.1 Reconstruction Attention</strong></h2>
+<p>在第 $l$ 层、第 $h$ 个 head：</p>
+<ul>
+<li>
+<p>Query：
+</p>
+$$Q_{l,h} \in \mathbb{R}^{G \times n_{in} \times d}$$</li>
+<li>
+<p>KV Cache（context 部分）：
+</p>
+$$K_{l,h} \in \mathbb{R}^{n_c \times d}$$</li>
+</ul>
+<p>Reconstruction attention：</p>
+$$
+\bar{A}_{l,h} = \operatorname{Softmax}\left(Q_{l,h} K_{l,h}^{\top}\right)
+$$<p>这是标准 Attention，但我们只关心指向 context 的片段（跳过重复 prompt）。</p>
+<hr>
+<h2 id="432-importance-score"><strong>4.3.2 Importance Score</strong></h2>
+<p>论文定义对 token $j$ 的重要度为：</p>
+$$
+S_{l,h}[j] = \max_{g,i}, \bar{A}_{l,h}[g, i, j]
+$$<p>含义：</p>
+<ul>
+<li>对所有 Repeat Prompt（$g$ 个）</li>
+<li>所有 query token（$i$ 个）</li>
+<li>找该 token 被访问的最大 attention score</li>
+</ul>
+<h3 id="为什么取最大而非平均"><strong>为什么取最大而非平均？</strong></h3>
+<p>论文理由：</p>
+<ol>
+<li>重构语义时某些 query 会特别强烈依赖某些 token</li>
+<li>平均可能平滑掉重要 token 的峰值</li>
+<li>最大值能更清晰反映“至少有一次非常重要”</li>
+</ol>
+<p>论文在 Ablation（Figure 16）验证：
+<strong>Replacing max with mean 会显著下降性能。</strong></p>
+<hr>
+<h2 id="433-layer-aggregation--head-aggregation"><strong>4.3.3 Layer Aggregation &amp; Head Aggregation</strong></h2>
+<p>论文使用：</p>
+<ul>
+<li>layer-wise importance：可设某些层更重要（可选）</li>
+<li>head-wise importance：可配合 DuoAttention 做 head-level eviction</li>
+</ul>
+<p>默认将所有 head importance 通过 max 聚合：</p>
+$$
+S[j] = \max_{l,h} S_{l,h}[j]
+$$<p>最终排序决定保留哪些 token。</p>
+<hr>
+<h1 id="44-关键技术难点quadratic-attention-cost"><strong>4.4 关键技术难点：Quadratic Attention Cost</strong></h1>
+<p><strong>FlashAttention 的限制：</strong></p>
+<ul>
+<li>
+<p>它 block-wise 计算 attention，但不会保留完整的中间结果</p>
+</li>
+<li>
+<p>KVzip <strong>必须获得完整归一化后的 attention 矩阵</strong></p>
+<ul>
+<li>需 softmax 归一化</li>
+<li>需按 query dimension 执行 $\max$</li>
+</ul>
+</li>
+</ul>
+<p>FlashAttention 得不到：</p>
+$$
+\max_{i} \mathrm{Softmax}(QK^\top)
+$$<p>只能得到最终结果 $V$，不可恢复 attention。</p>
+<p>因此 KVzip 必须重新设计计算方式。</p>
+<hr>
+<h1 id="45-chunked-scoring"><strong>4.5 Chunked Scoring</strong></h1>
+<h2 id="451-chunking-原理"><strong>4.5.1 Chunking 原理</strong></h2>
+<p>将 context 拆成大小为 $m$ 的块：</p>
+$$
+\text{context} = [C_1, C_2, ..., C_{n_c/m}]
+$$<p>对每个 chunk $C_k$：</p>
+<ol>
+<li>构造只包含 $C_k$ 的局部 KV</li>
+<li>执行 reconstruction attention</li>
+<li>得到 chunk 内局部分数</li>
+<li>最终合并所有 chunk 的 score</li>
+</ol>
+<hr>
+<h2 id="452-为什么-chunking-不会破坏语义"><strong>4.5.2 为什么 chunking 不会破坏语义？</strong></h2>
+<p>论文解释：</p>
+<ul>
+<li>Reconstruction attention 的 key 是整个 context，但我们是做 <strong>重要度建模</strong>，非推理</li>
+<li>为 token j 计算 score，只需其所在 chunk 内的查询访问情况</li>
+<li>Reconstruction query 实际访问 token 时主要依赖其附近语义</li>
+</ul>
+<p>实验（Figure 15）证明：</p>
+<blockquote>
+<p>只要 chunk ≥ 2048，其重要度几乎不变。</p>
+</blockquote>
+<hr>
+<h2 id="453-complexity-analysis"><strong>4.5.3 Complexity Analysis</strong></h2>
+<p>单个 chunk：</p>
+<ul>
+<li>reconstruction cost：$O(m^2)$</li>
+</ul>
+<p>总 chunk 数：</p>
+<ul>
+<li>$n_c/m$</li>
+</ul>
+<p>总成本：</p>
+$$
+O(m^2 \times n_c/m) = O(m n_c)
+$$<p>对于固定 $m$（论文默认 $m=2048$）：</p>
+<blockquote>
+<p>总成本随 context 长度线性增长，能轻松处理 128k–512k 长上下文。</p>
+</blockquote>
+<hr>
+<h2 id="454-memory-usage"><strong>4.5.4 Memory Usage</strong></h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure7.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure8.png"></p>
+<ul>
+<li>Chunked scoring 的额外显存 ≈ 1.8%</li>
+<li>计算耗时 ≈ 2× prefill</li>
+</ul>
+<p>对于 offline/online 初次压缩都可接受。</p>
+<hr>
+<h1 id="5-evaluation"><strong>5. Evaluation</strong></h1>
+<h1 id="51-实验设置概览"><strong>5.1 实验设置概览</strong></h1>
+<p>论文覆盖 12 类任务，包括：</p>
+<ul>
+<li>QA（TriviaQA, HotpotQA）</li>
+<li>Summarization（GovReport）</li>
+<li>Reasoning（GSM8K, MATH）</li>
+<li>Needle-in-a-Haystack（NIAH）</li>
+<li>QA retrieval（LongBench）</li>
+</ul>
+<p>实验模型包括：</p>
+<ul>
+<li><strong>LLaMA 3.1（8B / 70B）</strong></li>
+<li><strong>Qwen2.5（7B / 14B）</strong></li>
+<li><strong>Gemma 3</strong></li>
+</ul>
+<p>上下文长度测试：</p>
+<ul>
+<li>32k、64k、128k</li>
+</ul>
+<p>所测 eviction ratio：</p>
+<ul>
+<li>30% / 50% / 70%（default）/ 90%</li>
+</ul>
+<hr>
+<h1 id="52-cross-model-resultsfigure-910"><strong>5.2 Cross-model Results（Figure 9–10）</strong></h1>
+<h3 id="1同样-eviction-下kvzip-在所有任务上均接近无损"><strong>（1）同样 eviction 下，KVzip 在所有任务上均接近无损</strong></h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure9.png"></p>
+<ul>
+<li>在 70% eviction 下，所有任务下降 &lt; 2%</li>
+<li>SnapKV 在 30% eviction 下降超过 10–20%</li>
+<li>PyramidKV 在 50% retention 下就出现显著退化</li>
+</ul>
+<hr>
+<h3 id="2不同模型之间的稳定性"><strong>（2）不同模型之间的稳定性</strong></h3>
+<p>论文测试：</p>
+<ul>
+<li>LLaMA 3.1（decoder-only）</li>
+<li>Gemma 3（Google）</li>
+<li>Qwen2.5（阿里）</li>
+</ul>
+<p>结论：</p>
+<blockquote>
+<p>无论架构、embedding 维度、attention 方式如何变化，reconstruction attention 均稳定有效。</p>
+</blockquote>
+<hr>
+<h3 id="3多-query-场景中的能力"><strong>（3）多 query 场景中的能力</strong></h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure2.png">
+Figure 2（multi-query）证明：</p>
+<ul>
+<li>Query-aware 方法几乎完全失效</li>
+<li>KVzip 因 query-agnostic，可一次压缩、多次复用</li>
+</ul>
+<hr>
+<h1 id="53-kv-quantization-compatibilityqserve"><strong>5.3 KV Quantization Compatibility（QServe）</strong></h1>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure10.png">
+论文将 KVzip 与 <strong>QServe W8A8KV4</strong> 结合（Figure 10）：</p>
+<ul>
+<li>原 KV Cache：16.3 GB</li>
+<li>经过 W8A8KV4：4.5 GB</li>
+<li>再通过 KVzip 70% eviction：<strong>1.2 GB</strong></li>
+<li>性能损失 &lt; 2%</li>
+</ul>
+<p>这是论文最具工程意义的结果：</p>
+<blockquote>
+<p>KVzip + Quantization = <strong>边缘设备可运行超长上下文 LLM</strong>。</p>
+</blockquote>
+<hr>
+<h1 id="54-与-duoattention-的关系"><strong>5.4 与 DuoAttention 的关系</strong></h1>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure11.png">
+KVzip importance 可用于 head-level eviction：</p>
+<ul>
+<li>比 DuoAttention 更稳定，因为它不依赖大规模 profiling</li>
+<li>在 70% eviction 下更高得分</li>
+</ul>
+<p>论文说明 KVzip 即可替代 DuoAttention，也可作为其先验 score。</p>
+<hr>
+<h1 id="55-ablation-study"><strong>5.5 Ablation Study</strong></h1>
+<h3 id="551-是否必须重构整个-contextfigure-12"><strong>5.5.1 是否必须重构整个 context？（Figure 12）</strong></h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/KVzip/figure12.png">
+论文测试：</p>
+<ul>
+<li>只重构部分同样上下文</li>
+<li>仅使用前/后半部分</li>
+<li>重构层数减少（只用 top layers）</li>
+</ul>
+<p>结果：</p>
+<ul>
+<li>Token importance 显著下降</li>
+<li>只 reconstruct 局部会丢失 global semantics</li>
+</ul>
+<hr>
+<h3 id="552-repeat-prompt-数量-g-的影响figure-13"><strong>5.5.2 Repeat Prompt 数量 G 的影响（Figure 13）</strong></h3>
+<ul>
+<li>当 $G \ge 6$ 时 score 稳定</li>
+<li>$G &lt; 4$ 会导致噪声较大</li>
+</ul>
+<hr>
+<h3 id="553-reconstruction-prompt-长度-n_"><strong>5.5.3 Reconstruction Prompt 长度 $n_{in}$（Figure 14）</strong></h3>
+<ul>
+<li>当 $n_{in} \ge 512$ 性能基本稳定</li>
+<li>过短会导致模型难以重构完整 context</li>
+</ul>
+<hr>
+<h3 id="554-chunk-sizefigure-15"><strong>5.5.4 Chunk size（Figure 15）</strong></h3>
+<ul>
+<li>$m = 2048$ 是推荐值</li>
+<li>$m &lt; 1024$ 会破坏 importance</li>
+</ul>
+<hr>
+<h3 id="555-softmax-的必要性figure-16"><strong>5.5.5 Softmax 的必要性（Figure 16）</strong></h3>
+<p>论文测试不用 softmax 的替代（如 raw logits）：</p>
+<ul>
+<li>性能急剧恶化</li>
+<li>Softmax 是必须的归一化步骤</li>
+</ul>
+<hr>
+<h1 id="6-conclusion"><strong>6. Conclusion</strong></h1>
+<p>在不修改你原文的基础上进一步升华总结：</p>
+<p>KVzip 提出一种 <strong>query-agnostic、可泛化、可复用、成本可控、质量稳定</strong> 的 KV 压缩框架，其关键技术包括：</p>
+<ol>
+<li>
+<p><strong>Repeat-prompt-based context reconstruction</strong>
+诱导稳定 attention pattern。</p>
+</li>
+<li>
+<p><strong>Reconstruction Attention Scoring（RAS）</strong>
+获得跨任务一致的通用 token importance。</p>
+</li>
+<li>
+<p><strong>Chunked Scoring（线性复杂度）</strong>
+支持 128k–512k 长上下文压缩。</p>
+</li>
+<li>
+<p><strong>与量化、head-level eviction、speculative decoding 兼容</strong></p>
+</li>
+<li>
+<p><strong>在 50–70% eviction 下几乎无损</strong>
+显著优于所有 query-aware baseline。</p>
+</li>
+</ol>
+<p>这使得 KVzip 在：</p>
+<ul>
+<li><strong>云数据中心（multi-query serving）</strong></li>
+<li><strong>边缘部署（KV quantization + eviction）</strong></li>
+<li><strong>长上下文应用（RAG、文档 QA）</strong></li>
+</ul>
+<p>等场景都具备实用价值。</p>
+<hr>
+<p>这是一个非常深入且切中要害的问题。KVzip 之所以不只使用 &ldquo;Repeat Prompt&rdquo;（复述提示词），而是将 <strong>Prompt + 原始 Context</strong> 拼接在一起作为输入，主要是出于**计算效率（并行化）<strong>和</strong>评分准确性（Teacher-Forcing）**的考虑。</p>
+<p>以下是基于论文的详细解释：</p>
+<h3 id="1-核心原因利用-teacher-forcing-实现并行计算">1. 核心原因：利用 Teacher-Forcing 实现并行计算</h3>
+<p>如果只输入 &ldquo;Repeat the previous context:&rdquo; 让模型去生成，模型必须进行<strong>自回归生成（Autoregressive Generation）</strong>，即生成第一个 token，再用它生成第二个&hellip; 如此循环。</p>
+<ul>
+<li>[cite_start]<strong>问题</strong>：对于长上下文（例如 100K tokens），逐个生成这 100K tokens 的速度极慢，且计算成本极高，这在实际应用中是不可接受的 [cite: 120]。</li>
+<li>[cite_start]<strong>解决方案</strong>：通过将 <strong>Repeat Prompt</strong> 和 <strong>Context</strong> 拼接在一起作为输入（Input），KVzip 利用了 <strong>Teacher-Forcing</strong> 机制 [cite: 143]。
+<ul>
+<li>在这种模式下，模型在预测第 $t$ 个 token 时，已经能够看到真实的第 $t-1$ 个 token（因为它们就在输入里）。</li>
+<li>[cite_start]因此，模型可以在**一次前向传播（Single Forward Pass）**中并行计算出所有位置的注意力分数，而不需要真的逐个生成文本 [cite: 143]。</li>
+</ul>
+</li>
+</ul>
+<h3 id="2-评分机制模拟向后看的注意力">2. 评分机制：模拟“向后看”的注意力</h3>
+<p>KVzip 的核心逻辑是计算**“为了重建上下文，当前的查询（Query）需要关注缓存中的哪些键值对（KV pairs）”**。</p>
+<ul>
+<li>[cite_start]<strong>输入构造</strong>：输入序列长度为 $n_{in} = n_{prompt} + n_c$（提示词长度 + 上下文长度）[cite: 145]。</li>
+<li><strong>交叉注意力</strong>：这个拼接后的输入经过模型时，其产生的 Query（$Q$）会去查询缓存中的 Key（$K$）。
+<ul>
+<li>[cite_start]具体的逻辑是：输入中拼接的 Context 部分实际上充当了“正在生成的 token”的角色，它们回头去关注 $KV_c$（缓存的上下文），由此产生的**最大交叉注意力分数（Max Cross-Attention Score）**即代表了该 KV 对的重要性 [cite: 144, 153]。</li>
+</ul>
+</li>
+<li>如果不加 Context，模型就没有具体的 Query 去“质询”缓存中的 Key，也就无法计算出准确的注意力分布来判断哪些 KV 对对于重建内容是必须的。</li>
+</ul>
+<h3 id="3-实验验证完整重建的必要性">3. 实验验证：完整重建的必要性</h3>
+<p>论文作者在 <strong>Section 4.3</strong> 中专门分析了这一点，并进行了对比实验（见论文 Figure 12）：</p>
+<ul>
+<li>[cite_start]<strong>对比设置</strong>：作者尝试了只用 &ldquo;Prompt&rdquo;（仅提示词）、&ldquo;First&rdquo;（提示词+前10%内容）、&ldquo;Last&rdquo;（提示词+后10%内容）以及 &ldquo;Recon&rdquo;（提示词+完整内容）来进行评分 [cite: 486]。</li>
+<li>[cite_start]<strong>结果</strong>：实验结果显示，只有 <strong>Recon（完整重建）</strong> 能够防止性能下降。仅使用 Prompt 或部分内容会导致模型无法准确识别关键 KV 对，从而在压缩后导致推理准确率大幅下跌 [cite: 487, 509]。</li>
+</ul>
+<h3 id="总结">总结</h3>
+<p>简单来说，加上 Context 是为了<strong>作弊（Teacher-Forcing）</strong>：让模型在<strong>一次计算</strong>中假装自己正在生成整个上下文，从而快速地通过观测其注意力分布来“偷看”哪些记忆片段是它完成这项任务所真正需要的。</p>
+
+    </section>
+  
+    <section data-source="posts\SuffixDecoding - Extreme Speculative Decoding for Emerging AI Applications - NeurIPS&#39;25 Spotlight.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25 Spotlight</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/snowflakedb/ArcticInference">https://github.com/snowflakedb/ArcticInference</a></p>
+<h2 id="my-thoughts">My Thoughts</h2>
+<p>这篇 paper 针对 AI 应用中大量推理请求呈现 <strong>高度重复、模式化且可预测</strong> 的特性，提出了一个我觉得非常优秀的推测解码方法。起初我以为它的思路类似于 prefix cache，但实际阅读后发现：<strong>SuffixDecoding 基于 suffix tree 的方法对于 speculative decoding 的约束要小得多</strong>。
+Prefix cache 需要所有 token 完全一致才能命中，而 SuffixDecoding 只需满足 speculative decoding 的验证条件即可，大大提升了复用空间和适用范围。</p>
+<p>我原本担心 suffix tree 在实际部署中会因 <strong>规模过大</strong> 或 <strong>查询速度过慢</strong> 而成为瓶颈，但论文中的实验数据基本消除了这些顾虑。根据文中的测量，suffix tree 的<strong>内存效率非常高</strong>：即使缓存 <strong>572M tokens（约 20K 请求）</strong>，也只占用 <strong>6.15GB CPU 内存</strong>，平均下来每个 token 仅需 <strong>10.75 bytes</strong>。在一台常见的 <strong>144GB CPU 内存的 A100 系统</strong>上，SuffixDecoding 甚至能够缓存 <strong>31 天连续生成的数据</strong> 而无需 eviction。</p>
+<p>更重要的是，即便在如此大规模的 suffix tree 下，其性能依然稳定：</p>
+<ul>
+<li><strong>更新耗时约 4μs/ token</strong></li>
+<li><strong>查询耗时约 12μs/ token</strong></li>
+</ul>
+<p>构建速度同样令人放心，构建 <strong>10 万条示例输出</strong> 的 suffix tree 仅需 <strong>~62 秒</strong>，且这是整个系统启动时的一次性成本，后续更新增量极小。</p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>与基础聊天机器人不同，智能体驱动的AI应用会发出高度重复且可预测的推理请求。例如，多智能体系统会反复执行类似子任务，而推理循环[Wang et al., 2023a, Madaan et al., 2023]会不断生成结构相似的token序列。尽管这些工作负载展现出明显的模式重复性，现有推理优化方法仍未充分利用这些特性，导致延迟成为实际部署的关键瓶颈。</p>
+<p>为了高效处理智能体驱动应用中常见的长重复序列，推测解码（speculative decoding）方法必须满足两个关键要求。首先，它们需要以极低开销快速生成草稿token，从而最大化对长推测序列的利用效率。其次，它们必须具备自适应性——仅在接收可能性高时生成更多草稿token，而在接收可能性低时生成较少token，以避免验证过程成为计算瓶颈。</p>
+<p>虽然推测解码已被广泛应用于降低大语言模型（LLM）推理延迟，但其传统实现主要针对多样化用户任务设计。新兴的AI智能体应用呈现出截然不同的工作负载特征：它们不像传统场景那样提交多样化且相互独立的请求，而是倾向于提交高度重复的推理请求，例如执行相似子任务的多智能体流水线，或迭代优化输出的自我精炼循环。这些工作负载会产生长且高度可预测的序列，而当前的推测解码方法并未有效利用这些特性。</p>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>现有的推测解码方法在满足上述双重要求方面存在明显不足。基于模型的方法（如EAGLE、Medusa等）在推测长序列时会消耗大量GPU计算资源，并可能引发内存竞争和内核级切换[Chen et al., 2024b, Li et al., 2024]，需要复杂的工程优化。相反，现有的无模型方法（如Prompt-Lookup Decoding (PLD) [Saxena, 2023]）虽然实现了低开销和快速的token生成，但通常缺乏自适应性，无论接收可能性如何，都会推测固定数量的token，导致在验证长且可能性低的序列时浪费大量计算资源。</p>
+<h2 id="3-related-work">3. Related Work</h2>
+<p>现有推测解码方法主要分为两类：</p>
+<ul>
+<li><strong>基于模型的方法</strong>：包括Medusa[Cai et al., 2024]、SpecInfer[Miao et al., 2024]（引入了基于树的推测架构）、多token预测[Gloeckle et al., 2024]和块级并行解码[Stern et al., 18, Kim et al., 2024]。</li>
+<li><strong>无模型方法</strong>：包括Prompt Lookup Decoding[Saxena, 2023]、Token Recycling[Luo et al., 2024]、LLMA[Yang et al., 2023]和ANPD[Ou et al., 2024]。这些方法依赖于小规模参考文本，缺乏上下文自适应能力。</li>
+</ul>
+<p>SuffixDecoding是首个专为具有长重复序列的智能体应用而设计的无模型推测方法。</p>
+<p><strong>智能体AI算法特性</strong>：智能体应用将任务结构化为多次LLM调用，生成长且重复的token序列。Self-consistency[Wang et al., 2023a]从同一提示中采样多个推理路径，这些路径共享相似的思维链步骤。Self-refinement[Madaan et al., 2023]迭代修正错误，在修改小部分内容的同时保留周围内容。多智能体工作流[Khot et al., 2023]使用具有特定功能的专用智能体，产生结构化的重复输出。这些模式为利用历史序列中的重复模式创造了独特机会。</p>
+<p><strong>加速LLM智能体的方法</strong>：近期工作聚焦于降低智能体应用中的延迟。ALTO[Santhanam et al., 2024]通过流水线和调度优化多智能体工作流。Dynasor[Fu et al., 2024]提前终止可能性低的推理路径。SuffixDecoding采取正交的推测解码方法，可与上述方法无缝结合使用。</p>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure1.png">
+SuffixDecoding的核心目标是在长序列上实现快速、自适应的推测解码，尤其适用于智能体应用。在这些场景中，重复的推理调用通常包含高度可预测且重叠的token序列，使得输出的长片段可以从先前和当前请求中准确预测。</p>
+<p>为实现这一目标，SuffixDecoding必须应对两个关键挑战：</p>
+<ol>
+<li><strong>高效生成</strong>：支持快速生成长推测序列，无需依赖草稿模型或逐token计算</li>
+<li><strong>上下文自适应</strong>：根据当前预测置信度动态调整推测长度</li>
+</ol>
+<h3 id="41-后缀树构造构建历史模式记忆">4.1 后缀树构造：构建历史模式记忆</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure1.png"></p>
+<p>SuffixDecoding使用高效的后缀树(suffix trees)[Weiner, 1973]作为核心数据结构，缓存来自提示和先前输出的长token序列。在后缀树中：</p>
+<ul>
+<li>树的根节点表示任意序列后缀的起始点</li>
+<li>每个节点表示一个token</li>
+<li>从根到叶节点的路径编码了先前观察到的token子序列</li>
+<li>每个节点存储访问频率统计，用于预测后续token概率</li>
+</ul>
+<p>对于每个请求，SuffixDecoding考虑从两个来源推测token序列：</p>
+<ol>
+<li>当前请求的提示和已生成输出</li>
+<li>先前请求的历史输出</li>
+</ol>
+<p>这种双源策略有效捕捉了多种智能体算法(self-consistency, self-refinement, 多智能体流水线)中的输出重复模式。</p>
+<p><strong>后缀树实现细节</strong>：</p>
+<ul>
+<li><strong>双树架构</strong>：维护两种不同的后缀树
+<ul>
+<li>全局树(Global Tree)：存储所有先前请求的输出，可离线预构建，时间复杂度O(n)</li>
+<li>每请求树(Per-request Tree)：存储当前请求的提示和已生成token，支持在线增量更新[Ukkonen, 1995]</li>
+</ul>
+</li>
+<li><strong>内存效率</strong>：尽管后缀树在最坏情况下需要O(n)空间，但实际应用中非常高效
+<ul>
+<li>AWS p5.48xlarge实例(2TB内存)可缓存数月的生成内容</li>
+<li>典型A100系统(144GB CPU内存)可缓存31天的连续生成输出</li>
+</ul>
+</li>
+<li><strong>更新机制</strong>：全局树从历史日志批量构建，每请求树在推理过程中实时更新</li>
+</ul>
+<h3 id="42-推测树扩展从模式匹配到候选生成">4.2 推测树扩展：从模式匹配到候选生成</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure1.png"></p>
+<p>给定当前序列$x_{1:t}$和模式长度$p$，SuffixDecoding首先在后缀树中定位匹配节点$N_p$，该节点代表序列$x_{t-p+1:t}$。然后，通过以下步骤构建推测树：</p>
+<ol>
+<li><strong>概率估计</strong>：定义两个关键指标
+<ul>
+<li>$C(N) = \frac{COUNT(N)}{\sum_{M\in CHILDREN(PARENT(N))} COUNT(M)}$
+<em>表示在已知父节点历史的情况下，节点N被访问的条件概率</em></li>
+<li>路径接受概率定义为：</li>
+</ul>
+</li>
+</ol>
+\[
+D(N) = \begin{cases}
+1, & \text{if } N = N_p, \\
+D(\operatorname{PARENT}(N)) \times C(N), & \text{otherwise}.
+\end{cases}
+\]<p>
+<em>表示从根到节点N的完整路径被接受的概率估计</em></p>
+<ol start="2">
+<li><strong>贪婪扩展</strong>：从匹配节点$N_p$开始，迭代扩展最有希望的路径
+<ul>
+<li>每次选择具有最高$D(N)$值的子节点</li>
+<li>持续扩展直到达到最大推测大小$MAX_SPEC$</li>
+<li>保证在有限计算预算内选择最可能被接受的序列</li>
+</ul>
+</li>
+</ol>
+<p>这种机制使SuffixDecoding能够从后缀树中提取复杂的历史模式，例如JSON结构中的键值对序列或SQL查询中的表连接模式，而无需任何模型计算。</p>
+<h3 id="43-自适应推测长度动态调整置信度">4.3 自适应推测长度：动态调整置信度</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure2.png"></p>
+<p>SuffixDecoding通过智能调整$MAX_SPEC$参数实现推测长度的自适应控制：</p>
+<ul>
+<li>低值：选择少量高置信度token，减少验证浪费</li>
+<li>高值：推测更多token，最大化加速潜力</li>
+</ul>
+<p><strong>关键观察</strong>：实验发现接受的token数量随模式匹配长度$p$显著增加(图2a)。基于此，SuffixDecoding定义：
+</p>
+$$MAX\_SPEC(p) = \alpha p$$<p>
+其中$\alpha$是用户定义的最大推测因子(通常在1-4之间)。</p>
+<p><strong>自适应优势</strong>：</p>
+<ol>
+<li>长模式匹配(高置信度)→ 增加推测长度 → 最大化加速</li>
+<li>短模式匹配(低置信度)→ 减少推测长度 → 避免计算浪费</li>
+</ol>
+<p>图2b证明这种自适应策略在接收率和速度提升之间实现了最佳平衡，优于固定推测长度的方法。</p>
+<h3 id="44-推测树评分多源信息融合">4.4 推测树评分：多源信息融合</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/algorithm1.png"></p>
+<p>由于SuffixDecoding维护两个后缀树(全局和每请求)并考虑多种模式长度$p$，它会生成多个候选推测树。为选择最佳候选，定义评分函数：
+</p>
+$$SCORE(T_{spec}) = \sum_{N \in T_{spec}} D(N)$$<p>该评分直观地估计了推测树$T_{spec}$中预期被接受的token总数。SuffixDecoding执行以下步骤：</p>
+<ol>
+<li>为全局树和每请求树分别生成候选树</li>
+<li>对每个树尝试多种模式长度$p$(1到P)</li>
+<li>为每个候选树计算SCORE</li>
+<li>选择具有最高SCORE的树作为最终推测树</li>
+</ol>
+<p>算法1详细描述了这一端到端的候选生成和选择过程。</p>
+<h3 id="45-混合推测解码通用工作负载支持">4.5 混合推测解码：通用工作负载支持</h3>
+<p>为适应混合工作负载(既有重复性智能体任务又有开放式对话)，SuffixDecoding支持动态切换到基于模型的推测方法：</p>
+<ol>
+<li><strong>置信度过滤</strong>：计算$SCORE(T_{spec})$作为模式匹配质量的指标</li>
+<li><strong>阈值决策</strong>：设定阈值$\tau$
+<ul>
+<li>若$SCORE(T_{spec}) &gt; \tau$：使用SuffixDecoding的推测结果</li>
+<li>否则：回退到EAGLE-3等基于模型的推测器</li>
+</ul>
+</li>
+<li><strong>阈值指导</strong>：
+<ul>
+<li>混合工作负载：$\tau$设为接近回退推测器的平均接受token数</li>
+<li>高度重复任务：$\tau=0$(始终使用SuffixDecoding)</li>
+<li>完全开放式任务：较高的$\tau$值(更多使用模型推测)</li>
+</ul>
+</li>
+</ol>
+<p>这种混合方法在保留SuffixDecoding在重复任务上优势的同时，确保了在多样化任务上的鲁棒性。</p>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-evaluation-methodology">5.1 Evaluation Methodology</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure3.png"></p>
+<p><strong>Baseline Comparisons</strong>：使用Spec-Bench[Xia et al., 2024]与先进推测方法比较：</p>
+<ul>
+<li>基于模型方法：EAGLE-2和EAGLE-3[Li et al., 2025a]</li>
+<li>无模型方法：Prompt-Lookup Decoding(PLD)[Saxena, 2023]和Token Recycling[Luo et al., 2024]</li>
+</ul>
+<p><strong>Datasets and Applications</strong>：</p>
+<ul>
+<li>智能体应用：OpenHands[Wang et al., 2024c]在SWE-Bench[Jimenez et al., 2024]上；专有应用AgenticSQL(图3)</li>
+<li>非智能体工作负载：Spec-Bench(13类别，含8个MT-Bench类别)</li>
+</ul>
+<p><strong>系统实现</strong>：在vLLM[Kwon et al., 2023]中实现，实测端到端加速效果。</p>
+<p><strong>硬件配置</strong>：单个AWS p5.48xlarge实例(8×NVIDIA H100 80G GPU，2TB内存)。</p>
+<h3 id="52-baseline-comparisons">5.2 Baseline Comparisons</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure4.png"></p>
+<p><strong>智能体工作负载性能</strong>：</p>
+<ul>
+<li>AgenticSQL：SuffixDecoding获得5.3×平均加速，比EAGLE-2/3快2.8×，比Token Recycling快1.9×</li>
+<li>SWE-Bench：获得2.5×平均加速，比PLD快1.7×</li>
+</ul>
+<p><strong>关键指标分析</strong>：</p>
+<ul>
+<li>AgenticSQL：SuffixDecoding实现6.3个平均接受token/步，远高于EAGLE-3(3.6)和Token Recycling(3.2)</li>
+<li>SWE-Bench：实现7.8个平均接受token/步，而PLD仅3.2个</li>
+</ul>
+<p><strong>非智能体工作负载</strong>：</p>
+<ul>
+<li>单独SuffixDecoding在开放任务上表现一般</li>
+<li>混合方法(SuffixDecoding+EAGLE-3)在Spec-Bench上获得2.5×加速，优于单独EAGLE-3(2.4×)和Token Recycling(2.2×)</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure5.png"></p>
+<p><strong>推测树分析</strong>：图5展示了AgenticSQL Extract任务的推测树实例。该任务输出JSON文档，具有固定结构和布尔值特征。SuffixDecoding成功捕获了这些模式，构建了一个包含66个token的推测树，其中每个布尔值分支都对应一种可能的输出路径。在实际验证中，正确路径往往能一次性接受数十个token，显著加速生成过程。</p>
+<h3 id="53-end-to-end-swe-bench-on-vllm">5.3 End-to-End SWE-Bench on vLLM</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure6.png"></p>
+<p>在真实vLLM部署中，SuffixDecoding显著加速了OpenHands智能体在SWE-Bench上的端到端性能：</p>
+<ul>
+<li>解码时间(输出生成)占总任务时间的大部分</li>
+<li>相比PLD，SuffixDecoding提速1.3-3×</li>
+<li>相比普通解码，获得1.8-4.5×的推测加速</li>
+<li>保持100%的输出质量，维持37.2%的SWE-Bench Verified得分</li>
+</ul>
+<h3 id="54-ablation-experiments">5.4 Ablation Experiments</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure7.png"></p>
+<p><strong>全局树vs每请求树</strong>：图7显示两种后缀树的互补价值：</p>
+<ul>
+<li>大多数任务中，结合两棵树效果最佳</li>
+<li>全局树在多数任务上优于每请求树</li>
+<li>Combine任务例外：高度依赖当前请求上下文，每请求树更有效</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/figure8.png"></p>
+<p><strong>开放场景适应性</strong>：尽管专为智能体设计，SuffixDecoding在WildChat和Magicoder上也展现潜力：</p>
+<ul>
+<li>加速效果随后缀树大小增加而持续提升</li>
+<li>接受率保持稳定，不受树大小显著影响</li>
+<li>证明了方法在多样工作负载上的适应性</li>
+</ul>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>本文提出的SuffixDecoding是一种创新的无模型推测解码方法，专为新兴智能体应用设计。通过高效后缀树数据结构，它能够充分利用智能体工作负载中的重复模式，实现极端长度的推测解码。在SWE-Bench和专有AgenticSQL工作流上的实验表明，SuffixDecoding显著降低了推理延迟，比现有最佳方法快1.9-2.8倍，并在端到端任务中实现高达4.5倍的加速。这种性能提升无需牺牲输出质量，且能无缝集成到现有推理系统(vLLM)中。</p>
+<hr>
+<h2 id="7-frequently-asked-questions">7. <strong>Frequently Asked Questions</strong></h2>
+<h3 id="how-much-memory-does-suffixdecoding-require"><strong>How much memory does SuffixDecoding require?</strong></h3>
+<p>SuffixDecoding is <strong>highly memory efficient</strong>. The suffix trees scale linearly with the number of cached tokens:</p>
+<ul>
+<li>
+<p><strong>20K requests (~572M tokens)</strong>: ~<strong>6.15 GB</strong> of CPU memory</p>
+</li>
+<li>
+<p><strong>Per-token memory</strong>: ~<strong>10.75 bytes/token</strong></p>
+</li>
+<li>
+<p><strong>Typical capacity</strong>: Can cache <strong>31 days of continuous generation</strong> on a standard <strong>A100 system (144GB CPU memory)</strong> before requiring cache eviction</p>
+</li>
+<li>
+<p><strong>Lookup/update speed</strong>:</p>
+<ul>
+<li>Updates: <strong>~4 microseconds/token</strong></li>
+<li>Lookups: <strong>~12 microseconds/token</strong></li>
+<li>Even at large tree scale</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="what-happens-when-the-input-distribution-shifts"><strong>What happens when the input distribution shifts?</strong></h3>
+<p>SuffixDecoding <strong>adapts online</strong> to distribution shifts.</p>
+<ul>
+<li>
+<p>In experiments switching from <strong>WildChat → SpiderSQL</strong> (large shift):</p>
+<ul>
+<li>Initially: <strong>1.5× speedup</strong></li>
+<li>Quickly adapts by inserting new outputs</li>
+<li>After <strong>~500 requests</strong>, performance becomes <strong>almost indistinguishable from training on that distribution offline</strong></li>
+</ul>
+</li>
+</ul>
+<p>This demonstrates <strong>strong online adaptation capabilities</strong>.</p>
+<hr>
+<h3 id="what-is-agentsql-and-why-does-suffixdecoding-work-so-well-on-it"><strong>What is AgentSQL and why does SuffixDecoding work so well on it?</strong></h3>
+<p><strong>AgenticSQL</strong> is a proprietary <strong>multi-agent workflow</strong> designed for <strong>complex SQL generation</strong>.
+It contains multiple <strong>LLM-powered stages</strong> that convert natural language into SQL.</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SuffixDecoding/AgenticSQL.png"></p>
+<p>Workflow stages include:</p>
+<ul>
+<li><strong>Classify &amp; Extract</strong>: Extract metadata and features</li>
+<li><strong>Enrich</strong>: RAG-based context enrichment</li>
+<li><strong>SQL Generation (SQL 1…N)</strong>: Several text-to-SQL agents produce candidates, assisted by error correction</li>
+<li><strong>Combine</strong>: Merge SQL candidates + generate final answer</li>
+</ul>
+<p>SuffixDecoding achieves excellent performance (e.g., <strong>10.41× speedup</strong> on Enrich, <strong>9.85×</strong> on Extract) because:</p>
+<ul>
+<li><strong>Structured outputs</strong> (JSON, SQL) with high consistency</li>
+<li><strong>Repetitive patterns</strong> across similar queries</li>
+<li><strong>Schema consistency</strong> across tasks</li>
+<li><strong>Multi-stage reuse</strong> of intermediate outputs</li>
+</ul>
+<p>This shows SuffixDecoding&rsquo;s strength for <strong>production agentic workflows</strong> with <strong>structured, repetitive</strong> output patterns.</p>
+<hr>
+<h3 id="how-can-i-predict-if-suffixdecoding-will-work-well-for-my-application"><strong>How can I predict if SuffixDecoding will work well for my application?</strong></h3>
+<p>Measure <strong>“structuredness”</strong> via <strong>empirical entropy</strong> using only <strong>100 output samples</strong>:</p>
+<ol>
+<li>Build a <strong>suffix tree</strong> from outputs</li>
+<li>Compute each node&rsquo;s <strong>entropy</strong> from child access frequencies</li>
+<li>Take a <strong>weighted average</strong> across nodes</li>
+</ol>
+<ul>
+<li><strong>Lower entropy</strong> → output tokens <strong>more predictable</strong> → SuffixDecoding performs better</li>
+</ul>
+<p>Reference entropy values:</p>
+<table>
+  <thead>
+      <tr>
+          <th>Task</th>
+          <th>Entropy</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>AgenticSQL (Enrich)</td>
+          <td><strong>0.171</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (Classify)</td>
+          <td><strong>0.738</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (Extract)</td>
+          <td><strong>0.0862</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (SQL1)</td>
+          <td><strong>1.52</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (SQL2)</td>
+          <td><strong>1.49</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (SQL3)</td>
+          <td><strong>1.51</strong></td>
+      </tr>
+      <tr>
+          <td>AgenticSQL (Combine)</td>
+          <td><strong>1.49</strong></td>
+      </tr>
+      <tr>
+          <td>Spider</td>
+          <td><strong>2.50</strong></td>
+      </tr>
+      <tr>
+          <td>WildChat</td>
+          <td><strong>3.43</strong></td>
+      </tr>
+      <tr>
+          <td>Magicoder</td>
+          <td><strong>2.95</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>This metric correlates well with actual performance, allowing practitioners to predict suitability.</p>
+<hr>
+<h3 id="should-i-use-suffixdecoding-alone-or-in-hybrid-mode"><strong>Should I use SuffixDecoding alone or in hybrid mode?</strong></h3>
+<p>Depends on workload:</p>
+<ul>
+<li>
+<p><strong>Highly repetitive agentic tasks</strong> →
+<strong>Use SuffixDecoding alone</strong> with <strong>τ = 0</strong></p>
+<ul>
+<li>On AgenticSQL: <strong>5.35× speedup</strong></li>
+</ul>
+</li>
+<li>
+<p><strong>Mixed or open-ended workloads</strong> →
+<strong>Hybrid mode</strong> with τ ≈ mean accepted tokens of fallback speculator</p>
+<ul>
+<li>For example, with <strong>EAGLE-3 (MAT ≈ 4.65)</strong>
+→ set <strong>τ = 5–7</strong> → <strong>2.5× speedup</strong> on Spec-Bench</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="can-suffixdecoding-work-with-batch-serving"><strong>Can SuffixDecoding work with batch serving?</strong></h3>
+<p>Yes. It is compatible with <strong>batch-level speculation control</strong> like:</p>
+<ul>
+<li><strong>TurboSpec</strong></li>
+<li><strong>AdaServe</strong></li>
+</ul>
+<p>SuffixDecoding’s statistical scores help:</p>
+<ul>
+<li>Dynamically allocate <strong>speculation budgets per request</strong></li>
+<li>Maximize <strong>batch goodput</strong></li>
+<li>Meet <strong>SLO constraints</strong></li>
+</ul>
+<hr>
+<h3 id="how-long-does-it-take-to-build-the-suffix-tree"><strong>How long does it take to build the suffix tree?</strong></h3>
+<p>Tree construction is <strong>fast</strong> and done <strong>once at startup</strong>:</p>
+<ul>
+<li><strong>1,000 examples</strong>: 0.30s, 137MB</li>
+<li><strong>10,000 examples</strong>: 4.82s, 1.4GB</li>
+<li><strong>100,000 examples</strong>: 61.95s, 14.7GB</li>
+</ul>
+<p>The tree is <strong>incrementally updatable</strong> with <strong>minimal overhead</strong>.</p>
+<hr>
+<h3 id="does-suffixdecoding-preserve-the-output-distribution"><strong>Does SuffixDecoding preserve the output distribution?</strong></h3>
+<p>Yes. As a <strong>speculative decoding</strong> method, SuffixDecoding is <strong>mathematically guaranteed</strong> to preserve the <strong>exact output distribution</strong> of the target LLM.</p>
+<p>Example:</p>
+<ul>
+<li>
+<p>On <strong>SWE-Bench Verified</strong> with vLLM:</p>
+<ul>
+<li>Achieved <strong>37.2% task completion</strong> (same as vanilla decoding)</li>
+<li>Delivered <strong>1.8–4.5× speedup</strong></li>
+</ul>
+</li>
+</ul>
+
+    </section>
+  
+    <section data-source="posts\Breaking the Wall - Unifying Edge GPUs and NPUs into Pipeline Parallelism for Efficient LLM Fine-Tuning.md">
+      <h2 id="1-motivation">1. Motivation</h2>
+<p>目前边缘GPU（e-GPUs）和边缘NPU（e-NPUs）在硬件架构上存在显著差异，导致运行性能上有很大不同。例如，研究测量显示，某些e-NPUs仅进行前向传播的计算能力在进行反向传播时会降低10倍。具体来说，大多数边缘NPU（e-NPU）设备专为推理任务设计，只支持前向传播（FP），缺乏反向传播（BP）所需的BroadcastGradient和ReluGrad操作，这使得它们不兼容训练或微调任务。以Atlas 200I（e-NPU）的测量结果为例，如图1所示，其仅进行前向传播的计算能力为20 TOPS，而在进行反向传播时会降低约10倍至2.4 TOPS。这与Jetson Orin Nano等e-GPUs形成鲜明对比，后者的前向传播（FP）和反向传播（BP）计算能力保持相同的34 TOPS。因此，当使用现有并行方法将e-NPUs和e-GPUs统一用于LLMs微调时，e-NPUs上的慢速反向传播必然会增加整体延迟，如图5a所示。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure1.png"></p>
+<p>因此，如何将e-GPUs和e-NPUs统一到单一的流水线并行中，以实现高效的LLMs微调，是一个尚未充分探索且具有挑战性的问题。</p>
+<h2 id="2-preliminary">2. Preliminary</h2>
+<p>与通过反向传播计算梯度的BP-enable设备（e-GPUs）不同，BP-free设备（e-NPUs）仅使用前向传播基于方向导数估计梯度。具体来说，当使用参数高效方法如LoRA微调LLM $\Theta$时，带有可训练参数$\theta$和损失函数$L$的$\Theta$，在小批量$B = {b_1, &hellip;, b_M}$上的估计梯度可计算如下：</p>
+$$\hat{\nabla}L(\theta|\Theta) = \frac{L(\theta + \epsilon\mathbf{z}|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z} = g(\mathbf{z})\mathbf{z},$$<p>其中$L(\theta + \epsilon\mathbf{z}|\Theta)$表示可训练参数$\theta$在方向$\mathbf{z} \sim \mathcal{N}(0, I_d)$上扰动后的损失，这是对可训练参数的随机扰动。$d$表示可训练参数的大小，$\epsilon$表示标量步长。$g(\mathbf{z}) = \frac{L(\theta+\epsilon\mathbf{z}|\Theta;B) - L(\theta|\Theta;B)}{\epsilon}$表示随机方向$\mathbf{z}$的方向导数。因此，基于两次前向传播，作者可以获得$\theta$在方向$\mathbf{z}$上的下降尺度。</p>
+<p>图2a显示了估计梯度与通过带反向传播的一阶优化计算的梯度之间的相似性。作者观察到，添加扰动可以使估计梯度更接近BP梯度，同时仍比一阶优化实现更低的执行时间，如图2a所示。因此，为进一步减少估计方差并稳定微调，估计梯度可以通过对$Q$个独立采样方向$\mathbf{z}_q \sim \mathcal{N}(0, I_d)$取平均来计算：</p>
+$$\hat{\nabla}L(\theta|\Theta) = \frac{1}{Q}\sum_{q=1}^{Q}\frac{L(\theta + \epsilon\mathbf{z}_q|\Theta; B) - L(\theta|\Theta; B)}{\epsilon}\mathbf{z}_q,$$<p>此外，使用零阶优化估计梯度消除了对反向传播和中间激活保存的需求，从而减少了内存消耗，如图2b所示。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure2.png"></p>
+<h2 id="3-contribution">3. Contribution</h2>
+<ul>
+<li>作者首次提出了一种统一e-GPUs和e-NPUs的单一pipeline并行方案，用于高效的LLMs微调，该方案融合了无BP的零阶优化和一阶优化，以加速整体微调收敛。</li>
+<li>HybridOP的核心设计解决了两个关键挑战：跨异构e-GPUs和e-NPUs的LLM层划分和计算利用率提升。具体来说，作者开发了专用的成本模型来表征执行延迟和内存开销，这些模型专为HybridOP pipeline定制。分区规划器随后为e-NPUs和e-GPUs采用不同的搜索策略，以高效识别最优层分区方案，从而最小化执行延迟。</li>
+<li>大量实验表明了HybridOP的收敛性和有效性。与最先进的基线Asteroid相比，HybridOP将计算利用率提高了0.8倍，吞吐量提高了27.7%，并减少了41.2%的收敛时间，用于使用4个e-NPUs和6个e-GPUs微调LLaMA-3.1-8B模型。</li>
+</ul>
+<h2 id="4-hybridop-system-design">4. HYBRIDOP SYSTEM DESIGN</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure3.png"></p>
+<h3 id="41-overview">4.1 Overview</h3>
+<p>在HybridOP并行方案中，e-GPUs使用反向传播计算BP梯度，而e-NPUs使用多次前向传播计算估计梯度。首先，这些e-GPUs和e-NPUs协作执行第一次前向传播，并获取相应的无扰动基础损失（蓝色箭头）。然后，e-NPU设备生成可训练参数的随机扰动，并基于这些扰动参数执行前向传播（绿色箭头）。同时，e-GPU设备执行反向传播以计算BP梯度（橙色箭头）。流水线的最后一个设备计算损失和对应于随机扰动的方向导数$g(\mathbf{z})$，并将$g(\mathbf{z})$传输到所有e-NPU设备。e-NPU设备基于公式(10)计算估计梯度。最后，所有异构设备在流水线中获取小批量$b_i$的梯度。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure4.png"></p>
+<p>将零阶优化的估计梯度和一阶优化的真实梯度融合到单一流水线中时，需要解决一些棘手的挑战：
+(1) 如何将LLM层划分到流水线中的异构设备上，以最小化执行延迟？
+(2) 如何在不延长执行延迟的情况下进一步提高计算利用率？</p>
+<p>因此，在这项工作中，作者提出了HybridOP，一种新颖的流水线并行方案，能够高效地统一异构e-NPUs和e-GPUs，并充分发挥计算潜力，如图3所示。具体来说，作者构建了专用的成本模型，这些模型表征了针对HybridOP流水线定制的执行延迟和内存开销，并分析了最优设备放置方案。然后，新设计的LLM层分区规划器为异构e-NPUs和e-GPUs采用不同的搜索策略，快速搜索最优层分区计划，从而最小化执行延迟。作者进一步引入基于零阶优化的提前退出微调，以提高计算利用率。</p>
+<h3 id="42-cost-model-execution-latency-and-memory-overhead">4.2 Cost Model: Execution Latency and Memory Overhead</h3>
+<p>与现有流水线不同，HybridOP流水线中的异构设备以不同的计算模式进行微调。这些设备的不同放置方案将影响整体收敛性能和流水线效率。在这里，作者从两个方面分析这些e-NPU和e-GPU设备不同放置方案的影响：执行延迟和内存开销。</p>
+<p><strong>执行延迟</strong>。如图5所示，作者比较了不同的设备放置方案与传统的流水线并行GPipe，使用四个设备和四个微批次在一个流水线迭代中。作者假设每个设备的前向传播时间为$t_i$，通常来说，其反向传播时间可以表示为$2 \cdot t_i$。因此，对于GPipe，其在单次迭代中的总时间为：</p>
+$$T_{gpipe} = 3 \cdot (\sum_{i \in D_{e-G} \cup D_{e-N}} t_i + (M - 1) \cdot \max_{i \in D_{e-G} \cup D_{e-N}}\{t_i\}),$$<p>其中$M$表示小批量中的微批次数。此外，如图5b所示，当使用没有e-NPUs的GPipe时，LLM仅在这些e-GPU设备上分区。由于分配给单个设备的层数增加，前向传播的执行时间增加，流水线中的微批次数减少。</p>
+<p>如图5c所示，在HybridOP流水线中，e-NPU设备放置在流水线尾部，e-GPU设备放置在流水线头部。e-GPUs在e-NPUs通过多次前向传播获得估计梯度后计算BP梯度。因此，其在单次迭代中的总时间为：</p>
+$$T_{tail} = 3\sum_{i \in D_{e-G}} t_i + \sum_{i \in D_{e-N}} t_i + ((1+Q)M-1) \cdot \max_{i \in D_{e-N}}\{t_i\}.$$<p>如图5d所示，e-NPU设备和e-GPU设备分别放置在流水线头部和尾部。这些e-NPUs和e-GPUs首先对多个微批次执行前向传播，计算它们相应的无扰动基础损失。随后，e-GPU设备执行反向传播以获取BP梯度，e-NPU设备扰动LLM的可训练参数以获取估计损失，然后计算估计梯度。单次迭代的总时间为：</p>
+$$T_{head} = \sum_{i \in D_{e-N}} t_i + 3\sum_{i \in D_{e-G}} t_i + 3(M-1)\max_{i \in D_{e-G}}\{t_i\} + MQ t^*,$$<p>其中$t^*$表示流水线中第一个e-GPU设备的前向执行时间。</p>
+<p>为便于比较，作者假设e-GPU的计算能力是e-NPU的ZO计算能力的两倍，是e-NPU的FO计算能力的三倍。因此，四种流水线方案的单次迭代时间分别为51$t_i$、36$t_i$、24$t_i$和23$t_i$。因此，HybridOP流水线可以同时减少执行延迟，并且将e-NPU设备放置在流水线头部可以进一步扩大优势。</p>
+<p><strong>内存开销</strong>。作者从两部分分析每个设备的内存开销：$M_{states}$和$M_{act}$。$M_{states}$表示存储模型参数、梯度和优化器状态所需的内存。$M_{act}$表示维护用于在反向传播中计算梯度的前向传播中间激活所需的内存。</p>
+<p>对于GPipe，所有设备协作维护单个完整LLM，因此$M_{states} = \lambda_1|\Theta| + (\lambda_2 + \lambda_3)|\theta|$，其中$\lambda_1$、$\lambda_2$和$\lambda_3$分别表示参数、梯度和优化器状态在内存中占用的字节数。考虑到激活的内存$M_{act}$，所有设备在对所有微批次执行前向传播后执行反向传播，因此所有设备保留的中间激活受模型大小和可训练参数影响，与微批次数线性相关，即$M_{act} = M|\Theta|$。</p>
+<p>在HybridOP并行方案中，所有设备仍然协作维护单个完整LLM，因此$M_{states} = \lambda_1|\Theta| + (\lambda_2 + \lambda_3)|\theta|$与GPipe相同。然而，由于e-NPU设备不需要执行反向传播，因此不需要保留中间激活。因此，HybridOP并行方案可以减少部分激活所需的内存。此外，HybridOP并行方案使所有e-GPUs在接收到梯度后立即执行反向传播。因此，GPU设备在流水线中的位置越靠前，保留的中间激活就越多。给定完整LLM为$\Theta = {L_1, .., L_K}$，包含$K$层，设\(\Theta_i = \{L_k\}_{l_i}^{r_i}\)表示分配给每个设备的层。因此\(\Theta = \{\Theta_i\}_{i \in D_{e-N} \cup D_{e-G}}\)。对于一个小批次，内存开销与分配的模型大小线性相关，可以表示为$\lambda_4|\Theta_i|$。当将e-NPUs放置在流水线尾部时，每个e-GPU设备的激活所需内存为$\lambda_4(|D_{e-N}| + |D_{e-G}| - i)|\Theta_i|$。HybridOP流水线中激活所需的总内存$M_{act} = \lambda_4\sum_{i \in D_{e-G}}((|D_{e-N}| + |D_{e-G}| - i)|\Theta_i|)$。当将e-NPUs放置在流水线尾部时，每个e-GPU设备的激活所需内存为$\lambda_4(|D_{e-G}| - i)|\Theta_i|$。HybridOP流水线中激活所需的总内存$M_{act} = \lambda_4\sum_{i \in D_{e-G}}((|D_{e-G}| - i)|\Theta_i|)$。因此，将e-NPUs放置在流水线头部的HybridOP并行方案可以显著减少内存开销，从而提高流水线的吞吐量，如图5所示。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure5.png"></p>
+<h3 id="43-llm-layers-partition-planner">4.3 LLM Layers Partition Planner</h3>
+<p>HybridOP的目标是充分利用异构e-GPU和e-NPU设备的计算潜力，加速设备上的LLM微调。如第3.2节所述，e-NPU设备应放置在HybridOP流水线头部。在HybridOP并行方案中，每次迭代的执行延迟为$T_{head}$，如公式(5)所述。为简化，作者将其表示为$T$。然后，作者通过搜索跨异构设备的最优层分区计划来设计新的LLM分区规划器，以最小化执行延迟$T$，如下所示：</p>
+$$
+\min T =
+\underbrace{\sum_{i \in D_{e-N}} t_i}_{T_{e-N}}
++
+\underbrace{3\sum_{i \in D_{e-G}} t_i + 3(M - 1)\max_{i \in D_{e-G}}\{t_i\} + MQ t^*}_{T_{e-G}}.
+$$<p>
+</p>
+$$\text{s.t. } t_i = \frac{W(\Theta_i)}{p_i},$$<p>
+</p>
+$$M(\Theta_i) \leq m_i,$$<p>其中$T_{e-N}$和$T_{e-G}$分别表示影响$T$的e-NPUs和e-GPUs的执行延迟。$\Theta_i = {L_k}_{l_i}^{r_i}$表示分配给每个设备的层，其中$l_i$和$r_i$分别表示这些层的开始和结束。$W(\Theta_i)$表示模型$\theta_i$执行前向传播所需的计算工作量。$M(\Theta_i)$表示微调模型$\theta_i$所需的内存开销。</p>
+<p><strong>估计器</strong>。为了快速确定给定任何分区计划的执行延迟，作者首先估计影响$T$的两个关键因素：$M(\Theta_i)$和$W(\Theta_i)$。如第3.2节所述，微调所需的内存来自$M_{state}$和$M_{act}$。e-NPU设备不维护中间激活，因此e-NPU的内存开销为$M(\theta_i) = \lambda_1|\Theta_i| + (\lambda_2 + \lambda_3)|\theta_i|$。e-GPU设备需要维护额外的中间激活，其大小取决于分配的模型大小和在HybridOP流水线中的深度。因此，作者估计e-GPU设备的内存开销$M(\Theta_i) = \lambda_1|\Theta_i| + (\lambda_2 + \lambda_3)|\theta_i| + \lambda_4(|D_{e-G}| - i)|\Theta_i|$。作者预先测量不同部分层和维护激活所需的相应内存开销，以拟合系数$\lambda_4$。</p>
+<p>考虑到前向传播的计算工作量$W(\Theta_i)$，它可以通过累积多个不同层的计算工作量来估计，即$W(\Theta_i) = \sum_{k \in (\Theta_i)} W(L_k)$。因此，作者预先测量LLM中不同层的计算工作量，以计算$W(\Theta_i)$。基于这些估计，作者可以快速获取任何给定层分区计划下每个设备的内存开销和计算工作量。</p>
+<p>在HybridOP流水线中，e-NPUs和e-GPUs分别放置在流水线头部和尾部。为了搜索最优层分区方案，作者分别搜索e-NPUs和e-GPUs的层分区，以降低搜索复杂度。作者首先迭代搜索层分区$s$，其中${L_1, .., L_s}$层和${L_{s+1}, .., L_l}$层分别在e-NPUs和e-GPUs上分区。为降低搜索复杂度，作者设计了异构感知搜索算法，包括两个高效的动态规划（DP）算法，分别用于最小化$T_{zo}$和$T_{fo}$，如算法1所述。</p>
+<p><strong>最小化$T_{e-N}$</strong>。直观上，前$k$层的最小执行时间由前$k-1$层决定，这意味着最优解可以从子问题的最优结果构建，这促使作者使用动态规划来解决最优分区。因此，作者设计了一个层分区DP算法，搜索e-NPU设备的最优层分区\(\{[l_i, r_i]\}_{i \in D_{e-N}}\)。设$DP_{e-N}(D_i, L_k)$表示e-NPU设备${D_1, .., D_i}$覆盖前$k$层${L_1, &hellip;, L_k}$所使用的最小总执行时间。状态转移方程表述为：</p>
+$$DP_{e-N}(D_i, L_k) = \min_t (DP_{e-N}(D_{i-1}, L_t) + t_{e-N}(D_i, L_{t+1}, L_k))$$<p>其中$t_{e-N}(D_i, L_{t+1}, L_k) = \frac{W(\Theta_i)}{p_i}$表示在第$i$个e-NPU设备上对由这些层${L_{t+1}, &hellip;, L_k}$组成的$\Theta_i$执行前向传播所需的时间，$t \in [i-1, k-1]$。公式(7)显示$DP_{e-N}(D_i, L_k)$通过遍历所有在$(i-1)$-th层和$(k-1)$-th层之间的可能层来确定，并选择最小化前$k$层执行延迟的那个。搜索从$(i-1)$-th层开始的原因是确保前$i-1$个设备每个至少分配一层。当$i = |D_{e-N}|$和$k = s$时，作者搜索最小的$T_{e-N} = DP_{e-N}(D_{|D_{e-N}|}, L_s)$和e-NPUs对应的最优分区计划。此外，在搜索过程中，需要确保总内存消耗不超过设备的可用显存，即$M(\Theta_i) \leq m_i$。</p>
+<p><strong>最小化$T_{e-G}$</strong>。类似于最小化$T_{e-N}$，这里作者设计层分区DP算法，搜索e-GPU设备的最优层分区\(\{[l_i, r_i]\}_{i \in D_{e-G}}\)，以最小化$T_{e-G}$。由于$\max$操作$\max_{i \in D_{e-G}}{t_i}$不能直接用于DP搜索，作者首先枚举$\max$项$t_{max} = \max_{i \in D_{e-G}}{t_i}$，并对每个不同的$t_{max}$最小化以下方程：</p>
+$$T_{e-G} = 3\sum_{d_i \in D_{e-G}} t_i + MQ t^* + 3(M - 1)t_{max}.$$<p>设$DP_{e-G}(D_i, L_k)$表示设备${D_1, .., D_i}$覆盖$j$层${L_{s+1}, &hellip;, L_{s+k}}$所使用的最小总执行时间。对于第一个e-GPU设备，$DP_{e-G}(1, j) = (3 + MQ)t_{e-G}(D_1, L_{s+1}, L_{s+j})$。状态转移方程表述为：</p>
+$$DP_{e-G}(D_i, L_k) = \min_t (DP_{e-G}(D_{i-1}, L_t)) + 3t_{e-G}(D_i, L_{s+t+1}, L_{s+k})),$$<p>其中$t_{e-G}(D_i, L_{s+t+1}, L_{s+k}) = \frac{W(\Theta_i)}{p_i}$表示在第$i$个e-GPU设备上对由这些层${L_{s+t+1}, &hellip;, L_{s+k}}$组成的模型$\Theta_i$执行前向传播所需的时间，$t \in [\max{s+1, i-1}, k-1]$。公式(9)显示，当$\max$项固定时，$DP_{e-G}(D_i, L_k)$通过遍历所有可能层来确定，并选择最小化前$k$层执行延迟的那个。当$i = |D_{e-G}|$和$k = K$时，作者获得最优值$DP_{e-G}(D_{|D_{e-G}|}, L_K)$和固定$t_{max}$对应的最优层分区。随后，通过比较不同$t_{max}$下的$DP_{e-G}(c, s) + 3(N-1)t_{max}$，作者确定最优分区计划。</p>
+<p>此外，作者确定$t_{max}$的下限和上限以加速搜索。其下限为$\frac{W(\sum_{i \in D_{e-G}} \Theta_i)}{\sum_{i \in D_{e-G}} p_i}$，上限为$\frac{W(\sum_{i \in D_{e-G}} \Theta_i)}{\min_{i \in D_{e-G}} p_i}$。此外，在枚举$t_{max}$时，作者评估$t_{max}$比上一个$t_{max}$至少大$\varepsilon$的情况。</p>
+<p><strong>复杂度分析</strong>。在时间复杂度方面，在所有可能的层分区$s$上运行两个DP算法的成本为$\sum_{s=1}^K [O(|D_{e-N}| \cdot s^2) + O(|D_{e-G}| \cdot (l - s)^2 I)]$，其中$I$是$t_{max}$的搜索迭代次数。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/algorithm1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/algorithm2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/algorithm3.png"></p>
+<h3 id="44-zeroth-order-early-exit-fine-tuning">4.4 Zeroth-order Early-exit Fine-tuning</h3>
+<p>在HybridOP流水线中，e-GPU设备位于流水线尾部，这些设备的前向和反向传播都依赖于零阶设备的前向传播。此外，它们还需要为e-NPU设备执行前向估计并计算估计损失。当设计的LLM分区规划器在异构e-GPUs和e-NPUs上实现相对平衡的计算工作量时，e-NPU设备将经历一些空闲时间，如图6顶部所示。为了充分利用计算能力，作者进一步设计了一种新颖的提前退出微调模式，以增加e-GPUs和e-NPUs上计算的并行性，如图6底部所示。</p>
+<p>现有的一些工作使用提前退出机制来减少LLM微调的复杂性和收敛时间。作者在最后一个零阶设备上添加一个额外的输出层，以执行提前退出并计算估计损失。具体来说，在e-NPUs完成所有微批次的$Q$次前向估计后，作者将微批次注入流水线，并再次执行$Q&rsquo;$次扰动。与之前的$Q$次前向估计不同，提前退出前向估计在执行e-NPUs的前向传播后直接进入提前退出层。最后一个e-NPU设备从最后一个e-GPU获取基础损失，并计算小批量$b_i$的估计损失以及相应的梯度，如下所示：</p>
+$$\hat{\nabla}L'(\theta'|\Theta) = \frac{1}{Q'}\sum_{q=1}^{Q'}\frac{L'(\theta' + \epsilon\mathbf{z}_q|\Theta;b_i) - L(\theta|\Theta;b_i)}{\epsilon}\mathbf{z}_q,$$<p>其中$\theta&rsquo;$表示由e-NPU设备层和提前退出输出层组成的提前退出模型。通过引入提前退出微调机制，作者可以进一步利用HybridOP流水线中的空闲计算资源。此外，在e-NPU设备上添加可训练参数扰动的方向可以进一步提高训练稳定性和收敛性能。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure6.png"></p>
+<h3 id="45-convergence-analysis">4.5 Convergence Analysis</h3>
+<p>为了分析所提出的HybridOP的收敛性，作者首先界定估计梯度相对于实际随机梯度的误差。然后，在关于梯度的Lipschitz连续性和有界梯度方差的温和假设下，作者可以获得平均梯度范数的上界：</p>
+$$\frac{1}{\Gamma}\sum_{\tau=1}^{\Gamma} \mathbb{E}[\|\nabla F(\theta_{\tau})\|^2] \leq O(\frac{\mathbb{E}[F(\theta_1)] - \mathbb{E}[F(\theta_{\Gamma+1})]}{\sqrt{\Gamma}} + \frac{1}{\sqrt{\Gamma}}\delta^2 + \frac{1}{\sqrt{\Gamma}}\sigma^2),$$<p>其中$F(\theta) := \mathbb{E}_{B \sim S}[L(\theta; B)]$，$\tau$表示迭代索引，$\Gamma$表示总迭代次数，$\delta$表示估计梯度与真实随机梯度的误差界限，$\sigma$表示随机梯度方差的上限。这表明HybridOP可以达到渐近最优的收敛率$O(1/\sqrt{\Gamma})$，与一般非凸设置的速率相匹配。详细内容可在附录A中找到。</p>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-experimental-setup">5.1 Experimental Setup</h3>
+<p><strong>硬件测试平台</strong>。作者构建了真实世界的硬件测试平台，包括边缘NPUs：华为Atlas 200I DK A2，以及边缘GPUs：NVIDIA Jetson Orin，Xavier。详细的内存容量、计算能力和功耗模式如表1所示。</p>
+<p><strong>实现</strong>。作者为Atlas 200I DK A2设备配置CANN版本8.0，为所有Jetson设备配置Jetpack版本5.2。HybridOP系统使用PyTorch和torch_npu库实现。HybridOP和所有基线模型中异构设备之间的通信使用带有GLOO后端的torch.distributed实现。HybridOP的核心使用1300多行Python代码实现。</p>
+<p><strong>基线</strong>。作者选择了7个广泛使用的基线：</p>
+<ul>
+<li><strong>张量并行（TP）</strong>：Accpar将层划分为具有不同张量大小的异构设备。</li>
+<li><strong>流水线并行（PP）</strong>：GPipe将模型划分为流水线中的顺序阶段。PipeDream-Flush在获得梯度后立即执行反向传播，以减少激活所需的内存开销。Chimera是一种双向流水线方案，将两个流水线阶段放在每个设备上，以减少气泡率。</li>
+<li><strong>混合并行（HP）</strong>：混合数据并行（HDP）通过在异构GPU集群上使用组内PP和组间DP，促进并行训练。Dapple提出了一种混合流水线并行，使用组内DP和组间PP。Asteroid采用混合流水线并行，并将层分区，以在资源有限的场景中最大化吞吐量。</li>
+</ul>
+<p><strong>微调和评估</strong>。作者对LLaMA-3.2-3B和LLaMA-3.1-8B进行了参数高效微调LoRA实验，使用三个不同的NLP数据集：(1) AGNEWS数据集是一个具有4个类别的序列分类数据集，包括12万个训练样本和7.6k测试样本。序列的最大长度设置为384。(2) Multi-RC数据集是一个问答数据集，包括&gt;27k训练样本和&gt;4.8k测试样本。序列的最大长度设置为1024。(3) SQuAD数据集是一个阅读理解数据集，其中每个问题的答案是相应阅读段落的一段文本或跨度。训练和测试样本的数量分别为&gt;87k和&gt;10k。同样，序列的最大长度设置为1024。</p>
+<p>对于所有实验，作者测量吞吐量（样本/秒）、收敛时间和收敛性能（F1分数）。此外，为了评估计算利用率，作者使用评估指标$Comu_{ti}$，表示总时间中的计算时间。对于流水线并行，$Comu_{ti}$和气泡率相加为1。</p>
+<p><strong>实验设置</strong>。对于微调LLaMA-3.2-3B模型，作者使用2个Atlas 200I DK A2 + 2个Jetson Orin Nano + 2个Jetson Orin NX。对于LLaMA-3.2-8B模型，作者选择4个Atlas 200I DK A2 + 2个Jetson Orin Nano设备 + 2个Jetson Xavier NX + 2个Jetson Orin NX。为了公平起见，所有基线都是在有和没有Atlas设备的情况下进行的。</p>
+<p>作者使用早停策略和Adam优化器微调LLMs，LoRA秩设置为8，LoRA alpha为16。每个小批次的扰动数量设置为不同LLMs的12和20。作者将AGNEWS和Multi-RC数据集的初始学习率设置为5e-5，SQuAD数据集设置为2e-5。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/table1.png"></p>
+<h3 id="52-efficiency-of-hybridop">5.2 Efficiency of HybridOP</h3>
+<p>在本节中，作者将所有基线的计算利用率$Comu_{ti}$和吞吐量与所提出的HybridOP进行比较，如图8和图9所示。</p>
+<p><strong>与张量并行的比较</strong>。在跨不同任务微调LLaMA-3.2-3B和LLaMA-3.1-8B时，与AccPar相比，HybridOP的吞吐量提高了117.1%-322.2%和121.4%-350.0%。此外，HybridOP的计算利用率$Comu_{ti}$提高了26.6%-41.6%和27.5%-42.68%。此外，由于在异构设备（e-NPUs和e-GPUs）之间频繁进行全收集通信，AccPar的$Comu_{ti}$和吞吐量分别比流水线并行低9.4%-19.6%和10.0%-39.0%。</p>
+<p><strong>与流水线并行的比较</strong>。(1) 在跨不同任务微调LLaMA-3.2-3B和LLaMA-3.1-8B时，与GPipe相比，HybridOP实现了0.8×-3.0×的吞吐量提升和29.0%-44.7%的计算利用率提升。与PipeDream-Flush相比，HybridOP提供了0.6×-2.3×的吞吐量提升和25.7%-46.9%的计算利用率提升。这是因为GPipe和PipeDream-Flush都是为同构集群设计的，导致异构设备的层分区不平衡。(2) Chimera通过引入双向流水线减少气泡率。然而，在不同实验设置下，HybridOP将气泡率降低了18.41%-36.5%，同时将吞吐量提高了2.3倍。这表明HybridOP使e-NPUs和e-GPUs能够分别执行前向估计和反向传播来计算梯度，而无需依赖。(3) 观察到在使用e-NPUs的异构环境中，各种流水线并行和Accpar的平均吞吐量降低了0.43倍，计算利用率降低了13.1%。这是因为这些并行方法无法有效利用e-NPUs上ZO的计算能力，导致这些设备成为整个微调过程的瓶颈。</p>
+<p><strong>与混合并行的比较</strong>。(1) 与HDP相比，HybridOP在不同实验设置下实现了38.5%-67.0%的吞吐量提升，并将$Comu_{ti}$提高了10.34%-18.18%。与仅GPU配置相比，带有e-NPUs的HDP的吞吐量保持稳定甚至有所提升。这是因为HDP将e-NPU设备分成一个DP组，并为该组分配非常小的微批次（大小=1），确保不同设备组的执行延迟相似。(2) 与Dapple相比，HybridOP将吞吐量提高了2.2倍，最大吞吐量提升了42.2%。Dapple的吞吐量和$Comu_{ti}$最低，因为它无法根据异构资源调整计算和内存工作量。(3) Asteroid专为使用异构边缘设备微调模型而设计，是最先进的基线。在跨不同任务微调LLaMA-3.2-3B和LLaMA-3.1-8B时，HybridOP将吞吐量提高了0.8倍。与Asteroid相比，HybridOP将计算利用率提高了8.87%-27.7%。这些实验结果证实，HybridOP可以更充分利用异构资源，并确保流水线可以注入更大的批次以提高吞吐量。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure8.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure9.png"></p>
+<h3 id="53-convergence-performance">5.3 Convergence Performance</h3>
+<p>在本节中，作者进行了大量实验，证明HybridOP在保持可比较的收敛性能的同时，显著减少了各种模型和微调任务的收敛时间，如图7、图10和图11所示。图7描绘了在不同实验设置下使用各种并行方法进行微调的损失曲线。图10和图11显示了HybridOP和所有基线的最终收敛性能和收敛时间，说明HybridOP比所有基线实现了更快的收敛。</p>
+<p>在三个NLP微调任务中，使用HybridOP微调的LLaMA-3.2-3B模型的收敛性能下降分别控制在1.61%、1.97%和1.89%以内，而收敛时间减少了165.5%。对于LLaMA-3.1-8B模型，HybridOP实现了高达146.9%的收敛加速，所有任务的性能仅牺牲了约2.37%。这些结果表明，HybridOP在各种微调任务和模型中有效地加速了收敛，同时保持了可比较的性能。收敛时间的显著减少进一步凸显了HybridOP在设备上LLMs微调场景中的实际优势。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure7.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure10.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure11.png"></p>
+<h3 id="54-impact-of-model-scale">5.4 Impact of Model Scale</h3>
+<p>HybridOP和所有基线在不同模型规模下表现出不同的性能。随着模型规模从3B增加到8B，AccPar、PipeDream-flush、Asteroid和HybridOP的平均收敛时间分别增加了89.7%、87.2%、57.8%和46.7%。HybridOP较小的增幅主要归因于新设计的LLM分区规划器和提前退出微调模块，这些模块最小化了执行延迟并提高了微调LLaMA-3.1-8B模型的吞吐量。随着模型规模的扩大，HybridOP为异构e-NPUs和e-GPUs分区层，以最小化执行延迟。与最先进的基线Asteroid相比，HybridOP仍然实现了0.8倍的吞吐量提升。这证明了HybridOP在最大化吞吐量和充分发挥计算潜力方面的有效性，即使在更大的模型规模下也是如此。</p>
+<h3 id="55-perturbations-analysis">5.5 Perturbations Analysis</h3>
+<p>在本节中，作者研究了不同扰动数量对收敛性能和流水线效率的影响，如图12所示。随着扰动数量的增加，收敛损失减少，作者观察到将扰动数量设置为12时，收敛时间最短。这是因为增加扰动数量延长了每次迭代的时间，降低了整体吞吐量，从而延长了总收敛时间。此外，作者观察到，尽管扰动计数增加，HybridOP的计算利用率几乎保持不变。这是因为设计的提前退出微调模块有效地确保了流水线中空闲的e-NPUs得到充分利用。作者进一步分析了该模块的有效性。</p>
+<p>新设计的提前退出微调模块可以在保持高效流水线微调的同时增加扰动数量。因此，作者进行了一系列对比实验，证明该模块在使用AGNEWS数据集微调LLaMA-3.2-3B时的有效性。如表2所示，使用该模块将计算利用率提高了5.94%，将收敛时间减少了7.2%。这是因为该模块通过生成更多扰动来填充e-NPU设备中的空闲气泡，从而提高计算利用率。这些额外的扰动减少了估计梯度的方差，从而减少了收敛时间。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure12.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/table2.png"></p>
+<h3 id="56-system-overhead">5.6 System Overhead</h3>
+<p><strong>规划器开销</strong>。为了最小化单次迭代内的执行延迟，作者为HybridOP流水线新设计了LLM分区规划器，以确定异构设备的最优层分区计划。在这里，作者评估执行LLM分区规划器的时间开销。如图13a所示，Jetson Orin NX设备需要2.04秒来确定具有28个transformer块的LLaMA-3.2-3B模型的最优分区，对于具有32个transformer块的LLaMA-3.1-8B模型需要2.61秒。与Asteroid相比，搜索最优层分区的时间减少了8倍到12倍。与微调LLMs所需的执行延迟相比，HybridOP的规划时间可以忽略不计。</p>
+<p><strong>能耗</strong>。在这里，作者测量了使用AGNEWS数据集微调LLaMA-3.2-3B和LLaMA-3.1-8B模型时的能耗。如图13b所示，实验结果表明，HybridOP系统微调这两个模型每训练样本的能耗分别为1.06 J和3.76 J，与基线相比，最大减少了49.7%。这一改进可归因于减少的收敛时间和计算空闲时间。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HybridOP/figure13.png"></p>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>为了充分发挥异构e-NPUs和e-GPUs的计算潜力，作者提出了HybridOP，一种新颖的流水线并行方案，将零阶优化和一阶优化融合到单一流水线中。HybridOP首先对不同设备放置方案的执行延迟和内存开销进行建模。然后，新设计的LLM分区规划器搜索最优层分区计划，以最小化执行延迟。为了进一步提高计算利用率并确保稳定微调，HybridOP设计了提前退出微调模块，在不延长执行延迟的情况下生成更多扰动。作者基于PyTorch和torch_npu实现了HybridOP，并在不同任务上对LLaMA-3B和LLaMA-8B进行了大量实验。数值结果表明，HybridOP显著优于现有的最先进技术。</p>
+
+    </section>
+  
+    <section data-source="posts\TINY BUT MIGHTY - A SOFTWARE-HARDWARE CO DESIGN APPROACH FOR EFFICIENT MULTIMODAL IN FERENCE ON BATTERY-POWERED SMALL DEVICES.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICLR'26</strong></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>在设备端运行大语言模型（On-device LLMs）通过将数据保留在本地，显著增强了安全性，降低了数据泄露风险，同时支持实时智能和用户隐私保护。然而，其实际部署仍受到紧凑系统严苛的功耗与计算预算限制。随着对高级模型需求的增长——尤其是在离线或弱连接场景下——亟需在资源效率与隐私之间取得平衡的解决方案。当前这些模型已被广泛部署于智能手机、桌面设备与机器人，以支持自然语言交互、实时任务执行以及更强的用户隐私保障。</p>
+<p>然而，现有方法几乎完全聚焦于<strong>软件或算法层面的优化</strong>——主要是低比特量化（low-bit quantization）——却缺乏对碎片化多样的移动 GPU 与新兴 NPU 的支持，也无法很好地跨不同硬件平台适配。大多数先前工作仅尝试解决该问题的一两个方面，尚无端到端的完整解决方案。尤其重要的是，它们常常忽略了<strong>软硬件联合设计</strong>（joint design of software and hardware）。其结果是，设备无法充分利用可用资源，且功耗问题很少被系统性地考虑。</p>
+<p>大型多模态模型（LMMs）具有天然的模块化结构，通常由视觉编码器、嵌入层、投影器（projector）和语言解码器等组件组成，每个组件具有独特的计算特性。同时，不同硬件加速器也具备各自的优势：例如，<strong>NPU 在低比特张量运算</strong>（如 INT4/INT8），而 <strong>GPU 则擅长大规模并行浮点计算</strong>。然而，目前 LMMs 通常被当作单体（monolithic）工作负载部署在单一加速器上，无视这些架构差异。这种错配导致硬件利用率低下、端到端延迟增加、推理效率低下。若无法将不同组件动态卸载到最适合的计算单元，大量宝贵的硬件资源将长期闲置。实验（见第 4 节）表明，<strong>NPU 在编码器推理任务上始终优于其他单元</strong>，这凸显了动态、模块级卸载的重要性。</p>
+<p>此外，尽管许多框架现已支持在边缘设备上部署 LLM，但它们大多源自服务器或传统 PC 架构，其中 CPU 与 GPU 拥有独立的内存空间。相比之下，现代边缘设备（包括手机）普遍采用<strong>统一内存架构</strong>（Unified Memory Architecture, UMA），CPU、GPU（或 NPU）共享同一物理 DRAM。这一根本差异使得许多传统设计在边缘设备上效率低下。在 UMA 下，NPU 与 GPU 缺乏 DMA 隔离，必须协调对共享内存的访问，这就要求全新的系统级优化和精心的重新设计以确保高效运行。</p>
+<p>现有方法主要聚焦于软件层面技术（如低比特量化和模型缩放）以减少内存占用，却常常忽视了硬件层面的关键优化，包括：对移动 GPU/NPU 低比特操作的驱动支持、高效电源管理、以及跨加速器利用率的提升。此外，将整个模型简单地部署在单一加速器上通常会导致高延迟，使得这些框架无法充分利用边缘和小型设备上有限的计算资源。</p>
+<h2 id="2-related-work">2. Related Work</h2>
+<p><strong>推理系统</strong>：在系统级优化方面，近期工作已开始利用现代 SoC 中的异构加速器。例如，<code>llm.npu</code> (Xu et al., 2025) 在提示词、张量和块级别重构 NPU 上的执行流程，将异常值和浮点（FP）操作卸载到 CPU/GPU，并通过子图重排来提高利用率——解决了移动 NPU 仅支持静态输入形状的限制。<code>PowerInfer-2</code> (Xue et al., 2024) 提出了一种 NPU-CPU 协同框架，根据神经元激活密度卸载 LLM 推理，使手机能运行超出其内存容量的模型。</p>
+<p><strong>开源框架</strong>：<code>MLC LLM</code> (team, 2023a;b) 使用 <code>TVM</code> (Chen et al., 2018) 在移动和边缘设备上原生部署 LLM。然而，TVM 沉重的资源需求使其在小型平台上的常规设备端推理中不切实际，且在功耗和内存效率方面表现不佳。<code>llama.cpp</code> (Gerganov, 2023a) 是 Georgi Gerganov 使用 C++ 开发的轻量级、可移植的 LLM 推理框架。它支持多种后端，包括 Vulkan、OpenCL 和 CUDA，但在许多移动和边缘 GPU 上效率不佳。作者的实验表明，在特定平台上，它通常默认回退到 CPU 卸载，甚至在 GPU 上运行更慢，限制了性能提升（见表 1）。许多现有推理框架（如 <code>LlamaEdge</code> (LlamaEdge, 2024) 和 <code>Ollama</code> Gross (2023)）都以 <code>llama.cpp</code> 作为后端。</p>
+<p><strong>llama.cpp 的低效性</strong>：尽管 <code>llama.cpp</code> 引入了层卸载机制，但其工作负载分布在小型设备上（尤其是在现代统一内存平台上）效率低下。虽然它允许在 CPU 和 GPU 之间分配计算，但 GPU 执行仍依赖 CPU 通过缓冲区控制数据传输，从而在推理过程中增加了内存开销。附录中的图 9 展示了这种卸载工作流。当 GPU 可用时，张量可被赋予 <code>GGML_BACKEND_GPU</code> 标志，使 <code>ggml_compute_forward()</code> 能将计算卸载到 GPU。此过程涉及将关键张量从 CPU 内存传输到 GPU，而 CPU 必须持续向缓冲区写入数据并维护独立的内存分配，导致额外开销。这类框架虽能实现边缘设备上的 LLM 部署，但其设计沿用了服务器端 CPU/GPU 内存分离的架构，与现代边缘设备的统一内存架构（CPUs, GPUs, and NPUs share the same DRAM）不兼容。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure9.png"></p>
+<h2 id="3-contribution">3. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure2.png"></p>
+<p>为克服上述挑战，本文提出 <strong>NANOMIND</strong>——首个完全在设备端运行的推理框架，它将大型多模态模型（LMMs）拆分为可独立执行的模块化“砖块”（vision, language, audio, etc.），并动态地将每个模块分配到其最优计算单元（GPU、NPU 或 CPU）。该框架基于紧密集成的<strong>软硬件协同设计</strong>（hardware–software co-design），作者通过开发一个小型电池供电设备（如图 10 所示）来验证 NANOMIND。借助该定制硬件，作者的系统性能超越了在现有商用现成平台上运行的主流框架。</p>
+<p>作者还设计了一种<strong>事件驱动的按需级联推理管道</strong>（event-driven On-Demand Cascade Inference Pipeline）。该管道仅保留并传递到下一阶段所需的最小输出（如文本字符串或嵌入向量），从而形成一种轻量级的“多米诺骨牌式”执行链。</p>
+<p>如图 3 和图 2 所示，作者的框架能在资源受限的硬件上高效执行视觉和语音推理。为实现这一目标，作者设计了定制硬件，实施了系统级优化，并为低端 SoC 的内置 GPU 和 NPU 开发了驱动程序和计算内核。作者的主要贡献总结如下：</p>
+<ul>
+<li>
+<p><strong>面向模块化 VLM 的跨加速器调度</strong>（Cross-accelerator scheduling for modular VLMs）：作者将模型分解为视觉、融合和解码模块，并在统一内存架构（UMA）下将每个模块调度到最适合的加速器上，从而提高硬件利用率并降低端到端延迟。</p>
+</li>
+<li>
+<p><strong>定制化的软硬件协同设计</strong>（Custom Hardware–Software Co-Design）：在硬件方面，作者采用商用 RK3566 SoC（集成 GPU 和 NPU），通过四个并行 LPDDR4x 模块最大化内存带宽，并增加了专用电源管理单元（PMU）用于实时能耗监控。在软件方面，作者实现了针对硬件定制的 2-bit、4-bit 和 8-bit GEMM 内核，以及一个卸载调度器和驱动程序，以加速 GPU 和 NPU 上的量化张量运算。</p>
+</li>
+<li>
+<p><strong>动态工作负载卸载</strong>（Dynamic workload Offloading）：一个轻量级的环形缓冲区（ring buffer）和缓冲区管理器实现了共享内存中的<strong>零拷贝</strong>（zero-copy）令牌交换。作者的层感知卸载器（layer-aware offloader）会根据电池电量、内存使用情况和延迟需求做出逐层决策，并绕过 CPU 进行缓冲区写入。</p>
+</li>
+<li>
+<p><strong>电池感知的执行模式</strong>（Battery-aware execution modes）：轻量级策略能根据功耗约束自适应地调整模块部署位置和内存时钟，以延长运行时间，同时保持响应能力。</p>
+</li>
+</ul>
+<p>通过这些措施，一个微型设备能够在严格的硬件资源限制下，高效运行 LLMs 和 LMMs（如 LLaVA (Liu et al., 2023b;a)、Qwen-VL 系列 (Bai et al., 2023; Wang et al., 2024b)），并根据功耗和内存使用情况，直接将工作负载卸载到设备上的 GPU 或 NPU，从而绕过 CPU 的处理时间。这种方法显著提升了推理性能并大幅降低了功耗。作者的工作为在资源受限环境中部署 LLM 奠定了基础，推动了响应迅速、能效高且智能系统的开发，并为在小型设备上实现 LMM 的普及化开辟了道路，改变了作者在日常场景中与 AI 的交互方式。</p>
+<h2 id="3-method">3. Method</h2>
+<h3 id="31-model">3.1 MODEL</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure3.png"></p>
+<p>作者从<strong>模型分解</strong>（model decomposition）开始。由于 LMMs 具有天然的模块化特性，作者将各组件配置为可在不同加速器上独立运行（如图 1 和图 3 所示）。作者对多个模型进行了分解和转换，以实现高效的设备端推理：</p>
+<ul>
+<li><strong>语音转文本</strong>（Speech-to-text）：由独立的 <code>Whisper-base</code> 模型（Radford et al., 2023）处理，该模型通过 <code>Whisper.cpp</code>（Gerganov, 2023b）实现。</li>
+<li><strong>文本转语音</strong>（Text-to-speech）：由 <code>Piper</code>（Rhasspy, 2025）提供，这是一个运行在 CPU 上的轻量级 C++ 程序，独立于 VLM。</li>
+<li><strong>视觉模块</strong>：作者从 VLMs（如 <code>LLaVA-OneVision-Qwen2-0.5B</code> (Liu et al., 2024a) 和 <code>Qwen2-VL</code> (Bai et al., 2023; Wang et al., 2024b)）中提取视觉编码器。这些模型均采用 <code>SigLip</code>（Zhai et al., 2023）作为其视觉编码器。</li>
+<li><strong>模型转换</strong>：<code>SigLip</code> 编码器可使用 Rockchip 官方工具包（Linux, 2025）转换为 <code>RKNN</code> 格式，从而在 NPU 上高效部署。根据 <code>LLaVA-OneVision</code> 架构，作者从 Hugging Face（Li et al., 2024; HF, 2025）获取了 safetensors 格式的原始权重，并提取了视觉编码器及其投影器、多模态嵌入层和 <code>Qwen-2.0-0.5B</code> 基础模型。</li>
+</ul>
+<h3 id="32-softwarehardware-coordination">3.2 SOFTWARE–HARDWARE COORDINATION</h3>
+<p>在此，作者详细描述使 LMM 模块化组件得以适配的系统级优化，重点介绍在 NPU 和 GPU 加速器上的推理后端、混合量化、用于零拷贝数据传输的令牌感知缓冲区管理，以及能效策略。尽管该部署策略是为作者的定制 SoC 设计的，但该框架具有灵活性，可应用于其他移动 SoC，并采用不同的卸载策略。</p>
+<h4 id="npu">NPU</h4>
+<p>大多数移动 NPU 仅支持静态计算图，这意味着任何输入形状的改变都需要重新编译固件——这对于资源受限的设备是不切实际的。为解决此限制（如 <code>llm.npu</code> (Xu et al., 2025) 所强调的），作者将<strong>视觉编码器卸载到 NPU</strong>，并对所有图像进行预处理（压缩和调整为固定分辨率），以确保推理过程中输入形状的一致性。Rockchip 的 NPU 驱动（RKNN）（Linux, 2025）为运行 <code>CLIP</code>（Radford et al., 2021）、<code>SigLip</code>（Zhai et al., 2023）和 <code>Whisper.cpp</code> 等模型提供了原生支持，其速度优于开源实现。</p>
+<p>作者将 <code>SigLip</code> 部署在 SoC 的 NPU 而非 GPU 上，主要出于性能考虑：官方 RKNN 驱动提供了更高效的执行环境，使得视觉编码器在 NPU 上的速度大幅提升。相比之下，将 LLM 映射到 NPU 并不实际，因其静态形状限制——提示词长度是动态变化的，任何输入形状的改变都需要重新编译模型。虽然可以通过将输入填充到固定的最长上下文长度来规避此问题，但这会导致严重的效率低下，浪费大量计算周期和内存带宽。除了官方 SDK，社区资源（如技术博客和论坛）在 RKNN 转换和算子映射优化方面也起到了关键作用，帮助作者最大化 NPU 效率。</p>
+<h4 id="gpu">GPU</h4>
+<p>作者的推理框架基于 <code>llama.cpp</code>，保留了 <code>ggml</code>（GGUF）模型格式，同时通过<strong>定制后端</strong>对其进行扩展，以支持异构边缘加速器。使用 GGUF 作为统一格式，使 NANOMIND 能够利用广泛的开源量化模型。</p>
+<p>为了进一步提高在资源受限设备上的效率，作者集成了基于 <strong>OpenCL 的 GPU 内核</strong>，并对其进行了增强，支持<strong>线性注意力</strong>（linear attention）和<strong>融合反量化-GEMM</strong>（fused dequant-GEMM）操作，适用于 W4A16 量化（4-bit 权重，FP16 激活）。</p>
+<ul>
+<li><strong>线性注意力</strong>：为高效处理序列，作者将标准的二次方注意力（quadratic attention）替换为线性注意力。这种内核化、流式变体维护了过去键和值的运行摘要，随着新令牌的到来进行更新，并通过单次矩阵-向量乘法计算输出，从而避免了代价高昂的 $T \times T$ 评分矩阵（$T$ 为序列长度）。</li>
+<li><strong>融合反量化-GEMM 内核</strong>：作者实现了一个融合的 <code>dequant-GEMM</code> OpenCL 内核，该内核在 GEMM 循环内<strong>在寄存器中直接解包并重缩放 int4 权重</strong>，随后立即进行 FP16 FMA（乘加）运算。这种融合消除了中间缓冲区和内存传递，将每个字节都转化为有用的 MAC（乘加运算），这对缺乏 INT8 张量核心的移动 GPU 至关重要。</li>
+<li><strong>内核优化细节</strong>：该内核使用分块向量加载（tiled vector loads），将缩放表（scale tables）存储在常量内存或 LDS（Local Data Share）中，并配备一个可融合偏置和激活函数的尾声（epilogue），同时使用 FP16/FP32 累加器以保证数值稳定性。这些优化共同减少了内存流量和延迟，同时保持了模型精度。</li>
+</ul>
+<h4 id="model-compression">Model compression</h4>
+<p>模型压缩对于设备端 LLM 推理至关重要，因其受到硬件约束。NANOMIND 支持 GPU 和 NPU 的多种比特量化方案，包括 4-bit（GPTQ 4-bit (Frantar et al., 2022)）、1-bit（BitNet (Ma et al., 2024; Wang et al., 2024a)）以及 ggml（GGUF）的 2-bit/3-bit/4-bit (Gerganov, 2023a)。</p>
+<p>通过将 LMMs 分解为模块化组件，作者可以应用<strong>混合量化</strong>（hybrid quantization）——对视觉编码器（ViT）和基础模型（LLM）使用不同的量化策略。在作者的设置中：</p>
+<ul>
+<li><strong>SigLip 视觉编码器</strong>被部署在 NPU 上，采用 RKNN 格式，精度为 FP16 或 8-bit。</li>
+<li><strong>GGUF 量化后的 LLMs</strong>在 GPU 上运行，采用 4-bit（W4A16）或更低比特（2/3-bit）量化。</li>
+</ul>
+<p>这种策略背后的原因是：<strong>视觉编码器的高精度能显著提升图像理解能力</strong>，而<strong>4-bit 的 LLM 对于可穿戴设备和边缘设备已足够</strong>，因为这些场景下的复杂推理任务相对较少。近期研究（Li et al., 2025）也证实，<strong>4-bit 量化在内存效率和精度之间提供了最佳平衡</strong>。</p>
+<p>由于移动 GPU 通常缺乏快速的 INT8 张量核心，作者采用<strong>仅权重量化</strong>（weight-only quantization，即 INT8/INT4 权重 + FP16 激活），并配合融合的 <code>dequant-GEMM</code> OpenCL 内核——在寄存器中解包和重缩放，然后相乘。应避免单独的反量化步骤，以减少内存流量并保持计算流水线的饱和。</p>
+<h4 id="token-aware-buffer-management">Token-Aware Buffer Management</h4>
+<p>为实现跨加速器的高效令牌流（token flow），NANOMIND 引入了 **Token-Aware Buffer Manager **(TABM)。这是一个轻量级的 CPU 运行时模块，也是动态工作负载卸载的核心（见图 3）。</p>
+<p>TABM 在统一 DRAM 中管理一个<strong>共享环形缓冲池</strong>（shared ring buffer pool），并直接在 NPU（生产者）和 GPU（消费者）之间流式传输令牌，实现了<strong>真正的零拷贝传输</strong>（true zero-copy transfer）。该设计消除了冗余的内存移动，减少了 CPU 开销，降低了延迟，并维持了高吞吐量的令牌管道。</p>
+<p>TABM 通过一个简单的状态机跟踪缓冲区状态（FREE, ALLOCATED_FOR_WRITE, READY_TO_READ, ALLOCATED_FOR_READ），并使用轻量级同步机制。这不仅平滑了生产者与消费者之间的速率不匹配问题，还为更高级别的控制提供了调度信号。</p>
+<h4 id="power-efficiency-strategy">Power-efficiency Strategy</h4>
+<p>NANOMIND 采用一种由板载电源管理单元（PMU）实时数据驱动的<strong>动态三态电源管理策略</strong>。通过监控设备的电池电量（B），该策略智能地在性能与续航之间进行权衡：</p>
+<ul>
+<li><strong>(i) 无约束性能状态</strong>（Unconstrained Performance State, B &gt; Thigh）：系统以全容量运行，积极地将工作负载并行卸载到加速器。</li>
+<li><strong>(ii) 比例节流状态</strong>（Proportional Throttling State, Tlow &lt; B ≤ Thigh）：系统进入优雅降级状态，使用缩放因子 $\alpha = (B - T_{low}) / (T_{high} - T_{low})$ 对摄像头帧率和内存读写速率进行线性插值。</li>
+<li><strong>(iii) 关键节能状态</strong>（Critical Conservation State, B ≤ Tlow）：为确保关键功能，系统激活 <strong>On-Demand Cascade Inference</strong> 模式，暂停并行执行，转而采用功耗优化的串行工作流。</li>
+</ul>
+<h4 id="low-power-on-demand-cascade-inference">Low-Power On-Demand Cascade Inference</h4>
+<p>在电池电量极低的情况下，系统会切换到一种名为 “<strong>On-Demand Cascade Inference</strong>” 的事件触发模式，旨在最小化峰值内存使用和功耗。在此“一次性推理”模式下，系统保持在超低功耗待机状态，仅有一个 CPU 核心等待摄像头或麦克风事件。</p>
+<p>例如，摄像头仅捕获单帧（禁用时间池化），所有加速器每次触发只运行一次。当被唤醒词等事件触发时，系统运行一个<strong>顺序推理管道</strong>。每个模块（Whisper, ViT, 或 LLM）遵循 “<strong>load → execute → release</strong>” 生命周期：加载后执行任务，然后立即释放，仅将最小输出（如文本或嵌入）传递给下一阶段。这形成了一个轻量级的多米诺骨牌式级联，显著减少了内存和功耗，避免了高内存占用和 CPU 空等。</p>
+<h4 id="embeddings-zero-copy-transfer-in-unified-memory">Embeddings Zero-Copy Transfer in Unified Memory</h4>
+<p>为支持高效的令牌流和跨加速器的零拷贝传输，NANOMIND 再次强调了 **Token-Aware Buffer Manager **(TABM) 的核心作用。TABM 在统一 DRAM 中管理一个共享环形缓冲池，协调 NPU（生产者）和 GPU（消费者）之间的令牌传输，无需冗余内存移动或阻塞。</p>
+<p>NPU 编码器将嵌入（embeddings）直接写入缓冲区槽位，GPU 可立即将其绑定为 LLM 输入，从而避免了拷贝。此设计降低了 CPU 负载，减少了延迟，平滑了生产者-消费者速率差异，并维持了高吞吐量的令牌管道。</p>
+<h3 id="33-hardware-design">3.3 HARDWARE DESIGN</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure10.png"></p>
+<p>为实现模块化模型组件的卸载，并在系统层面更好地协调各加速器，作者设计了专用硬件。PCB 设计借鉴并修改了多个开源参考设计，以确保与主流 I/O 接口的兼容性。如图 4 所示，该设计针对高效的设备端 LLM 推理进行了优化。构建的硬件演示见图 10。</p>
+<ul>
+<li><strong>RK3566 SoC</strong>：作者采用 Rockchip 的 RK3566，这是一款高性价比、低功耗的 SoC。它包含四核 Arm Cortex-A55（最高 1.6GHz）、集成 NPU、Mali G52-2EE GPU 和外部 DDR 支持。其单价低于 12 美元，为构建能进行本地 LLM 推理的紧凑型设备提供了所有核心功能。</li>
+<li><strong>并行 LPDDR4x 内存</strong>：为解决小型设备的内存带宽瓶颈（对内存受限的 LLM 工作负载尤为重要），作者集成了<strong>四个并行的 LPDDR4x 内存通道</strong>，显著提升了有效内存吞吐量。CPU 负责跨加速器的统一内存管理，对资源回收拥有完全控制权，特别是管理 GPU 和 NPU 工作负载的内存清理和缓冲区复用，确保共享内存空间的高效利用。</li>
+<li><strong>接口</strong>（Interfaces）：为最小化功耗并简化系统，作者移除了 HDMI、Wi-Fi/Bluetooth 等非必要组件。作者使用 USB-OTG 支持一个音频集线器，用于扬声器和麦克风输入，实现语音交互。MIPI CSI 接口支持从低功耗摄像头捕获图像。可用接口见附录中的图 10。</li>
+<li><strong>电源管理单元</strong>（PMU）：与传统移动和边缘平台不同，作者的系统包含一个专用的 PMU，用于实时能耗监控和控制，支持作者的能效策略。</li>
+</ul>
+<h2 id="4-evaluation">4. Evaluation</h2>
+<h3 id="41-resource-usage">4.1 RESOURCE USAGE</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure6.png"></p>
+<p>本节从三个维度对 NANOMIND 进行实验评估：(1) 不同平台的资源使用情况分析，(2) 不同卸载策略下的模型精度，(3) 不同运行条件下的能效测量。</p>
+<p>作者在包括 InfoVQA、DoCVQA、MMBench 和 MME 在内的数据集上评估了 VLM 推理的资源效率，重点关注响应延迟、硬件利用率（CPU、GPU、内存）和能效。</p>
+<ul>
+<li><strong>内存使用</strong>（图 5）：在 LLaVA-OneVision-0.5B、Qwen2-VL-2B 和 SmolVLM-500M 三个模型上，<code>llama.cpp</code> 在所有平台（NANOMIND、Orange Pi 5 Ultra、Jetson Nano/AGX）上始终消耗更多内存。NANOMIND 的内存使用更低，这归功于 TABM 的环形缓冲区对共享内存的优化。</li>
+<li><strong>吞吐量与延迟</strong>（图 6）：在运行 4-bit 量化的 Qwen2-VL-2B-Instruct 时，尽管 NANOMIND 的硬件（RK3566）性能低于 Orange Pi 5 Ultra (RK3588) 和 Jetson Nano，但其吞吐量（约 35.7 tokens/s）与使用 CUDA 的 Jetson Nano 上运行 <code>NanoVLM</code> 框架相当，并且相比使用官方 <code>rkllm</code> 的 Orange Pi 5 Ultra，<strong>端到端延迟降低了 36.2%</strong>。值得注意的是，在 NANOMIND 硬件上运行 <code>llama.cpp</code> 因超出运行时间限制而未获得结果。</li>
+</ul>
+<h3 id="42-different-combinations-of-hybrid-quantization">4.2 DIFFERENT COMBINATIONS OF HYBRID QUANTIZATION</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure7.png"></p>
+<p>图 7 展示了不同量化策略和模块解耦配置的对比。图例标签格式为 <code>模块–量化</code>，其中：</p>
+<ul>
+<li><code>em-</code> 表示嵌入层，</li>
+<li><code>vis-</code> 表示视觉编码器（ViT），</li>
+<li><code>dec-</code> 表示语言解码器（Qwen2-0.5B）。</li>
+<li><code>fp16</code> 代表 16 位浮点精度，</li>
+<li><code>q4f16</code> 表示 4-bit 权重量化 + fp16 激活。</li>
+</ul>
+<p>作者在 MMBench、MMLU、MME 和 InfoVQA 等多个基准上评估了这些配置。结果明确显示：<strong>当 VLM 被分解并在不同加速器上独立执行时，视觉相关任务的精度主要由 ViT 的精度决定</strong>。这凸显了在硬件资源受限的情况下，为视觉编码器分配更高比特宽度或计算资源对于优化多模态性能的重要性。</p>
+<h3 id="43-power-consumption-and-hours-to-use">4.3 POWER CONSUMPTION AND HOURS TO USE</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/NANOMIND/figure8.png"></p>
+<p>图 8 报告了 NANOMIND 在标准 2000 mAh 商用电池包供电下的功耗和预估运行时间。得益于软硬件协同设计，NANOMIND 通过减少资源使用而降低了功耗。</p>
+<ul>
+<li><strong>在低功耗模式下</strong>，按需一次性级联推理的平均功耗仅为 <strong>0.375 W</strong>，可提供<strong>长达 20.8 小时</strong>的事件触发式推理，超越了现有的边缘设备。</li>
+<li><strong>在全性能模式下</strong>，系统也能支持 <strong>LlaVA-OneVision 与摄像头连续工作近半天</strong>（约12小时）。</li>
+</ul>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>在本文中，作者提出了 <strong>NANOMIND</strong>——一个用于高效设备端大型多模态模型推理的软硬件协同设计框架。通过将模型分解为模块化组件，并在异构加速器之间动态卸载任务，作者的评估表明，该框架在边缘设备上的性能匹配甚至超越了现有框架，并且在低功耗模式下可实现<strong>超过 20 小时的电池供电多模态推理</strong>。这项工作为在日常设备上实现<strong>私密、响应迅速且高能效的多模态 AI</strong> 提供了一条切实可行的路径。</p>
+
+    </section>
+  
+    <section data-source="posts\Efficiently Serving Large Multimodal Models Using EPD Disaggregation - ICML&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICML'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/vbdi/epdserve">https://github.com/vbdi/epdserve</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>Large Multimodal Models (LMMs) 将视觉/音频/视频等感知模态引入到 LLM 的推理流程中，从而带来更强的能力，但随之而来的是<strong>额外的编码（encoding）阶段</strong>，该阶段会产生大量视觉（或音频）token，显著增加计算与内存消耗，并对关键的 SLO（如 TTFT、TPOT）造成负面影响。当前主流的 LLM-serving 系统（如 vLLM、DistServe 等）要么将编码与 prefill 聚合在同一资源上导致干扰与内存竞争，要么只对 LLM 的 prefill/decode 做优化，无法从根本上缓解 LMM 的编码瓶颈。因此论文提出通过**将 Encoding / Prefill / Decode 三阶段进行严格分离（EPD Disaggregation）**来重新设计服务架构，以解耦资源、并提供针对每阶段的定制优化，从而减少延迟、提升 SLO 达成率并大幅节省内存。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure1.png"></p>
+<hr>
+<h2 id="2-related-work">2. Related Work</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure2.png"></p>
+<ul>
+<li>现有 LLM 服务（vLLM、SARATHI、Orca 等）与 Disaggregated-serving（SplitWise、DistServe、DéjàVu 等）对 LLM 的 prefill/decode 分离带来了可观改进，但这些工作<strong>通常忽略或未充分优化编码（encoding）阶段</strong>，因此不适用于 LMM 的编码密集型工作负载。相较之下，本文填补该空白，提出将编码也作为独立可调度阶段，从而开启新的并行化、缓存与资源分配策略。</li>
+</ul>
+<hr>
+<h2 id="3-method">3. Method</h2>
+<h3 id="31-epd-disaggregation">3.1. EPD Disaggregation</h3>
+<p>EPD 把推理流程明确划分为三个独立阶段：<strong>Encoding (E)</strong>、<strong>Prefill (P)</strong>、<strong>Decode (D)</strong>，并定义两类跨阶段迁移（migration）函数：</p>
+<ul>
+<li><strong>EP-migration</strong>：编码阶段生成的 multimodal tokens $v^e_t$ 被传递到 prefill：
+$$v^p_t = \psi_{EP}(v^e_t)$$</li>
+<li><strong>PD-migration</strong>：prefill 生成的初始 KV cache 与首个 token 经迁移至 decode：
+$$(kv^d_1, o^d_1) = \psi_{PD}(kv^p_1, o^p_1)$$</li>
+</ul>
+<p>阶段内部流程：</p>
+<ul>
+<li><strong>Encoding (E)</strong>：把原始多模态输入 $i_m$（图像/音频/视频帧集合）通过 multimodal encoder $E$ 编码为视觉/模态 token 序列 $v^e_t = E(i_m)$。编码器通常为 ViT / CNN-backbone / audio-encoder 等组成的 MME（Multimodal Encoder）。</li>
+<li><strong>Prefill (P)</strong>：接受 $v^p_t$ 与文本 prompt $i_p$，生成 LLM 所需的初始 KV cache（prefill 阶段的 key/value）并产生第一个输出 token：$(kv^p_1, o^p_1) = P(v^p_t, i_p)$。</li>
+<li><strong>Decode (D)</strong>：标准自回归解码，用接收到的 KV cache 继续生成后续 token，更新 KV cache：
+$$(kv^d_{t+1}, o^d_{t+1}) = D(kv^d_t, o^d_t)$$</li>
+</ul>
+<p><strong>设计要点</strong>：解耦使每个阶段能独立做 batching、调度与 parallelism 策略（例如 E 可做 IRP，P/D 可做 TP/PP）。同时需要高效的跨阶段 token 迁移机制，以避免额外传输延迟吞噬分离带来的收益。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure3.png"></p>
+<hr>
+<h3 id="32-system-design-and-optimization">3.2. System Design and Optimization</h3>
+<p>总体架构（见 Figure 4）：每个 stage 运行若干 <strong>instance</strong>（数据并行 DP），每个 instance 含 scheduler、block manager（缓存管理）、多个 worker（可内部做 TP/PP）。E workers 只加载 encoder 权重并维护 MM-cache；P workers 加载 LLM 权重并维护 MM + KV 缓存；D workers 仅加载 LLM 权重并维护 KV 缓存。实例之间以队列和异步传输进行耦合。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure4.png"></p>
+<h4 id="321-asynchronous-token-transfer异步-token-迁移">3.2.1. Asynchronous Token Transfer（异步 token 迁移）</h4>
+<ul>
+<li>
+<p><strong>问题</strong>：E → P 迁移新增了视觉 token 的传输步骤，如果同步阻塞会导致编码端无法接新请求，丧失并行优势。</p>
+</li>
+<li>
+<p><strong>方案要点</strong>：</p>
+<ul>
+<li>
+<p>使用<strong>高带宽直连通道</strong>（NVLink / InfiniBand / NCCL）进行直接异步传输，减少拷贝步骤。</p>
+</li>
+<li>
+<p><strong>MM cache</strong>：E 与 P 各自维护 MM cache（按请求粒度 pre-allocate block），编码完成后把 token 写入 E 的 MM cache，并由异步事件循环监测完成任务并触发迁移。</p>
+</li>
+<li>
+<p><strong>MMBlockManager</strong>：预分配 cache block，根据每个 request 的 token 大小分配、复用/回收 block，避免频繁的内存分配导致性能波动。</p>
+</li>
+<li>
+<p>传输流程（伪代码）：</p>
+<pre tabindex="0"><code>on encoding_complete(request_id):
+    mark MMBlock(request_id) ready
+    enqueue transfer_task(request_id) to transfer_loop
+
+transfer_loop():
+    for task in pending_transfers:
+        initiate async transfer via NCCL/CudaMemcpy/IB
+        await confirmation
+        update P.MM_cache[request_id] = received_tokens
+        free E.MM_block(request_id)
+</code></pre></li>
+</ul>
+</li>
+<li>
+<p><strong>实现细节</strong>：</p>
+<ul>
+<li>在 intra-node（同机）用异步 <code>cudaMemcpyAsync</code>，跨节点用 NCCL / IB RDMA。</li>
+<li>传输确认可通过短控制消息（tiny RPC）或直接核对目标缓存写入完成标志位。</li>
+<li>为避免 head-of-line blocking，对 transfer_queue 需按 SLO 优先级（或短作业优先）调度。</li>
+</ul>
+</li>
+</ul>
+<h4 id="322-intra-request-parallelism-irp">3.2.2. Intra-Request Parallelism (IRP)</h4>
+<ul>
+<li>
+<p><strong>动机</strong>：单个请求常包含多张高分辨率图片或视频若干帧，MME 对每张图片会产生大量 patch-level tokens，使单请求编码成为瓶颈。</p>
+</li>
+<li>
+<p><strong>核心思想</strong>：把同一请求内部的 patch 划分为多个独立子任务，分配给多台编码 worker 并行处理（数据并行），各 worker 负责一部分 patch 的 embedding 计算，计算完后<strong>异步</strong>地将 patch-level token 传输到 P 端，P 端负责对齐（alignment）、线性投影（projection）与合并（merge）成最终的 multimodal tokens。</p>
+</li>
+<li>
+<p><strong>细节与保证一致性</strong>：</p>
+<ul>
+<li><strong>分割策略</strong>：按图像 patch 的空间切分（均匀划分）或按帧划分（视频），并记录 patch 元信息（position / order）。</li>
+<li><strong>对齐与合并</strong>：P 端在收到某请求的全部 patch-token 之后进行排序与合并。若缺少某些子块（如传输慢），可设置超时策略或先进行部分 prefill（trade-off）。</li>
+<li><strong>通信优化</strong>：由于 IRP 的 patch-level计算之间无需频繁通信（独立），在编码节点上可以避免 TP 带来的通信开销，故论文建议采用 IRP 而非传统的 TP 来并行化 E 阶段。</li>
+</ul>
+</li>
+<li>
+<p><strong>工程实现建议</strong>：</p>
+<ul>
+<li>为每个编码子任务维护小的 request-id 与 patch-index metadata，确保 P 端能通过 metadata 重构顺序。</li>
+<li>对高优先级 SLO 请求可采用更细粒度的分裂以减小 TTFT。</li>
+</ul>
+</li>
+</ul>
+<h4 id="323-optimized-resource-allocation">3.2.3. Optimized Resource Allocation</h4>
+<ul>
+<li>
+<p><strong>问题</strong>：系统有大量可调参数（每个 instance 的并行化 p、batch 大小 b、调度策略 s、实例数量等），需要在吞吐、延迟和 GPU 成本间权衡。</p>
+</li>
+<li>
+<p><strong>形式化</strong>：设性能函数 $f(p,b,s)$（好比 goodput），目标：
+</p>
+$$
+  \max_{(p,b,s)\in X} f(p,b,s) - \beta \cdot cost(p)
+  $$<p>
+其中 $cost(p)$ 与使用 GPU 数量成正比，$\beta$ 控制成本惩罚权重。论文使用基于模拟器（扩展自 DistServe）的黑箱优化器（采用贝叶斯优化）来搜索配置空间。公式与约束写法保持论文原式。</p>
+</li>
+<li>
+<p><strong>搜索空间细化</strong>：</p>
+<ul>
+<li>每个 instance 的并行化向量 $p_i$：对于 P/D 包括 $p^{TP}_i$（tensor-parallel）与 $p^{PP}_i$（pipeline-parallel）；对于 E 使用 $p^{IRP}_i$（IRP 的 worker 数）替代 TP 的概念。</li>
+<li>Batch size 向量 $b$：每实例最大 batch（影响 latency vs throughput trade-off）。</li>
+<li>Scheduling 策略 s：Round-Robin / Least-Loaded / SLO-aware priority / Shortest-job-first 等。</li>
+</ul>
+</li>
+<li>
+<p><strong>实现策略</strong>：</p>
+<ul>
+<li>先用快速模拟器评估大量配置，再对若干候选在真实集群上微调验证。</li>
+<li>对 metric 采用多目标处理：基于目标的层次化目标（首先保证 SLO 达成，然后最大化 goodput）。</li>
+<li>为避免搜索收敛到局部最优，论文在初始阶段使用随机样本+贝叶斯优化混合策略。</li>
+</ul>
+</li>
+</ul>
+<h4 id="324-dynamic-role-switching">3.2.4. Dynamic Role Switching</h4>
+<ul>
+<li>
+<p><strong>动机</strong>：线上负载会动态变化，静态离线优化配置在工作负载突变时会失效。重启或重新初始化实例代价高且会影响已在处理的请求（需保留缓存）。</p>
+</li>
+<li>
+<p><strong>机制</strong>：</p>
+<ul>
+<li>监控所有 stage 的队列统计（队列长度、等待时间、SLO 违约率），当检测到某阶段负载高时，系统将把一台或多台 instance 从源阶段 S 迁移到目标阶段 T。</li>
+<li>迁移流程分三步：Offload（停止接新请求并把队列内任务迁移给同阶段其他实例）、Migration（更换模型与缓存类型，例如从 LLM→MME，KV cache↔MM cache）、Onload（恢复接新请求）。</li>
+<li>迁移时间：论文测得通常小于 0.7s；E 相关迁移更耗时（需加载 MME 权重与切换 cache），P↔D 切换较快（可复用 LLM 权重与 KV cache）。</li>
+</ul>
+</li>
+<li>
+<p><strong>实验中的角色切换示例</strong>：在一个实验中，系统会从初始 5E1P2D 配置动态转为 2E1P5D，以应对解码负载从 50 tokens → 500 tokens 的突发增长，显著降低 TPOT 与总体延迟。</p>
+</li>
+</ul>
+<hr>
+<h2 id="4-experiments">4. Experiments</h2>
+<h3 id="实验平台与超参数">实验平台与超参数</h3>
+<ul>
+<li><strong>硬件</strong>：8 × NVIDIA A100（82GB），每台服务器 128 CPU cores，1TB RAM，CUDA 12.2。NPU 实验使用 Huawei Ascend（论文 Appendix F）。</li>
+<li><strong>数值精度</strong>：FP16；attention 使用 FlashAttention-2。</li>
+<li><strong>统一推理引擎设置</strong>：block size=16；最大 2048 blocks/request；context tokens 上限 49152；decoding tokens 上限 81920/batch；调度策略 FCFS；KV cache GPU 利用率设置为 50%；每 prompt 最大 multimodal 数据 32；MM cache size 固定为 3000；vLLM 版本 0.6.1.post1（作为 baseline 的实现基础）。在线实验使用 Poisson 到达过程（每 trial 至少完成 100 requests）。</li>
+</ul>
+<hr>
+<h3 id="baselines-与模型">Baselines 与模型</h3>
+<ul>
+<li>
+<p><strong>Baselines</strong>：</p>
+<ul>
+<li><strong>vLLM</strong>：聚合式（monolithic）服务，E/P/D 全放同一组 GPU。</li>
+<li><strong>DistServe</strong>：PD disaggregation（prefill-decode 分离），但 E 与 P 聚合在同一组 GPU（论文对其做了扩展以支持 multimodal）。</li>
+</ul>
+</li>
+<li>
+<p><strong>Models</strong>：</p>
+<ul>
+<li><strong>MiniCPM-V 2.6</strong>（8B total，SigLip-400M encoder + Qwen2-7B LM）。</li>
+<li><strong>InternVL2-8B</strong>（InternViT-300M-448px + internlm2 7.7B）。</li>
+<li><strong>InternVL2-26B</strong>（InternViT-6B-448px + internlm2-chat-20B）。
+详细模型说明见 Appendix E.2。</li>
+</ul>
+</li>
+<li>
+<p><strong>Datasets</strong>：</p>
+<ul>
+<li><strong>Synthetic workload</strong>（可配置 prompt 长度 / images per request / resolution / output length / sampling 等）；</li>
+<li><strong>NextQA</strong>（视频 QA，真实分布，sampled frames=8）；</li>
+<li><strong>Video-MME</strong>（Video 多模态 benchmark，multiple-choice QA，支持变量帧数，按 MiniCPM 推荐 frame 设置实验）。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="41-slo-attainment-for-end-to-end-generation">4.1. SLO Attainment for End-to-End Generation</h3>
+<ul>
+<li>
+<p><strong>实验设计</strong>：</p>
+<ul>
+<li>在线 setting，100 requests 按 Poisson(λ) 到达；输出长度固定为 10 tokens；测试 2 / 4 images per request（res=4032×3024）。</li>
+<li>SLO 条件（不同模型/ #I/R）详见 Appendix E.3（例如 MiniCPM-V TTFT=1.40（#I/R=2）等）。</li>
+</ul>
+</li>
+<li>
+<p><strong>关键结论</strong>：</p>
+<ul>
+<li>EPD 在较低请求率下就能达到 ≥90% SLO attainment（goodput 明显优于 baselines），因为 EPD 能把编码并行化到多 GPU（IRP），减少编码对 prefill 的 head-of-line blocking，进而减少 TTFT 与 TPOT 的违约；DistServe 与 vLLM 因资源争用和队列积压在高负载下 SLO 达成率会陡降。</li>
+</ul>
+</li>
+<li>
+<p><strong>图表</strong>：Figure 5 展示不同模型与不同 images-per-request 的 SLO attainment 曲线（EPD 恒优）。</p>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure5.png"></p>
+<hr>
+<h3 id="42-first-token-generation-latencyttft">4.2. First Token Generation Latency（TTFT）</h3>
+<ul>
+<li>
+<p><strong>实验</strong>：</p>
+<ul>
+<li>分析 TTFT 分布（boxplot），比较 EPD 与 baselines（vLLM/DistServe），不同模型、不同 image counts。</li>
+<li>对 MiniCPM-V 2.6 采用 λ = 0.25；InternVL2-8B 与 26B 采用 λ = 0.08（paper 中设定）。</li>
+</ul>
+</li>
+<li>
+<p><strong>发现</strong>：</p>
+<ul>
+<li>IRP 极大降低 TTFT：相对 DistServe，EPD 在 MiniCPM-V 上可降低 TTFT 约 71.9%，在 InternVL2-26B 上 44.9%。视频任务（Video-MME）上 Table 1 给出不同帧数下的 mean TTFT（EPD 明显更低，且随着帧数增长，差距放大）。
+<img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table1.png"></li>
+</ul>
+</li>
+</ul>
+<p>（单位：秒；EPD 在所有帧数下最低，尤其在长视频/大帧数时优势更明显。）</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure6.png"></p>
+<hr>
+<h3 id="43-memory-savings-through-stage-disaggregation">4.3. Memory Savings through Stage Disaggregation</h3>
+<ul>
+<li>
+<p><strong>核心事实</strong>：</p>
+<ul>
+<li>E workers 无需加载 LLM 权重与 KV cache，因此单从权重角度计算，E worker 的内存需求能减小约 78%–96%（取决于模型）。论文在 profiling 中测得实际峰值 memory 可达 <strong>15× 的降低</strong>（约 93.3% saving）。</li>
+</ul>
+</li>
+<li>
+<p><strong>影响</strong>：</p>
+<ul>
+<li>导致支持的 images-per-request 与 batch size 显著增加（Table 2, Table 3）。</li>
+<li>例如，在 4032×3024 分辨率下，InternVL2-26B 对比 DistServe，EPD 支持的 images/req 增长 7×（表中列举）。</li>
+</ul>
+</li>
+<li>
+<p><strong>代表表格片段（论文 Table 2/3）</strong>：显示了不同模型/分辨率下 EPD 与 DistServe 的最大 images-per-request 与最大 batch sizes（E、P 两阶段），EPD 在很多配置下避免 OOM 并显著提升 batch/图片容量。
+<img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table2.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table3.png"></p>
+</li>
+</ul>
+<hr>
+<h3 id="44-ablation-study消融">4.4. Ablation Study（消融）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table4.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table5.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/table6.png"></p>
+<p>论文对关键组件做了系统消融以量化其贡献，主要包括 IRP、offline optimizer、dynamic role switching：</p>
+<ul>
+<li><strong>Effect of IRP</strong>（Table 4）：关闭 IRP 导致 TTFT 增加 1.6×–2.9×（随图片数增加作用更强）。说明 IRP 对于多图请求/长视频场景是关键。</li>
+<li><strong>Effect of Offline Optimizer</strong>（Table 5）：若随机选择配置代替优化器，goodput 平均下降 2.2×，TTFT 变差约 2.1×，说明黑箱优化器在配置选择上很重要（论文用贝叶斯优化 + 模拟器加速搜索）。</li>
+<li><strong>Effect of Dynamic Role Switching</strong>（Table 6）：在工作负载突变的场景下（前 10 请求 50 tokens，后 90 请求 500 tokens），若禁用 dynamic switch，总体延迟与 TPOT 均显著恶化（end-to-end latency 从 28.01s → 61.10s，TPOT 从 0.05 → 0.12，表中给出具体倍数）。说明动态迁移对于在线系统稳定性至关重要。</li>
+</ul>
+<hr>
+<h3 id="45-adaptation-to-neural-processing-units-npus">4.5. Adaptation to Neural Processing Units (NPUs)</h3>
+<ul>
+<li>
+<p><strong>动机</strong>：NPUs（如 Ascend）在 encode→prefill 延迟比上通常更高（encode 成本更重），因此 EPD 的 disaggregation 对 NPU 的增益可能更明显。</p>
+</li>
+<li>
+<p><strong>实验与结论</strong>：</p>
+<ul>
+<li>在 InternVL2-8B 的 NPU 实验（8 × 4K images/request，最佳配置 5E2P1D）中，EPD 是唯一能满足 SLO（TTFT ≤ 8.5s, TPOT ≤ 0.12s）的方案，vLLM/DistServe 均无法达成。</li>
+<li>EPD-NPU 相较于 vLLM 的 TTFT 改进达到 35.2%（比 GPU 场景的 24.4% 更优），原因是 NPU 上 encoding 相对更耗时，分离带来的平行化收益更大。</li>
+</ul>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/EPDServe/figure9.png"></p>
+<hr>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>EPD Disaggregation 通过把编码（E）、prefill（P）与 decode（D）三阶段解耦，结合<strong>异步 token 迁移、IRP、资源分配黑箱优化器与动态角色切换</strong>，在多模型、多数据集与多硬件平台（GPU / NPU）上验证了显著优势：<strong>更低的峰值内存（高达 15×）、更大 batch 与更多 images-per-request、显著更高的 SLO attainment 与更低 TTFT</strong>。论文同时指出：当吞吐（throughput）而非 SLO 为首要目标时，聚合式方案在 GPU 利用率上可能更具成本效益；因此 EPD 适合对 latency 有强约束的云服务场景。</p>
+<hr>
+<h2 id="6-limitations">6. Limitations</h2>
+<ul>
+<li>Disaggregation 引入跨阶段通信开销与 pipeline bubble 风险；在一些以吞吐为主、对延迟 SLO 不敏感的场景下，聚合式配置可能更划算（higher GPU utilization）。</li>
+<li>EPD 的收益对工作负载特性敏感：编码-预填内存/计算不平衡时需要精细调节资源分配与动态迁移策略；visual token migration 在高并发下可能成为瓶颈（可通过 token 压缩/剪枝缓解）。</li>
+</ul>
+<hr>
+<h2 id="7-future-work">7. Future Work</h2>
+<ul>
+<li><strong>异构硬件调度</strong>：在 EPD 框架中将 E 部署到低内存高计算设备（或边缘设备）而 P 部署到高内存 GPU，可进一步提升成本效率。</li>
+<li><strong>视觉 token 压缩</strong>：利用 token pruning / compress 技术（如 DivPrune 等）减少迁移带宽占用与传输延迟。</li>
+<li><strong>隐私相关的边缘-云混合部署</strong>：把编码放在边缘设备上，云端仅处理编码表示以减少隐私风险。</li>
+</ul>
+<hr>
+<h1></h1>
+
+    </section>
+  
+    <section data-source="posts\ElasticMM - Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism - NeurIPS&#39;25 Oral.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25 Oral</strong></p>
+<hr>
+<h2 id="1-background-and-motivation">1. Background and Motivation</h2>
+<p>多模态大语言模型（Multimodal Large Language Models, MLLMs）在传统 LLM 的基础上扩展了图像、视频、音频等输入模态，使模型能够进行跨模态理解与推理。然而，这些额外组件（如视觉编码器、投影模块等）带来了显著的推理开销。由于多模态推理流程复杂、任务异构，MLLM 的高效部署成为一个重大挑战。</p>
+<p>现有的大多数推理服务架构（serving architecture）采用紧耦合（tightly coupled）设计，无法区分不同请求类型，也无法在不同阶段灵活地调整并行策略，导致 <strong>time-to-first-token (TTFT)</strong> 延迟增大、GPU 资源利用率低下。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure1.png"></p>
+<p>与传统仅处理文本的 LLM 不同，MLLM 需要同时处理多种模态的输入，因此推理流程更复杂，通常包括：</p>
+<ol>
+<li><strong>Image Preprocessing</strong>：对原始图像进行裁剪、缩放、分块；</li>
+<li><strong>Image Encoding</strong>：通过视觉编码器提取特征并转化为 vision token；</li>
+<li><strong>Text Generation</strong>：将 vision token 与文本 prompt 拼接后输入语言模型，经过 prefill 和 decode 阶段生成输出。</li>
+</ol>
+<p>这些额外阶段显著增加了推理复杂度和平均上下文长度，从而导致计算与内存开销的上升。</p>
+<hr>
+<h3 id="11-multimodal-large-language-models-inference">1.1 Multimodal Large Language Models Inference</h3>
+<p>MLLM 的推理流水线可以拆分为三个关键阶段：</p>
+<ul>
+<li><strong>图像预处理</strong>：原图像被缩放或分块；</li>
+<li><strong>图像编码</strong>：视觉编码器提取视觉 token；</li>
+<li><strong>文本生成阶段</strong>：LLM 同时处理视觉与文本 token 并生成响应。</li>
+</ul>
+<p>现代 MLLM 的架构可分为两类：</p>
+<ol>
+<li><strong>Decoder-only (DecOnly)</strong>：如 LLaVA-OneVision、Qwen-VL、Janus、InternVL。视觉与文本 token 拼接后共同输入模型，视觉 token 参与每一步生成；</li>
+<li><strong>Encoder-decoder (EncDec)</strong>：如 LLaMA-3.2 Vision、NVLM-X、Flamingo。视觉 token 通过 cross-attention 与文本 token 交互，仅在 cross-attention 层中出现。</li>
+</ol>
+<p>两者的主要差异在于视觉 token 的交互方式：前者在每一步生成都参与计算，后者仅在交叉注意力阶段出现。
+由于视觉 token 的数量通常远大于文本 token，这两种架构都在推理中引入了大量的额外开销，包括更长的上下文、更高的显存使用率和更慢的推理速度。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/table1.png"></p>
+<hr>
+<h3 id="12-llm-serving-systems">1.2 LLM Serving Systems</h3>
+<p>现有 LLM 推理系统（如 vLLM、SGLang）通常采用 <strong>KV cache 复用</strong> 技术，将推理划分为 prefill 和 decode 两个阶段。</p>
+<ul>
+<li><strong>Prefill 阶段</strong>：计算输入 token 的 KV cache 并生成首个输出 token；</li>
+<li><strong>Decode 阶段</strong>：每次迭代生成一个新 token。</li>
+</ul>
+<p>Prefill 阶段计算负载更重，而 decode 阶段更受限于显存。系统通过连续批处理（continuous batching）和 chunked prefill 等方式提升效率，但 prefill 与 decode 之间的干扰仍难以消除。</p>
+<p>近年的工作如 ORCA、LoongServe 尝试通过 <strong>prefill-decoding disaggregation</strong> 将两个阶段分离到不同 GPU 实例中运行，以提升利用率。然而这些系统在多模态场景下依然存在严重的<strong>耦合问题</strong>：</p>
+<ul>
+<li><strong>服务级别耦合</strong>：将文本与多模态请求混合处理，无法区分其负载特性；</li>
+<li><strong>基础设施级别耦合</strong>：视觉编码器与语言模型共占 GPU 资源，无法独立扩缩容。</li>
+</ul>
+<hr>
+<h3 id="13-research-challenges-and-motivations">1.3 Research Challenges and Motivations</h3>
+<p>现有紧耦合架构在多模态任务中面临两个核心问题：</p>
+<ol>
+<li><strong>服务层问题</strong>：文本与多模态请求的计算开销差异巨大。混合处理会导致整体资源利用率下降、TTFT 增加，并容易造成服务级别目标（SLO）违反。</li>
+<li><strong>体系结构问题</strong>：Encoder-decoder 模型引入 cross-attention，无法在混合 batch 中高效运行，导致吞吐下降。</li>
+</ol>
+<p><strong>关键洞察 1</strong>：需要采用解耦架构，将文本与多模态请求分别处理。
+<strong>关键洞察 2</strong>：静态解耦无法适应动态负载变化，必须实现 <strong>弹性（elastic）</strong> 资源分配。</p>
+<p>因此，作者提出了 <strong>Elastic Multimodal Parallelism (EMP)</strong> —— 一种结合解耦与弹性资源调度的新范式。</p>
+<hr>
+<h2 id="2-challenge">2. Challenge</h2>
+<p>现有系统采用紧耦合架构，不区分请求类型，也不解耦推理组件，所有阶段都在同一 GPU 上执行。结果是在多模态负载下，TTFT 急剧上升，尤其是当 Encoder-decoder 模型中引入 cross-attention 后，计算异构性进一步加剧，导致批处理效率显著降低。</p>
+<hr>
+<h2 id="3-contribution">3. Contribution</h2>
+<p>为了解决上述问题，论文提出了 <strong>Elastic Multimodal Parallelism (EMP)</strong>，并基于该框架实现了推理系统 <strong>ElasticMM</strong>。其主要贡献如下：</p>
+<ul>
+<li>
+<p><strong>发现瓶颈</strong>：明确指出现有系统紧耦合是 MLLM 服务性能瓶颈；</p>
+</li>
+<li>
+<p><strong>提出 EMP 框架</strong>：将文本和多模态请求分为独立模态组（modality group），并在组内对不同推理阶段（encoding、prefill、decode）施加阶段级并行策略；</p>
+</li>
+<li>
+<p><strong>设计两项关键技术</strong>：</p>
+<ol>
+<li><strong>模态感知负载均衡（Modality-aware Load Balancing）</strong>：根据实时负载波动动态调整 GPU 分配；</li>
+<li><strong>分阶段弹性调度（Elastic Partition Scheduling）</strong>：针对每个推理阶段独立调整并行度与资源；</li>
+</ol>
+</li>
+<li>
+<p><strong>两项优化</strong>：</p>
+<ul>
+<li><strong>统一多模态前缀缓存（Unified Multimodal Prefix Cache）</strong>：减少重复编码与数据传输；</li>
+<li><strong>非阻塞编码（Non-blocking Encoding）</strong>：异步解耦视觉编码过程；</li>
+</ul>
+</li>
+<li>
+<p><strong>实证结果</strong>：相比 vLLM，ElasticMM 在 TTFT 上降低 4.2×，吞吐提升 3.2×–4.5×，同时满足 SLO 要求。</p>
+</li>
+</ul>
+<hr>
+<h2 id="4-elastic-multimodal-parallelism">4. Elastic Multimodal Parallelism</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure2.png"></p>
+<p>ElasticMM 的核心在于 <strong>两层解耦</strong>：</p>
+<ul>
+<li>第一层（模态级）：根据请求类型分为文本组与多模态组；</li>
+<li>第二层（阶段级）：进一步拆分为 encoding、prefill、decode 阶段。</li>
+</ul>
+<p>在两层上均引入弹性调度机制，避免资源争用、提升利用率。</p>
+<hr>
+<h3 id="41-modality-aware-load-balancing">4.1 Modality-Aware Load Balancing</h3>
+<p>为解决多模态请求在时间维度上的突发性负载问题，ElasticMM 采用主动 + 被动相结合的调度机制。</p>
+<p><strong>主动机制（Proactive Mechanism）</strong>
+系统分析长期负载模式，发现文本请求稳定而多模态请求呈周期性波动。
+因此，在分配 GPU 实例时，优先保证各模态组的“突发容忍度（burst tolerance）”：</p>
+$$
+bt(i) = \frac{N_i^{peak}}{N_i^{avg}}
+$$<p>其中：</p>
+<ul>
+<li>$bt(i)$ 表示第 $i$ 个模态组的突发容忍度；</li>
+<li>$N_i^{peak}$ 表示该模态组在峰值负载时可用的 GPU 实例数；</li>
+<li>$N_i^{avg}$ 表示其平均负载下所需的 GPU 实例数。</li>
+</ul>
+<p>系统采用贪心算法，每次将空闲实例分配给当前 burst tolerance 最低的组，直至资源分配完毕。</p>
+<p><strong>被动机制（Reactive Scaling）</strong>
+面对短期突发（如图像流输入激增），系统根据 gain-cost 模型动态扩缩容。如果 inter-group 抢占（从其他组借 GPU）收益更高，管理器将选择影响最小的实例进行抢占，并迁移其 workload 至其他实例继续执行。</p>
+<hr>
+<h3 id="42-stage-partition-scheduling">4.2 Stage Partition Scheduling</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure3.png"></p>
+<p>该部分处理模态组内部各阶段（encoding、prefill、decode）的资源调度与伸缩。</p>
+<h4 id="request-dispatching">Request Dispatching</h4>
+<p>系统采用 FCFS（先来先服务）策略，但当文本请求与多模态请求绑定时（如同一对话中含图像），优先调度以减少迁移延迟。调度时需同时考虑：</p>
+<ul>
+<li><strong>显存约束</strong>：确保 KV cache slot 充足；</li>
+<li><strong>计算约束</strong>：避免超过 compute-bound tipping point。</li>
+</ul>
+<h4 id="elastic-instance-allocation">Elastic Instance Allocation</h4>
+<p>Prefill 阶段计算密集，优先分配更多 GPU；若资源不足，则允许从 decode 阶段抢占空闲实例。
+系统使用 gain-cost 模型评估抢占收益：</p>
+$$ \text{Gain} = \sum_{r\in R_p} \frac{T(R_p, E_p) - T(R_p, E_p \cup e_{max})}{r.input_len} $$<p> </p>
+$$ \text{Cost} = \sum_{r\in B_d} \frac{M(e_{max}) + w \cdot L(B_d, E_d - e_{max})}{r.output_len} $$<p> 当 $\text{Gain}&gt;\text{Cost}$ 时执行抢占。迁移仅移动 KV cache，不移动模型权重。</p>
+<p>其中：</p>
+<ul>
+<li>$r$ 表示单个请求；</li>
+<li>$R_p$ 为当前 prefill 阶段的请求集合；</li>
+<li>$B_d$ 为当前 decode 阶段的批次集合；</li>
+<li>$E_p$、$E_d$ 分别为 prefill 和 decode 阶段分配的实例集合；</li>
+<li>$e_{\text{max}}$ 表示拥有最多空闲 KV slot 的候选实例；</li>
+<li>$T(\cdot)$ 表示任务在对应实例集上的执行时间；</li>
+<li>$M(e_{\text{max}})$ 为迁移开销；</li>
+<li>$L(\cdot)$ 表示因抢占造成的性能损失；</li>
+<li>$w$ 为惩罚因子，用于控制抢占的激进程度。</li>
+</ul>
+<p>当 $\text{Gain} &gt; \text{Cost}$ 时执行抢占。迁移仅移动 KV cache，不移动模型权重。</p>
+<hr>
+<h4 id="elastic-auto-scaling">Elastic Auto-Scaling</h4>
+<p>Decode 阶段可扩展性差，当检测到延迟上升或显存不足时触发伸缩。若组内资源不足，则跨组抢占：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/mdk.png"></p>
+<p>解释：
+系统通过比较 $\text{Gain}$ 与 $\text{Cost}$ 判断是否执行跨组伸缩：</p>
+<ul>
+<li>当 $\text{Gain} &gt; \text{Cost}$ 时，表示将 GPU 实例从 prefill 组迁移到 decode 组能够带来更高整体收益，系统触发跨组扩展；</li>
+<li>否则维持现有分配，避免抢占导致的性能震荡。</li>
+</ul>
+<p>通过离线 profiling 设定伸缩阈值，系统可根据 decode 阶段瓶颈自动调节资源，实现精细化动态弹性。</p>
+<hr>
+<h3 id="43-multimodal-inference-optimization">4.3 Multimodal Inference Optimization</h3>
+<h4 id="unified-multimodal-prefix-cache">Unified Multimodal Prefix Cache</h4>
+<p>ElasticMM 通过统一缓存机制减少重复计算：</p>
+<ul>
+<li>
+<p><strong>缓存池 1</strong>：视觉特征缓存池（CV pool），存储图像哈希与对应视觉 token；</p>
+</li>
+<li>
+<p><strong>缓存池 2</strong>：前缀缓存池（Prefix pool），存储已生成的 KV cache 片段；</p>
+</li>
+<li>
+<p><strong>工作流程</strong>：</p>
+<ol>
+<li>对输入图像生成哈希；</li>
+<li>若命中缓存，则直接复用视觉 token；</li>
+<li>查找前缀树以匹配最长已缓存前缀，跳过重复 prefill；</li>
+<li>两池均采用 LRU 策略控制显存。</li>
+</ol>
+</li>
+</ul>
+<h4 id="non-blocking-encoding">Non-blocking Encoding</h4>
+<p>由于图像编码耗时通常为 prefill 的数倍，传统系统中 encoding 与 prefill 串行执行造成阻塞。ElasticMM 将 encoding 分离为异步进程或独立实例，与语言模型部分并行执行。结合统一缓存机制，可显著减少阻塞并降低 TTFT。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure4.png"></p>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-experimental-setup">5.1 Experimental Setup</h3>
+<ul>
+<li>
+<p><strong>硬件环境</strong>：8 × NVIDIA A800 80GB GPU，2 × Intel Xeon 8358P（64核），2TB 内存，NVLink 带宽 400GB/s；</p>
+</li>
+<li>
+<p><strong>对比基线</strong>：</p>
+<ol>
+<li><strong>vLLM (coupled)</strong>：原始架构；</li>
+<li><strong>vLLM-Decouple</strong>：静态解耦版本；</li>
+<li><strong>ElasticMM</strong>：启用 EMP 与两项优化；</li>
+</ol>
+</li>
+<li>
+<p><strong>模型与数据集</strong>：</p>
+<ul>
+<li>模型：Qwen2.5-VL、LLaMA3.2-Vision；</li>
+<li>数据集：ShareGPT-4o、COCO Caption；</li>
+</ul>
+</li>
+<li>
+<p><strong>指标</strong>：TTFT、吞吐量、SLO 满足率。</p>
+</li>
+</ul>
+<hr>
+<h3 id="52-end-to-end-performance">5.2 End-to-End Performance</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure5.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure6.png"></p>
+<p>结果显示：</p>
+<ul>
+<li>在多模态请求比例较高的负载下，ElasticMM 相比 vLLM 将 TTFT 降低最高 4.2×；</li>
+<li>平均吞吐量提升 3.2×–4.5×；</li>
+<li>在混合场景中依然保持较高的 GPU 利用率与稳定的 SLO 满足率。</li>
+</ul>
+<hr>
+<h3 id="53-ablation-study">5.3 Ablation Study</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure7.png"></p>
+<h4 id="emp-有效性">EMP 有效性</h4>
+<p>对比三种静态资源分配策略（文本优先 / 平均分配 / 多模态优先），ElasticMM 动态分配的策略表现最优，吞吐量分别提升：</p>
+<ul>
+<li>Qwen2.5-VL：1.8×；</li>
+<li>LLaMA3.2-Vision：2.3×。</li>
+</ul>
+<h4 id="mllm-优化模块有效性">MLLM 优化模块有效性</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticMM/figure8.png"></p>
+<p>对比以下系统：</p>
+<ul>
+<li><strong>ElasticMM-EMP</strong>：无缓存优化；</li>
+<li><strong>ElasticMM-UniCache</strong>：仅启用缓存；</li>
+<li><strong>ElasticMM</strong>：完整系统。</li>
+</ul>
+<p>结果表明：</p>
+<ul>
+<li>统一前缀缓存显著减少重复计算，降低输入 token 延迟；</li>
+<li>非阻塞编码进一步减少编码阻塞，使平均 TTFT 下降 50%；</li>
+<li>两者结合后在高负载下仍保持稳定吞吐。</li>
+</ul>
+<hr>
+<h2 id="6-related-work">6. Related Work</h2>
+<p>现有 MLLM 推理优化多聚焦于模型结构简化（TinyGPT-V、TinyLLaVA）、视觉 token 剪枝（Dynamic-LLaVA、VTM）或 KV cache 压缩（InfMLLM、Elastic Cache），通常以牺牲精度换取速度。
+ElasticMM 不涉及模型精度变化，可兼容任意 MLLM 架构。
+与 Splitwise、DistServe 等静态分片方案不同，ElasticMM 在模态与阶段上实现动态弹性调度，性能提升更显著。</p>
+<hr>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>本文提出了 ElasticMM —— 基于 <strong>Elastic Multimodal Parallelism (EMP)</strong> 的多模态大语言模型推理系统，通过模态级与阶段级的双层解耦与弹性伸缩，实现了对动态多模态负载的高效服务。</p>
+<p>ElasticMM 的三项核心创新：</p>
+<ol>
+<li>模态感知负载均衡；</li>
+<li>分阶段弹性调度；</li>
+<li>多模态特定优化（统一缓存与非阻塞编码）；</li>
+</ol>
+<p>在真实数据集实验中，ElasticMM 相比 vLLM 实现最高 <strong>4.2× 的 TTFT 降低</strong> 与 <strong>4.5× 的吞吐提升</strong>。</p>
+
+    </section>
+  
+</body>
+</html>

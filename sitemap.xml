@@ -2,40 +2,121 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://jjl357.github.io/blog/posts/deep-think-with-confidence---iclr26/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/longcodezip---compress-long-context-for-code-language-models---ase25/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/swe-pruner-pro---the-coder-llm-already-knows-what-to-prune/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/agent/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/ase/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/code-generation/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/code-llm/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/coding-agent/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/confidence-estimation/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/context-compression/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/context-pruning/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/efficient-inference/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/iclr/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/llm-reasoning/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/long-context/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/self-consistency/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/swe-bench/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/test-time-scaling/</loc>
+    <lastmod>2026-08-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/vlash---real-time-vlas-via-future-state-aware-asynchronous-inference/</loc>
+    <lastmod>2026-08-05T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/asynchronous-inference/</loc>
+    <lastmod>2026-08-05T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/real-time-inference/</loc>
+    <lastmod>2026-08-05T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/robotics/</loc>
+    <lastmod>2026-08-05T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/vla/</loc>
+    <lastmod>2026-08-05T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/</loc>
+    <lastmod>2026-07-20T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/posts/long-context-modeling-with-dynamic-hierarchical-sparse-attention-for-memory-constrained-llm-inference---icml26-spotlight/</loc>
+    <lastmod>2026-07-10T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/icml/</loc>
+    <lastmod>2026-07-10T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
+    <lastmod>2026-07-10T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/llm-inference/</loc>
+    <lastmod>2026-07-10T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://jjl357.github.io/blog/tags/sparse-attention/</loc>
+    <lastmod>2026-07-10T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://jjl357.github.io/blog/posts/kvflow---efficient-prefix-caching-for-accelerating-llm-based-multi-agent-workflows/</loc>
     <lastmod>2026-06-20T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/agentic-workflow/</loc>
     <lastmod>2026-06-20T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://jjl357.github.io/blog/categories/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/kv-cache/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/categories/paper-note/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/paper-note/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/posts/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://jjl357.github.io/blog/tags/prefix-caching/</loc>
     <lastmod>2026-06-20T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://jjl357.github.io/blog/tags/</loc>
-    <lastmod>2026-06-20T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://jjl357.github.io/blog/posts/thunderagent---a-simple-fast-and-program-aware-agentic-inference-system---icml26-spotlight/</loc>
-    <lastmod>2026-06-18T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://jjl357.github.io/blog/tags/agent/</loc>
     <lastmod>2026-06-18T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://jjl357.github.io/blog/tags/system/</loc>

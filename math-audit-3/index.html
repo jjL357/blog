@@ -1,0 +1,2502 @@
+<!doctype html>
+<html lang="zh-cn">
+<head><script src="/blog/livereload.js?mindelay=10&amp;v=2&amp;port=14183&amp;path=blog/livereload" data-no-instant defer></script>
+  <meta charset="utf-8">
+  <title>Math Audit</title>
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+
+</head>
+<body>
+  
+  
+  
+    <section data-source="posts\VLCACHE - Computing 2%Vision Tokens and Reusing 98% for Vision–Language Inference.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/title.png"></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<ul>
+<li>
+<p><strong>前缀缓存（Prefix Cache）的局限性</strong>：目前的 KV Cache 重用机制（如前缀缓存）要求新请求的初始片段（即前缀）与已有缓存序列<strong>精确匹配</strong>。这种严格的匹配标准虽然保证了输出准确性，但在多模态场景下引入了严重的效率瓶颈：即便<strong>图像完全相同</strong>，只要系统提示词或用户问题不同，也无法触发缓存命中。</p>
+</li>
+<li>
+<p><strong>位置无关重用的必要性</strong>：如果允许在<strong>不同位置</strong>重用预缓存的 KV Cache，将显著提升多模态推理的灵活性。然而，位置变化会破坏因果注意力中的位置一致性，因此为了保持输出准确性，<strong>必须对部分 token 进行重新计算（recompute）</strong>。</p>
+</li>
+<li>
+<p><strong>现有启发式方法的缺陷</strong>：</p>
+<ul>
+<li>
+<p><strong>CacheBlend [14]</strong>：通过比较<strong>前三层</strong>的 KV Cache 距离来识别“最不可靠”的 token 并重计算。但该方法仅依赖<strong>浅层局部信息</strong>，无法刻画 token 在整个 Transformer 堆栈中的<strong>全局重要性</strong>。</p>
+</li>
+<li>
+<p><strong>EPIC [6] 与 MPIC [16]</strong>：以 chunk 为单位，重计算每个数据块的<strong>初始 token</strong>。其中 MPIC 假设存在“注意力汇聚（attention sink）”效应，但该假设在视觉 token 上并不成立，因为视觉 token 不像系统提示词那样在注意力中占据主导地位。</p>
+</li>
+<li>
+<p><strong>KVShare [13]</strong>：基于注意力分布偏差选择性重计算关键 token，但仍然缺乏对<strong>重用误差如何在解码阶段传播</strong>的系统性分析。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>缺乏系统性研究</strong>：上述方法普遍缺少以下两点：</p>
+<ol>
+<li>不同 Transformer 层对最终输出贡献差异的系统研究；</li>
+<li>重用误差在自回归解码过程中<strong>跨 token、跨层传播机制</strong>的深入分析。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<ul>
+<li>
+<p><strong>识别累积重用误差效应</strong>：系统性分析了多模态大语言模型（VLM）中 KV Cache 重用所引入的误差，提出并验证了 <strong>累积重用误差效应（Cumulative Reuse Error Effect）</strong>，即早期 token 的重用误差会在后续生成过程中不断传播和放大。</p>
+</li>
+<li>
+<p><strong>层级重要性差异分析</strong>：通过实验发现，不同 Transformer 层对最终模型输出的影响高度不均衡，并首次从实证角度揭示了 VLM 中的<strong>层级重要性多样性</strong>。</p>
+</li>
+<li>
+<p><strong>提出 VLCache 框架</strong>：设计了一个端到端的视觉 token KV Cache 重用流水线，兼顾算法有效性与系统可落地性。</p>
+</li>
+<li>
+<p><strong>双重重用机制</strong>：</p>
+<ul>
+<li>重用视觉编码器输出（Encoder Cache）；</li>
+<li>重用语言模型中的 KV Cache。</li>
+</ul>
+</li>
+<li>
+<p><strong>动态重计算策略</strong>：在固定重计算预算约束下，提出一种<strong>逐层自适应</strong>的重计算比例分配算法，以最小化输出误差。</p>
+</li>
+<li>
+<p><strong>显著性能提升</strong>：实验表明，仅需重新计算 <strong>2–5%</strong> 的视觉 token，即可实现近乎无损的准确率，同时将首字延迟（TTFT）提升 <strong>1.2×–16×</strong>。</p>
+</li>
+<li>
+<p><strong>系统集成验证</strong>：在 <strong>SGLang</strong> 框架中实现原型系统，显著降低真实部署环境中的推理延迟。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-observation">3. Observation</h2>
+<h3 id="31-cumulative-reuse-error-effect累积重用误差效应">3.1 Cumulative Reuse Error Effect（累积重用误差效应）</h3>
+<p>在自注意力机制中，每个 token 的输出依赖于其上下文表示。在因果语言模型（Causal LLM）中，第 $i$ 个 token 会关注所有位置 $j \le i$ 的 token。当 KV Cache 在<strong>不匹配的上下文</strong>下被重用时，会引入 <strong>重用误差（Reuse Error）</strong>。</p>
+<p>作者将位置 $i$ 的 token 总误差分解为两部分：</p>
+<ol>
+<li><strong>自身重用误差（Self Reuse Error）</strong>：</li>
+</ol>
+$$
+\epsilon_i^{\text{self}} = h_i^{\text{reuse}} - h_i^{\text{full}},
+$$<p>其中 $h_i^{\text{reuse}}$ 表示使用重用 KV Cache 得到的隐状态，$h_i^{\text{full}}$ 表示完全重计算得到的隐状态。</p>
+<ol start="2">
+<li><strong>传播误差（Propagated Error）</strong>：来自所有先前 token 的误差累积：</li>
+</ol>
+$$
+\epsilon_i^{\text{prop}} = \sum_{j < i} \alpha_{i,j} , \epsilon_j,
+$$<p>其中 $\alpha_{i,j}$ 表示位置 $j$ 的误差通过自注意力机制向位置 $i$ 传播的权重。</p>
+<p>因此，第 $i$ 个 token 的总重用误差为：</p>
+$$
+\epsilon_i = \epsilon_i^{\text{self}} + \epsilon_i^{\text{prop}}.
+$$<p>该公式揭示了一个关键现象：<strong>即使后续 token 本身被精确计算，只要早期 token 存在重用误差，该误差仍会持续影响下游表示</strong>。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/figure2.png">
+<em>（对应论文 Figure 2：早期 token 的重计算可显著抑制下游误差累积）</em></p>
+<p><strong>实验验证</strong>：通过测量不同重计算比例下的误差范数，作者发现：</p>
+<ul>
+<li>早期 token 的重用会引入<strong>持久且累积</strong>的误差；</li>
+<li>仅对前 $10%$ 或 $30%$ 的 token 进行重计算，即可消除大部分上游误差，从而显著改善整体输出质量。</li>
+</ul>
+<hr>
+<h3 id="32-layer-wise-importance-difference层级重要性差异">3.2 Layer-wise Importance Difference（层级重要性差异）</h3>
+<p>作者在 <strong>Qwen2.5-VL-7B</strong> 上实证研究了不同 Transformer 层对最终输出的敏感性，验证“所有层同等重要”的假设是否成立。</p>
+<p><strong>实验流程（三阶段）</strong>：</p>
+<ol>
+<li>
+<p><strong>构造缓存</strong>：固定输入图像，将原始问题替换为无关提示词（如 <em>“Please describe this image”</em>），执行前向传播并缓存图像对应的 KV Cache。</p>
+</li>
+<li>
+<p><strong>获取基准输出</strong>：使用原始问题进行标准推理，记录输出的 logits 与生成文本。</p>
+</li>
+<li>
+<p><strong>注入误差并测量敏感度</strong>：</p>
+<ul>
+<li>在推理过程中使用<strong>不匹配的图像 KV Cache</strong>；</li>
+<li>仅在<strong>指定的第 $l$ 层</strong>对前 $r$ 比例的 token 进行重计算；</li>
+<li>计算当前输出 logits 与基准 logits 之间的 MSE 损失。</li>
+</ul>
+</li>
+</ol>
+$$
+\mathcal{L}_l(r) = | \mathbf{z}^{\text{reuse}}_l(r) - \mathbf{z}^{\text{full}} |_2^2.
+$$<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/figure3.png">
+<em>（对应论文 Figure 3：MMMU-Pro 上的层级敏感度曲线）</em></p>
+<p><strong>结论</strong>：</p>
+<ul>
+<li>不同层对重计算比例 $r$ 的敏感性差异极大；</li>
+<li>某些中间或高层是“关键层”，需要较高的重计算比例；</li>
+<li>也存在对重用几乎不敏感的层，甚至可以完全跳过重计算而不影响输出质量。</li>
+</ul>
+<hr>
+<h2 id="4-design-algorithm--system-implementation">4. Design (Algorithm &amp; System Implementation)</h2>
+<h3 id="41-vlcache-reuse-and-dynamic-recomputation">4.1 VLCache: Reuse and Dynamic Recomputation</h3>
+<p>VLCache 以插件形式集成到标准的 VLM 推理流水线中。</p>
+<h4 id="基础算法basic-algorithm">基础算法（Basic Algorithm）</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/figure1.png">
+<em>（对应论文 Figure 1：整体缓存与重用流程）</em></p>
+<ol>
+<li>
+<p><strong>哈希与检索</strong>：</p>
+<ul>
+<li>对输入图像计算内容哈希值；</li>
+<li><strong>Cache Miss</strong>：执行完整 prefilling，并将视觉编码器输出（Encoder Cache）与 LLM 的 KV Cache 存入后端存储（如 Tair KVCache Store）；</li>
+<li><strong>Cache Hit</strong>：直接从后端检索缓存。</li>
+</ul>
+</li>
+<li>
+<p><strong>部分重计算</strong>：</p>
+<ul>
+<li>对缓存的视觉 token，仅重计算最前面的 $r$ 比例；</li>
+<li>其余 $(1-r)$ 的 token 直接重用缓存结果。</li>
+</ul>
+</li>
+<li>
+<p><strong>计算跳过</strong>：</p>
+<ul>
+<li>对重用 token，其 Attention 与 MLP 计算被<strong>完全跳过</strong>；</li>
+<li>这是 VLCache 实现显著加速的核心机制。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/figure4.png">
+<em>（对应论文 Figure 4：形成连续、硬件友好的计算区域）</em></p>
+<hr>
+<h4 id="动态重计算策略dynamic-recomputation">动态重计算策略（Dynamic Recomputation）</h4>
+<p>为在固定预算下获得最优精度，作者提出逐层动态分配重计算比例的策略。</p>
+<ol>
+<li><strong>层敏感度定义</strong>：</li>
+</ol>
+<p>在代理数据集 $\mathcal{D}$ 上，第 $l$ 层在重计算比例 $r$ 下的敏感度定义为：</p>
+$$
+S_l(r) = \mathbb{E}_{(x,y) \sim \mathcal{D}} \left[ | \mathbf{z}_l^{\text{reuse}}(r) - \mathbf{z}^{\text{full}} |_2^2 \right].
+$$<ol start="2">
+<li><strong>优化目标建模</strong>：</li>
+</ol>
+<p>在总重计算预算 $B$ 下，优化问题表示为：</p>
+$$
+\min_{{r_l}} \sum_{l=1}^L S_l(r_l)
+$$<p>约束条件：</p>
+$$
+\sum_{l=1}^L r_l \le B,
+$$$$
+r_1 \ge r_2 \ge \cdots \ge r_L,
+$$$$
+r_l \in {0, \Delta, 2\Delta, \dots, 1}.
+$$<p>其中单调不增约束保证<strong>深层可以直接复用浅层已经计算好的隐状态</strong>，避免重复计算。</p>
+<ol start="3">
+<li><strong>贪心近似算法</strong>：</li>
+</ol>
+<p>由于该问题是离散整数规划，作者在假设层间近似独立的前提下，采用贪心策略搜索近似最优解，大幅降低搜索成本。</p>
+<hr>
+<h3 id="42-sglang-integration-of-vlcache">4.2 SGLang Integration of VLCache</h3>
+<p>在 SGLang 框架中的实现包含两项关键系统优化：</p>
+<ol>
+<li>
+<p><strong>跳过 ViT 计算</strong>：</p>
+<ul>
+<li>对输入图像像素计算全局内容哈希；</li>
+<li>若缓存命中，直接从 <strong>Tair KVCache Store</strong> 读取视觉 embedding，完全绕过视觉 Transformer（ViT）。</li>
+</ul>
+</li>
+<li>
+<p><strong>跳过 Attention 与 MLP 计算</strong>：</p>
+<ul>
+<li>为每张图像分配独立哈希，实现细粒度缓存管理；</li>
+<li>采用 <strong>Block Sparse Attention</strong> 支持非连续 token 的选择性重计算；</li>
+<li>在每一层构造二值 <strong>Computation Mask</strong>，标识需重计算的 token；</li>
+<li>仅对被选中的 token 执行 RoPE、Attention 与 MLP，其余部分直接复用；</li>
+<li>KV Cache 在应用 RoPE 之前存储，从而支持位置无关重用。</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2 id="5-experiments-and-discussion">5. Experiments and Discussion</h2>
+<h3 id="51-acceleration-of-vlcache加速性能">5.1 Acceleration of VLCache（加速性能）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/table1and2.png">
+VLCache 显著降低了 Time-To-First-Token（TTFT）。在 Qwen2.5-VL（表中标记为 Qwen3-VL）上的实验表明：</p>
+<ul>
+<li>
+<p><strong>Qwen2.5-VL-8B</strong>：</p>
+<ul>
+<li>在 20K 视觉 token 下，原始 TTFT 为 8.784s；</li>
+<li>动态配置后降至 4.714s，加速比 <strong>1.86×</strong>；</li>
+<li>即使不考虑 ViT 跳过，仅 KV Cache 重用也贡献主要加速。</li>
+</ul>
+</li>
+<li>
+<p><strong>Qwen2.5-VL-32B</strong>：</p>
+<ul>
+<li>在 20K token 下，加速比最高可达 <strong>3.94×（静态）</strong>，动态配置下仍超过 <strong>2.5×</strong>。</li>
+</ul>
+</li>
+<li>
+<p><strong>整体趋势</strong>：视觉 token 越长，加速效果越显著，TTFT 提升范围为 <strong>1.2×–16×</strong>。</p>
+</li>
+</ul>
+<hr>
+<h3 id="52-accuracy-preservation-of-vlcache准确度保持">5.2 Accuracy Preservation of VLCache（准确度保持）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/table3&4.png"></p>
+<ul>
+<li>
+<p><strong>近乎无损精度</strong>：仅重计算 <strong>2–5%</strong> 的视觉 token，在 MMMU-Pro、MME 等基准上与全量重计算几乎一致。</p>
+</li>
+<li>
+<p><strong>动态优于静态</strong>：在相同预算下，逐层动态分配重计算比例显著优于统一比例策略。</p>
+</li>
+</ul>
+<hr>
+<h3 id="53-comparisons-with-other-sota-methods">5.3 Comparisons with Other SOTA Methods</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VLCACHE/table5.png"></p>
+<ul>
+<li>
+<p><strong>全面优于启发式方法</strong>：在加速比与准确率上均优于 CacheBlend、MPIC 与 KVShare；</p>
+</li>
+<li>
+<p><strong>理论驱动优势</strong>：基于累积误差效应与层级重要性分析，VLCache 避免了 MPIC 在视觉 token 场景下失效的问题。</p>
+</li>
+</ul>
+<hr>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>VLCache 提供了一个将<strong>理论洞察与系统实现深度结合</strong>的完整方案，在几乎不损失推理精度的前提下，大幅加速了 VLM 的预填充阶段。该方法尤其适用于<strong>多请求共享同一图像</strong>的高并发推理场景。未来的研究方向包括将缓存重用从“完全相同图像”扩展到“相似视觉输入”，以进一步提升其实用价值。</p>
+
+    </section>
+  
+    <section data-source="posts\Accelerating Streaming Video Large Language Models via  Hierarchical Token Compression.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/STC/title.png"></p>
+<p><strong>Github:</strong> <a href="https://github.com/lern-to-write/STC">https://github.com/lern-to-write/STC</a></p>
+<p><strong>Conference: CVPR'26</strong></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>最近，随着直播体育解说和增强现实眼镜等新兴应用的出现，对<strong>流式视频理解 (Streaming Video Understanding, SVU)</strong> 的需求日益迫切。在这些场景中，模型必须持续处理输入的视频帧，并以极低的延迟生成响应 。然而，现有 VideoLLM 在处理来自连续视频流的高密度视觉标记（tokens）时，计算成本极高，导致其在延迟敏感的应用中难以实时部署 。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure1.png"></p>
+<p>通过图 1 的推理时间分解可以发现：视频理解与图像理解存在显著差异 。在 Qwen2-VL 和 LLaVA-OV 等模型中，ViT 编码的计算成本通常比图像理解高出 2-3 倍，成为主要的延迟瓶颈 。例如，当 LLaVA-OV 处理 32 帧视频时，会有  个视觉标记输入 LLM，是普通图像任务（约 1,900 个标记）的三倍以上 。</p>
+<p>针对流式场景，本研究通过实证分析揭示了两个关键特征：</p>
+<ol>
+<li>
+<p><strong>ViT 编码中的时间冗余 (Temporal Redundancy)</strong>：流式视频需要更密集的帧采样，导致相邻帧之间存在大量重复内容 。实验显示，在 ViT 的深层（如 Layer 20），相邻帧特征的平均余弦相似度在流式设置下高达 0.85，而离线设置仅为 0.60 。</p>
+</li>
+<li>
+<p><strong>不完整的视频与未知的指令 (Incomplete Video and Unknown Instructions)</strong>：流式场景下，模型无法预先获取完整视频或用户指令，这使得依赖全局视频特征或指令感知的压缩策略（如 Instruction-aware pruning）失效，因为查询通常在视频帧处理完后才到达 。</p>
+</li>
+</ol>
+<p>因此，迫切需要一种能够**因果式（causally）**运行、利用编码过程中的时间冗余且不依赖全局上下文的压缩方法 。</p>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<p>基于上述分析，我们提出了 <strong>Streaming Token Compression (STC)</strong>，这是一个即插即用的分层加速框架，旨在共同优化 ViT 编码和 LLM 预填充（prefilling）阶段 。其核心贡献包括：</p>
+<ul>
+<li>
+<p><strong>流式场景的实证分析</strong>：分析了现有压缩方法在 SVU 中的局限性，强调了因果压缩的必要性，即在不依赖未来指令的情况下降低 ViT 成本 。</p>
+</li>
+<li>
+<p><strong>即插即用的加速框架</strong>：STC 框架可无缝集成到现有 VideoLLM 中，无需重新训练即可实现高效的流式视频理解 。</p>
+</li>
+<li>
+<p><strong>两个互补的标记压缩器</strong>：</p>
+<ul>
+<li>
+<p><strong>STC-Cacher</strong>：通过缓存和重用相邻帧的特征来加速 ViT 编码 。</p>
+</li>
+<li>
+<p><strong>STC-Pruner</strong>：通过剪枝低显著性标记来加速 LLM 预填充阶段 。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>全面的验证与结果</strong>：实验证明 STC 在性能与效率之间取得了卓越平衡。在 ReKV 框架上保留了 99% 的准确度，同时将 ViT 编码延迟降低了 24.5%，LLM 预填充延迟降低了 45.3% 。</p>
+</li>
+</ul>
+<hr>
+<h2 id="3-methodology">3. Methodology</h2>
+<h3 id="31-preliminary">3.1. Preliminary</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure2.png"></p>
+<p><strong>流式推理范式 (Streaming Inference)</strong>：
+连续视频流  被划分为多个长度为  的数据块（chunks） 。</p>
+$$
+\mathcal{V} = \{\mathcal{V}_1, \mathcal{V}_2, \dots, \mathcal{V}_t\}, \quad
+\mathcal{V}_t = \{I_{t,1}, I_{t,2}, \dots, I_{t,L}\}
+$$<p>对于每个块，ViT 提取视觉特征标记  。</p>
+$$
+\mathbf{Z}_t = \mathrm{ViT}(\mathcal{V}_t), \quad
+\mathbf{Z}_t \in \mathbb{R}^{N \times d}
+$$<p>为了在因果约束下保持时间一致性，每个块生成的 Key-Value (KV) 状态被缓存在存储库  中，作为未来处理的上下文 。</p>
+$$
+\mathcal{M}_t = \mathcal{M}_{t-1} \cup \{(\mathbf{K}_t, \mathbf{V}_t)\}
+$$<p><strong>冗余瓶颈 (Redundancy Bottleneck)</strong>：</p>
+<ol>
+<li>
+<p><strong>ViT 编码中的时间冗余</strong>：相邻帧共享大量静态背景，导致重复计算 。</p>
+</li>
+<li>
+<p><strong>LLM 预填充中的长上下文冗余</strong>：随着视频推进，标记序列中积累了持久的时间特征和低信息区域，加重了 LLM 自注意力机制的  计算负担和 KV 缓存的存储压力 。</p>
+</li>
+</ol>
+<hr>
+<h3 id="32-streaming-token-compression">3.2. Streaming Token Compression</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure3.png"></p>
+<p>STC 框架通过以下两个模块解决上述瓶颈：</p>
+<ul>
+<li>
+<p><strong>STC-Cacher</strong>：结合时间变化信息，缓存并重用静态内容的视觉特征，仅选择性地计算时间上的“动态标记” 。</p>
+</li>
+<li>
+<p><strong>STC-Pruner</strong>：结合因果事件信息，在标记进入 LLM 之前对其进行剪枝，缩短上下文长度 。</p>
+</li>
+</ul>
+<p>两个组件均是查询无关（query-agnostic）且未来无关（future-agnostic）的 。</p>
+$$
+\mathbf{Z}_t^{\text{compressed}} = f(\mathbf{Z}_{\le t}), \quad
+\mathbf{Z}_t^{\text{compressed}} \perp \mathbf{Z}_{>t}
+$$<hr>
+<h3 id="33-stc-cacher-selective-computation-in-vit">3.3. STC-Cacher: Selective Computation in ViT</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure5.png"></p>
+<p>STC-Cacher 的核心思想是<strong>选择性重计算 (Selective Recomputation)</strong>。它通过识别动态标记来避免对冗余帧进行完整的 ViT 前向传播 。</p>
+<p><strong>具体步骤如下：</strong></p>
+<ol>
+<li><strong>参考帧处理 (Full Computation &amp; Caching)</strong>：
+对于参考帧 （由缓存间隔  决定，如每 4 帧更新一次），执行完整的 ViT 前向传播 。缓存每一层  的中间表示 ：</li>
+</ol>
+$$
+\mathcal{C}_t^{(l)} =
+\left\{
+\mathbf{K}_t^{(l)},
+\mathbf{V}_t^{(l)},
+\mathbf{A}_t^{(l)},
+\mathbf{H}_t^{(l)}
+\right\}
+$$<p>其中包含 Key、Value、Attention 输出和 MLP 输出 。</p>
+<ol start="2">
+<li><strong>非参考帧处理 (Selective Computation)</strong>：
+对于后续帧 ，利用缓存旁路大部分计算，仅聚焦于包含新信息的动态标记 。</li>
+</ol>
+<ul>
+<li><strong>识别动态标记</strong>：计算当前 Key 投影  与缓存参考  之间的余弦相似度：</li>
+</ul>
+$$
+s_i =
+\frac{
+\langle \mathbf{k}_{t,i}, \mathbf{k}_{\text{ref},i} \rangle
+}{
+\lVert \mathbf{k}_{t,i} \rVert\,\lVert \mathbf{k}_{\text{ref},i} \rVert
+}
+$$<p>选择相似度最低的前  个标记作为动态集合 ：</p>
+$$
+\mathcal{D}_t =
+\operatorname{TopK}_{i}
+\left(1-s_i;\, k=\rho N\right)
+$$<ul>
+<li><strong>选择性注意力 (Selective Attention)</strong>：仅为  中的标记计算 Query 和 Value：</li>
+</ul>
+$$
+\mathbf{Q}_t^{\mathcal{D}} = \mathbf{Z}_t^{\mathcal{D}} \mathbf{W}_Q, \quad
+\mathbf{V}_t^{\mathcal{D}} = \mathbf{Z}_t^{\mathcal{D}} \mathbf{W}_V
+$$<p>构建完整的 Value 矩阵 ：先从缓存  初始化，然后将新计算的  散布（scatter）更新到相应位置 。注意力计算如下：</p>
+$$
+\mathbf{V}_t =
+\mathbf{V}_{\text{cache}} \quad \text{with} \quad
+\mathbf{V}_t[\mathcal{D}_t] \leftarrow \mathbf{V}_t^{\mathcal{D}}
+$$$$
+\begin{aligned}
+\mathrm{Attn}(\mathbf{Q}_t^{\mathcal{D}}, \mathbf{K}_t, \mathbf{V}_t)
+&=
+\mathrm{softmax}
+\left(
+\frac{\mathbf{Q}_t^{\mathcal{D}} \mathbf{K}_t^\top}{\sqrt{d}}
+\right)
+\mathbf{V}_t
+\end{aligned}
+$$<ul>
+<li><strong>散布更新输出 (Scatter-Update)</strong>：将计算结果散布回缓存的  中形成更新后的 ，后续的 MLP 块也采用类似的散布逻辑 。</li>
+</ul>
+$$
+\mathbf{H}_t[\mathcal{D}_t] \leftarrow \hat{\mathbf{H}}_t^{\mathcal{D}}, \quad
+\mathbf{H}_t[\bar{\mathcal{D}}_t] \leftarrow \mathbf{H}_{\text{cache}}
+$$<hr>
+<h3 id="34-stc-pruner-dual-anchor-pruning-for-llm">3.4. STC-Pruner: Dual-Anchor Pruning for LLM</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure6.png"></p>
+<p>STC-Pruner 旨在通过双锚点剪枝策略减少输入 LLM 的标记数量 。它衡量标记相对于历史上下文（时间）和当前帧背景（空间）的新颖性 。</p>
+<p><strong>具体机制包括：</strong></p>
+<ol>
+<li><strong>锚点建立 (Anchor Establishment)</strong>：</li>
+</ol>
+<ul>
+<li><strong>时间上下文锚点 (Temporal Context Anchor, TCA)</strong>：历史缓冲区  中过去  帧标记向量的均值，代表累积的历史背景：</li>
+</ul>
+$$
+\mathbf{a}_{\text{TCA}} =
+\frac{1}{|\mathcal{B}|}
+\sum_{\mathbf{z} \in \mathcal{B}}
+\mathbf{z}
+$$<ul>
+<li><strong>空间上下文锚点 (Spatial Context Anchor, SCA)</strong>：当前帧所有标记的均值，代表该帧的全局背景或静态信息：</li>
+</ul>
+$$
+\mathbf{a}_{\text{SCA}} =
+\frac{1}{N}
+\sum_{i=1}^{N}
+\mathbf{z}_{t,i}
+$$<ol start="2">
+<li><strong>动态性评分 (Dynamics Scoring)</strong>：
+使用余弦距离  计算每个标记  的评分。评分公式结合了时间与空间的新颖性：</li>
+</ol>
+$$
+s_i =
+\lambda \cdot
+\left( 1 - \cos(\mathbf{z}_{t,i}, \mathbf{a}_{\text{TCA}}) \right)
++
+(1 - \lambda) \cdot
+\left( 1 - \cos(\mathbf{z}_{t,i}, \mathbf{a}_{\text{SCA}}) \right)
+$$<p>其中  是调节时空显著性的权重。该评分会优先保留那些既不同于过去也不同于当前背景的标记 。</p>
+<ol start="3">
+<li><strong>标记剪枝 (Token Pruning)</strong>：
+根据剪枝比例 ，保留评分最高的前  个标记：</li>
+</ol>
+$$
+\mathcal{Z}_t^{\text{keep}} =
+\operatorname{TopK}_{i}
+\left(
+s_i;\, k = \gamma N
+\right)
+$$<hr>
+<h2 id="4-experiments">4. Experiments</h2>
+<h3 id="41-experimental-setup">4.1. Experimental Setup</h3>
+<ul>
+<li>
+<p><strong>基线模型</strong>：Dispider, LiveCC, StreamForest, ReKV 。</p>
+</li>
+<li>
+<p><strong>数据集 (OVO-Bench)</strong>：涵盖实时视觉感知（OCR、动作识别等）、后向追踪（情节记忆等）和前向主动响应（重复事件计数等）三类任务 。</p>
+</li>
+</ul>
+<hr>
+<h3 id="42-main-comparisons">4.2. Main Comparisons</h3>
+<p>根据表 1 的实验结果，STC 展示了显著的加速效果和极高的精度保留 ：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/table1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/table3.png"></p>
+<ul>
+<li>
+<p><strong>效率提升</strong>：与原始 ReKV 相比，STC 组合将 LLM 预填充延迟从 482.4s 大幅降至 263.7s（约减少 45.3%），同时通过 Cacher 有效降低了 ViT 编码延迟 。</p>
+</li>
+<li>
+<p><strong>性能对比</strong>：在保持较高推理速度的同时，STC 的综合准确度（52.0）优于许多同类压缩方法（如 ToMe 在某些感知任务上由于信息丢失严重导致性能下滑） 。</p>
+</li>
+</ul>
+<hr>
+<h3 id="43-ablation-studies-and-analysis">4.3. Ablation Studies and Analysis</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/table5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/STC/figure7.png"></p>
+<ul>
+<li>
+<p><strong>模块独立性</strong>：STC-Cacher 显著降低了 ViT 的计算负担，而 STC-Pruner 在减少 LLM 处理的序列长度方面效果卓著 。</p>
+</li>
+<li>
+<p><strong>鲁棒性</strong>：即便在极高的剪枝比例下，双锚点策略也能确保关键的语义标记（如移动的物体、新出现的文字）不被误删 。</p>
+</li>
+</ul>
+<hr>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>本研究提出了 <strong>Streaming Token Compression (STC)</strong> 框架，通过 <strong>STC-Cacher</strong> 解决 ViT 编码中的时间冗余，以及通过 <strong>STC-Pruner</strong> 解决 LLM 预填充阶段的序列长度挑战 。该方法不仅保留了流式处理所需的因果性，还在无需重新训练的前提下显著提升了现有 VideoLLM 的实时性能。实验结果证明，STC 是在延迟敏感应用中部署大规模视频语言模型的一种高效且实用的解决方案 。</p>
+<hr>
+
+    </section>
+  
+    <section data-source="posts\HyperVL - An Efficient and Dynamic Multimodal Large Language Model for Edge Devices.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/title.png"></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/figure1.png"></p>
+<p>随着数据质量的提高和模型架构设计的成熟，LLM 的 <strong>Densing Law</strong> [Yao et al., 2024] 不断提升，使得小参数模型也能获得强大的通用能力。这一趋势为大模型的端侧部署（On-device deployment）提供了实际的基础。最近，紧凑型 MLLM（如 Qwen3 VL 2B [Bai et al., 2025a] 和 InternVL 2B [Zhu et al., 2025, Wang et al., 2025]）展示了极具竞争力的性能。</p>
+<p>然而，一个关键的瓶颈依然存在：这些模型通常依赖标准的 <strong>Vision Transformer (ViT)</strong> 编码器，而 ViT 具有二次复杂度（Quadratic Complexity）。当处理高分辨率输入（这在用户界面 UI 理解和 grounding 等典型端侧场景中至关重要）时，它们在端侧部署期间容易产生高内存消耗和明显的推理延迟。为了缓解这一问题，一些尝试（如 Apple 的 FastVLM [Vasu et al., 2025]）通常诉诸于通过激进的卷积下采样（Convolutional Downsampling）来减少视觉 token，但这往往以性能大幅下降为代价。</p>
+<h2 id="2-conclusion">2. Conclusion</h2>
+<p>为此，作者推出了 <strong>HyperVL</strong>，这是一种专为端侧推理量身定制的高效多模态大语言模型。</p>
+<p>具体而言，作者采用了<strong>图像切片策略（Image-tiling strategy）</strong>，将高分辨率输入划分为可以独立编码的小块，从而降低峰值内存消耗。在此基础上，作者通过两项关键技术进一步降低端侧推理成本：</p>
+<ol>
+<li><strong>视觉分辨率压缩器 (Visual Resolution Compressor, VRC)</strong>：自适应地根据图像信息密度预测最佳视觉编码分辨率，避免不必要的高分辨率计算，降低视觉编码延迟。</li>
+<li><strong>双重一致性学习 (Dual Consistency Learning, DCL)</strong>：在不同容量的 ViT 编码器上应用 DCL，使它们能够无缝连接到共享的 LLM，从而根据任务类型、延迟预算或设备计算能力，在轻量级和高精度视觉路径之间实现动态切换。</li>
+</ol>
+<p><strong>总结作者的贡献如下：</strong></p>
+<ul>
+<li>作者提出了 <strong>HyperVL</strong>，一个专为高效端侧推理设计的多模态大语言模型。如 <strong>Fig. 1</strong> 所示，在同等模型规模下，HyperVL 在多个权威多模态基准测试中达到了 SOTA（State-of-the-art）结果，并在端侧场景中超越了现有的通用模型，为实际端侧应用实现了重大的能力突破。</li>
+<li>作者通过 <strong>ViT 双重一致性学习</strong>和<strong>视觉分辨率压缩器</strong>显著提升了视觉编码效率。该压缩器是即插即用的（Plug-and-play），可以直接集成到任何预训练的 MLLM 中，为端侧多模态推理提供了一种通用的加速方案。</li>
+<li>作者在真实硬件上系统地验证了端侧推理性能。作者量化了商业移动设备上延迟和内存消耗的降低，为优化端侧部署的高效多模态推理流水线提供了全面的系统级演示。</li>
+</ul>
+<hr>
+<h2 id="3-hypervl">3. HyperVL</h2>
+<h3 id="31-architecture">3.1 Architecture</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/figure2.png"></p>
+<p>[Fig. 2: HyperVL Overall Architecture. 展示了 VRC、双视觉编码器分支、Projector 以及共享 LLM 的连接方式]</p>
+<p>如 <strong>Figure 2</strong> 所示，HyperVL 包含四个核心模块：视觉分辨率压缩器、两个不同尺寸的视觉编码器、视觉-语言投影器（Vision-language projector）以及共享的大语言模型（LLM）。</p>
+<ul>
+<li><strong>Visual Resolution Compressor (VRC)</strong>:
+作者观察到，高分辨率图像并不总是必需的——大图会显著增加端侧 ViT 的推理延迟和内存占用，而在某些场景下，低分辨率图像已足以支持高质量响应。为此，作者设计了 VRC，它根据输入图像的信息密度预测压缩率 ，将图像缩放至原始尺寸的 10%–100%。该压缩器由一个轻量级的 CNN 主干网络组成，推理延迟极低（约 2ms）。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table1.png"></p>
+<ul>
+<li>
+<p><strong>Visual Encoders</strong>:
+作者采用了两种不同尺寸的 ViT 变体——<strong>SigLIP2-Large</strong> 和 <strong>SigLIP2-Base</strong> 作为视觉编码器。</p>
+</li>
+<li>
+<p><strong>SigLIP2-Large</strong>: 24 层，约 300M 参数，用于高精度需求的任务。</p>
+</li>
+<li>
+<p><strong>SigLIP2-Base</strong>: 18 层，约 93M 参数，用于低延迟需求的任务。
+为了处理任意宽高比和分辨率的图像，作者集成了 <strong>AnyRes</strong> 策略：通过最小比例缩放保持原始宽高比，并在必要时添加 padding，随后将处理后的图像切分为不重叠的 patches。</p>
+</li>
+<li>
+<p><strong>Vision-language Projector</strong>:
+为了将视觉表示映射到 LLM 的输入空间，作者使用一个两层 MLP 作为 Projector，将 ViT 输出与 LLM 的嵌入层（Embedding layer）对齐。此外，作者引入了 <strong>Pixel Shuffle</strong> 技术，将视觉 token 序列在空间维度上进行压缩，使输入 LLM 的 token 长度减少为原始的 ，显著缓解了 LLM 处理长序列的压力。</p>
+</li>
+<li>
+<p><strong>Shared LLM</strong>:
+为了平衡端侧的计算资源与推理性能，作者选择了 <strong>Qwen3-1.7B</strong> 作为基础大语言模型。两个视觉分支共享该 LLM 的参数。</p>
+</li>
+</ul>
+<hr>
+<h3 id="32-dual-consistency-learning-dcl">3.2 Dual Consistency Learning (DCL)</h3>
+<p>为了使不同规模的视觉编码器（Base 和 Large）能与同一个 LLM 兼容并保持语义一致性，作者设计了双重一致性学习策略。其核心思想是让两个分支在训练过程中相互对齐。</p>
+<ol>
+<li><strong>Dual-Branch Alternating Training (双分支交替训练)</strong>:
+在训练过程中，作者以一定的概率交替激活  分支或  分支。这种策略确保了 LLM 能够适应来自不同视觉编码器的特征分布。</li>
+<li><strong>Semantic Consistency Distillation (语义一致性蒸馏)</strong>:
+为了进一步缩小两个分支间的性能差距，作者将  分支视为教师（Teacher）， 分支视为学生（Student）。通过最小化两者预测概率分布之间的 KL 散度，引导小模型学习大模型的逻辑。</li>
+</ol>
+<p>其中  和  分别代表学生和教师模型在给定图像  和历史文本  下，对下一个 token  的预测分布。这种方法确保了在切换到轻量级分支时，模型性能依然稳健。</p>
+<hr>
+<h3 id="33-visual-resolution-compressor-vrc">3.3 Visual Resolution Compressor (VRC)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/figure3.png"></p>
+<p>VRC 是实现端侧高效推理的关键。它并不是简单地缩放图片，而是**内容自适应（Content-adaptive）**的。</p>
+<ul>
+<li>
+<p><strong>工作流程</strong>:
+输入图像首先经过一个极小的编码器提取全局特征，回归出一个标量 。图像会根据  动态调整分辨率。</p>
+</li>
+<li>
+<p><strong>按需分配计算资源</strong>:</p>
+</li>
+<li>
+<p>对于<strong>信息冗余度高</strong>的任务（如 DocVQA 中的文档背景），VRC 会预测较小的 ，减少视觉 token 数量，减少量可达 49.5%–63.4%。</p>
+</li>
+<li>
+<p>对于<strong>细节密集型</strong>任务（如 ChartQA 中的微小文字），VRC 会自动预测 ，保留原始高分辨率以维持精度。</p>
+</li>
+<li>
+<p><strong>效率提升</strong>:
+实验证明，VRC 在减少约 20.2% 的视觉 token 的前提下，仍能保留 98.7% 的基准性能。</p>
+</li>
+</ul>
+<hr>
+<h3 id="34-training-data">3.4 Training Data</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/figure4.png"></p>
+<p>作者构建了一个三阶段的数据治理流水线，确保训练数据的多样性与高质量：</p>
+<ol>
+<li><strong>Data Classification (数据分类)</strong>: 采用“任务分解-重组”策略，将样本分为视觉识别（Content-based）和意图推理（Instruction-based）两大类，分类准确率超过 96%。</li>
+<li><strong>Quality Filtering (质量过滤)</strong>: 使用包含图文对齐度、图像质量、事实一致性等 12 个指标的量化框架进行筛选。</li>
+<li><strong>Diversity (多样性)</strong>: 涵盖了通用任务（如 COCO, GQA）、STEM 领域（ART500K, ScienceQA）、OCR 以及大量的 GUI 落地数据（用于增强端侧 UI 理解能力）。</li>
+</ol>
+<hr>
+<h3 id="35-training-pipeline">3.5 Training Pipeline</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table2.png"></p>
+<p>HyperVL 的训练分为三个关键阶段：</p>
+<ol>
+<li><strong>Stage 1: Vision-Language Alignment (图文对齐)</strong>:
+冻结 ViT 和 LLM，仅训练 Projector。使用大规模图文对数据，让视觉特征初步映射到文本空间。</li>
+<li><strong>Stage 2: Knowledge Enhancement (知识增强)</strong>:
+解冻全参数。使用混合的多模态数据进行全参数预训练，提升模型的视觉知识储备。此时引入 DCL 策略，训练双分支的一致性。</li>
+<li><strong>Stage 3: Multi-Task Supervised Fine-Tuning (多任务微调)</strong>:
+在高质量、经过精挑细选的指令遵循数据集上进行微调，优化模型在特定端侧任务（如 UI 导航、数学推理）上的表现。</li>
+</ol>
+<hr>
+<h2 id="4-evaluation">4. Evaluation</h2>
+<h3 id="41-public-benchmarks">4.1 Public Benchmarks</h3>
+<p>作者在 OpenCompass 框架下对 HyperVL (1.8B) 进行了全面评估。</p>
+<ul>
+<li>
+<p><strong>综合性能</strong>: HyperVL 在 OpenCompass 平均分达到 <strong>64.5</strong>。</p>
+</li>
+<li>
+<p><strong>细粒度任务表现</strong>:</p>
+</li>
+<li>
+<p><strong>ChartQA</strong>: <strong>83.8</strong>（在同规模模型中处于领先地位）。</p>
+</li>
+<li>
+<p><strong>DocVQA</strong>: <strong>91.3</strong>（证明了强大的 OCR 和文档理解能力）。</p>
+</li>
+<li>
+<p><strong>AI2D</strong>: <strong>81.8</strong>（展现了优秀的科学图表解析力）。</p>
+</li>
+<li>
+<p><strong>MathVista</strong>: <strong>66.2</strong>（强于许多更大参数的模型）。</p>
+</li>
+<li>
+<p><strong>Scale-up 效果</strong>: 使用  分支的 HyperVL (2.0B) 平均分进一步提升至 <strong>66.1</strong>。</p>
+</li>
+</ul>
+<h3 id="42-internal-benchmarks-端侧实用场景">4.2 Internal Benchmarks (端侧实用场景)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/figure5.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table4.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table5.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table6.png">
+<img loading="lazy" src="http://localhost:14183/blog/image/HyperVL/table7.png">
+针对真实的端侧应用，作者测试了三个核心场景：</p>
+<ul>
+<li><strong>UI 理解与结构解析</strong>: 准确率 <strong>84.2%</strong>。</li>
+<li><strong>意图建议与推荐</strong>: 准确率 <strong>94.0%</strong>。</li>
+<li><strong>图文创作</strong>: 评分 <strong>49.8</strong>。</li>
+</ul>
+<h3 id="43-on-device-efficiency-真实硬件表现">4.3 On-device Efficiency (真实硬件表现)</h3>
+<p>作者在 <strong>Qualcomm 8750</strong> 移动平台上验证了 HyperVL 的系统级优化效果：</p>
+<ul>
+<li><strong>Memory Consumption (内存消耗)</strong>:
+标准的 Qwen3-VL 在处理高分辨率时内存会激增（峰值达 1354MB）。相比之下，HyperVL 通过图像切片和 VRC 策略，将峰值内存降低了 <strong>6.8倍</strong>。</li>
+<li><strong>Inference Latency (推理延迟)</strong>:
+通过 DCL 切换到  分支并配合 VRC，推理速度提升了约 <strong>12.9倍</strong>。</li>
+<li><strong>Hardware-aware Optimization</strong>:
+作者实现了将图像 patches 串行输入硬件加速器，确保中间激活值（Activations）始终保留在片上高速存储 <strong>VTCM</strong> 中，避免了频繁的 DDR 访问，极大降低了功耗。</li>
+</ul>
+<hr>
+<h2 id="5-conclusion">5. Conclusion</h2>
+<p>作者提出了 <strong>HyperVL</strong>，这是一个专为端侧推理设计的高效多模态大语言模型。通过<strong>图像切片（Image tiling）</strong>、<strong>视觉分辨率压缩器（VRC）<strong>和</strong>双重一致性学习（DCL）</strong>，HyperVL 在显著降低移动设备延迟和内存占用的同时，在多个基准测试中达到了 SOTA 性能。</p>
+<p>该模型在 <strong>UI 理解、意图推荐和图文创作</strong>等实际端侧任务中展现出强大的泛化能力。未来工作将探索自适应 token 稀疏化、注意力剪枝，并将其扩展到视频理解和实时交互场景，进一步提升在真实移动应用中的资源感知性能和用户个性化体验。</p>
+
+    </section>
+  
+    <section data-source="posts\VisionThink - Smart and Efficient Vision Language Model via Reinforcement Learning - NeurIPs&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/title.png"></p>
+<p><strong>Conference:</strong> <strong>NeurIPS'25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/dvlab-research/VisionThink">https://github.com/dvlab-research/VisionThink</a></p>
+<hr>
+<h2 id="1-motivation">1. Motivation</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure1.png"></p>
+<p>最近，视觉语言模型（VLMs） 通过将视觉标记（visual tokens）投影并适配到大语言模型（LLM）空间中，在通用视觉问答（General VQA）和各种现实场景中取得了显著成就。然而，随着 VLM 性能的不断提升，视觉标记的消耗呈指数级增长。例如，一张使用智能手机拍摄的 $2048 \times 1024$ 照片在 LLaVA 1.5 中需要 576 个视觉标记，而现在在 Qwen2.5-VL 中则需要 2,678 个。因此，避免过度使用视觉标记已成为当务之急。</p>
+<p>目前已经有大量关于视觉标记压缩的研究被提出。大多数方法使用预定义的阈值来修剪或合并固定数量的视觉标记。然而，不同问题和图像的冗余程度各不相同，这引发了一个自然的问题：作者真的应该在所有场景中应用统一的标记压缩比吗？为了回答这个问题，作者简单地通过降低图像分辨率来减少视觉标记的数量，并评估了 Qwen2.5-VL 在多个基准测试上的性能。如 Fig. 1 左侧所示，作者发现对于大多数现实场景（如 MME 和 RealWorldQA），即使将图像分辨率降低四倍（显著减少 75% 的视觉标记），对模型性能的影响也微乎其微。然而，如 Fig. 1 右侧所示，对于 ChartQA 和 OCRBench 等需要细节理解和 OCR 相关能力的基准测试，减少视觉标记会导致性能大幅下降。</p>
+<p>基于这些观察，作者发现大多数现实世界的问题并不需要带有长视觉标记的高分辨率图像，而一小部分 OCR 相关任务对这类细节输入的要求非常高 。因此，如果作者能够动态区分哪些样本需要高分辨率处理，哪些不需要，那么效率优化将具有巨大的潜力 。</p>
+<p>在本文中，作者提出了 <strong>VisionThink</strong>，这是一种利用模型推理能力的新型高效 VLM 范式 。与之前处理全图后丢弃冗余标记的方法不同，VisionThink 直接输入压缩后的视觉标记，并允许模型在需要时请求原始高分辨率图像 。这使得在大多数现实场景中能够进行更高效的推理，同时保留在 OCR 相关任务上的性能 。</p>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<p>在本文中，作者提出了 VisionThink，这是一种新的高效 VLM 范式，它利用了模型的推理能力 。与之前处理完整图像然后丢弃冗余标记的方法不同，VisionThink 直接输入压缩后的视觉标记，并允许模型在需要时请求原始高分辨率图像 。这使得在大多数现实场景中能够实现更高效的推理，同时在 OCR 相关任务上保持性能 。</p>
+<p>尽管 VisionThink 提供了一种聪明处理具有不同视觉冗余水平样本的前景方法，但它仍然面临两个关键挑战：</p>
+<ul>
+<li>
+<p><strong>针对通用 VQA 的有效强化学习 (Effective Reinforcement Learning for General VQA)</strong>：传统的基于规则的强化学习算法（通常用于优化推理过程）难以应对通用 VQA 的多样性和复杂性 。为了克服这个问题，作者提出了 <strong>LLM-as-Judge</strong> 方法，实现了语义匹配 。实验表明，在多个通用 VQA 基准测试中性能都有所提升，突显了将基于视觉的强化学习从视觉数学推理扩展到更广泛 VQA 任务的潜力 。</p>
+</li>
+<li>
+<p><strong>确定高分辨率何时值得 (Determine When High Resolution is Worth)</strong>：为了在不损害性能的情况下提高效率，模型必须准确确定何时需要高分辨率输入 。作者通过精心设计<strong>平衡奖励函数 (balanced reward function)</strong> 来实现这一点，以防止模型陷入总是要求高分辨率图像或总是使用低分辨率图像的崩溃状态 。通过这种机制，VisionThink 在 OCR 基准测试上保持了强大的性能，同时在非 OCR 基准测试上实现了显著的加速，DocVQA 的加速高达 100% 。</p>
+</li>
+</ul>
+<p>总的来说，作者提出了一个简单且有效的流水线——VisionThink 。它通过根据每个样本的内容动态决定压缩，引入了一种视觉标记压缩的新方法，从而在样本级别实现效率增益 。因此，它与其它先进的空间级方法兼容 。</p>
+<hr>
+<h2 id="3-preliminary">3. Preliminary</h2>
+<h3 id="31-large-language-models-and-reinforcement-learning">3.1 Large Language Models and Reinforcement Learning</h3>
+<p>最近在提升大语言模型（LLMs）推理能力方面的进展表明，强化学习（RL）是一种有效的训练方法 。在这项工作中，作者使用 <strong>GRPO (Group Relative Policy Optimization)</strong> 作为作者的训练方法 。GRPO 通过使用组分数来估计基准，从而消除了对独立 Critic 模型的需要，这降低了计算成本，提高了训练稳定性 。</p>
+<p>训练过程中，GRPO 根据旧策略  对给定问题  采样一组输出 ，并通过最大化以下目标来优化策略模型  ：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/section3-1-0.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/section3-1.png"></p>
+<h3 id="32-computation-complexity">3.2 Computation Complexity</h3>
+<h2><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/section3-2.png"></h2>
+<h2 id="4-methodology-详细设计">4. Methodology (详细设计)</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure2.png"></p>
+<h3 id="41-overview">4.1 Overview</h3>
+<p>作者的目标是开发一个智能且高效的 VLM，能够自主判断给定图像中的信息是否足以准确回答问题 。如 Fig. 2 所示，该流水线首先处理低分辨率图像以最小化计算成本 。当降采样图像中的信息不足以回答问题时，它会智能地请求原始高分辨率输入 。理想情况下，这一策略在大幅减少计算负载的同时保持了高性能 。</p>
+<p>为了实现这一目标，作者必须解决两个关键挑战：</p>
+<ol>
+<li>
+<p><strong>在通用 VQA 上实现有效的 RL</strong>：由于通用 VQA 的多样性和复杂性，传统的基于规则的 RL 算法并不直接适用 。为此，作者提出了 <strong>LLM-as-Judge</strong> 策略，利用大语言模型指导和评估 RL 训练过程 。</p>
+</li>
+<li>
+<p><strong>使模型能够决定何时需要高分辨率</strong>：模型必须学会评估降采样图像是否包含足够信息，或者是否需要原始高分辨率图像，以便平衡效率和性能 。</p>
+</li>
+</ol>
+<h3 id="42-llm-as-judge-for-general-vqa">4.2 LLM-as-Judge for General VQA</h3>
+<p><strong>挑战</strong>：在通用 VQA 中应用强化学习的核心挑战之一在于评估模型响应，特别是当答案是开放式或依赖上下文时 。大多数现有的多模态 RL 努力仍局限于结构化任务（如视觉数学），其 Ground-truth 答案可以通过规则或精确匹配轻松验证 。</p>
+<p><strong>纯文本准确性判断 (Pure Text Accuracy Judgement)</strong>：</p>
+<ul>
+<li>
+<p>作者采用外部强 LLM（如 GPT-4o）作为评判者 。</p>
+</li>
+<li>
+<p>评判完全在文本层面进行，通过对比模型预测和 Ground-truth 来判断正确性 。这种设计避免了来自视觉内容的偏见以及 VLM 性能本身的局限 。</p>
+</li>
+<li>
+<p>为了减少评判者的误判，奖励是离散的（0 或 1），而非连续得分 。具体 Prompt 模板见附录 Table 3 。</p>
+</li>
+<li>
+<p><strong>有效性</strong>：该策略非常灵活，可以利用绝大部分 SFT 数据。作者收集了 130K 样本直接进行 GRPO 训练，无需冷启动 。</p>
+</li>
+</ul>
+<h3 id="43-multi-turn-training-algorithm-多轮训练算法">4.3 Multi-Turn Training Algorithm (多轮训练算法)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/section4-3.png"></p>
+<p><strong>模型如何发出信号？</strong>：
+作者修改了 Prompt，引导模型在需要高分辨率时输出特定的特殊标记（如 Agent Prompt） 。选择合适的 Prompt 至关重要，否则 GRPO 会因零样本下无法输出特殊标记而导致梯度缺失 。研究发现 Qwen-2.5VL 推荐的 Agent Prompt 最适合 VisionThink 。</p>
+<h3 id="44-reward-design-奖励设计详情">4.4 Reward Design (奖励设计详情)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/section4-4.png"></p>
+<h3 id="45-data-preparation-数据准备">4.5 Data Preparation (数据准备)</h3>
+<p>为了训练模型学会在不同分辨率间决策，作者构建了一个平衡数据集 ：</p>
+<ul>
+<li>
+<p><strong>采样</strong>：对基础模型进行 8 次采样（rollouts），Temperature 设为 1.0。</p>
+</li>
+<li>
+<p><strong>类别划分</strong>：</p>
+<ul>
+<li><strong>Solvable Low-Res (低分可解)</strong>：在低分和高分下均 8 次全对的样本。</li>
+<li><strong>High-Res Required (需高分)</strong>：高分下的正确率比低分下显著高出（如高出 6 次及以上）的样本。</li>
+</ul>
+</li>
+<li>
+<p><strong>规模</strong>：最终挑选各 10K 样本，共 20K 训练数据。</p>
+</li>
+</ul>
+<hr>
+<h2 id="5-experiments-详细实验评估">5. Experiments (详细实验评估)</h2>
+<h3 id="51-evaluation-setup">5.1 Evaluation Setup</h3>
+<ul>
+<li>
+<p><strong>模型</strong>：基于 Qwen2.5-VL-7B-Instruct 。</p>
+</li>
+<li>
+<p><strong>训练细节</strong>：使用 veRL 框架，全局 Batch Size 512，采样 16 个响应进行 GRPO 训练。</p>
+</li>
+<li>
+<p><strong>对比模型</strong>：包括 GPT-4o, Claude-3.5 Sonnet, Gemini-1.5-Pro 等闭源模型，以及 InternVL2-8B, LLaVA-OneVision 等开源模型。</p>
+</li>
+</ul>
+<h3 id="52-reinforcement-learning-enables-vlm-to-be-more-effective">5.2 Reinforcement Learning Enables VLM to Be More Effective</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/table1.png"></p>
+<p>如 <strong>Table 1</strong> 所示，VisionThink 在多个基准测试上取得了显著提升：</p>
+<ul>
+<li><strong>MathVerse</strong> 提升了 <strong>3.7%</strong>，<strong>MMVet</strong> 提升了 <strong>8.9%</strong>。</li>
+<li>在 <strong>MME</strong> 测试中，VisionThink 达到了 <strong>2400</strong> 分，超越了 GPT-4o (2329)。</li>
+<li>实验证明，即使不考虑效率，通过 LLM-as-Judge 引导的 RL 也能显著增强模型的推理和理解能力。</li>
+</ul>
+<h3 id="53-reinforcement-learning-enables-vlm-to-be-more-efficient">5.3 Reinforcement Learning Enables VLM to Be More Efficient</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure4.png"></p>
+<p>VisionThink 实现了极高的推理效率（见 <strong>Fig. 1</strong> 右侧和 <strong>Table 7</strong>）：</p>
+<ul>
+<li>
+<p><strong>DocVQA</strong>：相比全分辨率模型，实现了 <strong>100%</strong> 的提速 。</p>
+</li>
+<li>
+<p><strong>MME &amp; POPE</strong>：在这些通用任务上，推理时间减少了约 <strong>1/3</strong>，因为模型自主选择了低分路径。</p>
+</li>
+<li>
+<p><strong>性能/效率平衡</strong>：在 ChartQA 上，VisionThink 以更少的视觉标记实现了 102% 的相对性能（相比全分辨率基础模型） 。</p>
+</li>
+</ul>
+<h3 id="54-reinforcement-learning-enables-vlm-to-be-smarter">5.4 Reinforcement Learning Enables VLM to Be Smarter</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VisionThink/figure5.png"></p>
+<p>模型表现出了明显的“因地制宜”能力：</p>
+<ul>
+<li>
+<p>对于 OCRBench 等强 OCR 任务，模型请求高分辨率的比例显著更高 。</p>
+</li>
+<li>
+<p>对于简单物体识别或常识问答，模型几乎总是直接回答，节省了 75% 的图像标记 。</p>
+</li>
+</ul>
+<h3 id="55-relationship-of-the-efficientvlm-methods-and-visionthink">5.5 Relationship of the EfficientVLM methods and VisionThink</h3>
+<ul>
+<li>
+<p><strong>Key Differences (核心区别)</strong>：传统方法（如 FastV, SparseVLM）使用固定阈值剪枝，容易在 OCR 任务上造成毁灭性打击 。VisionThink 是根据内容自主决定是否需要更多信息 。</p>
+</li>
+<li>
+<p><strong>Integration Potential (集成潜力)</strong>：VisionThink 是一种处理图像的新范式，可以与现有的标记压缩技术（如 VisionZip）结合 。通过 RL，模型可以更聪明地使用这些工具，从而在不降性能的前提下进一步推高效率上限。</p>
+</li>
+</ul>
+<hr>
+<h2 id="6-concluding-remarks">6. Concluding Remarks</h2>
+<h3 id="61-summary">6.1 Summary</h3>
+<p>在本文中，作者介绍了 VisionThink，这是一种增强通用 VQA 效率和性能的新范式。通过最初处理降采样图像，并利用强化学习在需要时选择性地升级到更高分辨率，VisionThink 在优化计算资源的同时保留了准确性。利用 LLM-as-Judge 策略和量身定制的奖励函数，作者的方法在各种 VQA 基准测试中优于之前的最先进模型，特别是在 OCR 等需要细粒度细节的任务中。作者相信 VisionThink 展示了强化学习在视觉语言模型中的潜力，并鼓励开发更有效、更高效的 AI 系统。</p>
+<h3 id="62-limitations-and-future-work">6.2 Limitations and Future work</h3>
+<p>在这项工作中，作者关注 2 倍分辨率升级和最多两轮对话的设置，并取得了可喜的结果。然而，它尚未扩展到灵活分辨率升级的设置。此外，结合裁剪（cropping）等更多视觉工具将进一步带来效率和性能方面的收益。此外，多轮（例如超过 5 轮）图像工具调用在解决复杂视觉问题方面可以获得更多收益。</p>
+<p>此外，作者的论文利用图像缩放来减少视觉标记的数量。这种简单的方法通过强化学习在性能和效率之间取得了良好的平衡。作者希望这项工作能启发高效推理视觉语言模型领域的进一步研究，特别是让模型变得更聪明、更像人。作者将继续探索构建更通用、更强大且更高效的视觉语言模型的道路。</p>
+
+    </section>
+  
+    <section data-source="posts\SpecBranch - SpeculativeDecoding via Hybrid Drafting and Rollback-Aware Branch Parallelism.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/title.png"></p>
+<p><strong>Conference:</strong> <strong>ICLR'26</strong></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p><strong>核心痛点：投机解码（Speculative Decoding, SD）中的串行瓶颈与回滚代价</strong></p>
+<p>受到现代处理器分支预测技术的启发 ，作者允许 Draft Model（草稿模型）在 Target Model（目标模型）进行验证的同时，主动生成推测性的分支。这种并行 SD 范式创建了一个两阶段流水线，使得 Draft Model 的 token 生成与 Target Model 的验证在时间上重叠，从而有效地填补了传统 SD 中固有的流水线气泡（Pipeline Bubbles）。</p>
+<p>先前的研究（如 PEARL ）尝试在 Drafting 阶段利用 Target Model 预验证第一个 token，并在验证阶段让 Draft Model 继续生成。然而，与传统 SD 仅面临局部惩罚（即丢弃部分 token）不同，<strong>并行 SD 面临全局失效的风险</strong> 。如果并行生成的某个关键 token 被拒绝，会导致后续所有并行计算的 token 全部失效（Global Invalidation），从而严重阻碍并行效率。这种现象在生成长度较长时尤为严重，因为被接受的 token 数量通常服从截断几何分布（Truncated Geometric Distribution），这在并行性和回滚代价之间制造了一个艰难的权衡（Trade-off）。</p>
+<p>遗憾的是，PEARL 并未充分解决这些挑战：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure1.png"></p>
+<ol>
+<li>
+<p><strong>Pre-verify Rollback（预验证回滚）：</strong> PEARL 忽视了并行加速的一个关键条件：验证期间生成的 token 必须被 <strong>“全部接受（All-Accepted）”</strong> 。否则，PEARL 会退化为串行执行并失去并行能力。它仅验证第一个 token，而系统对序列中间发生的拒绝（例如 Fig. 1(b) 中  被拒绝）一无所知，直到并行验证结束才发现，导致大量浪费 。</p>
+</li>
+<li>
+<p><strong>Post-verify Rollback（后验证回滚）：</strong> 其静态的 Draft 长度缺乏对回滚和被拒绝 token 的感知能力 。这导致了对那些 “注定失败的 token（doomed tokens）” 的冗余计算，使得 Target Model 即使在不可避免的回滚面前，仍需处理来自无效分支的不必要 token，成为系统瓶颈。这种现象在参数比例不平衡的模型对（如 68M Draft &amp; 13B Target）中尤为严重 。</p>
+</li>
+</ol>
+<p><strong>现有动态 Drafting 方法的局限性</strong></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/table1.png"></p>
+<p>虽然近期的动态 Drafting 方法（分为 <strong>隐式/Implicit</strong> 和 <strong>显式/Explicit</strong>）试图缓解回滚问题，但仍存在实际困难 ：</p>
+<ul>
+<li>
+<p><strong>隐式方法（Implicit）：</strong> 依赖置信度（Confidence）或熵（Entropy）进行早停。由于需要针对每个任务手动调整阈值，且逐 token 的预测会导致 <strong>误差累积（Error Compounding）</strong>，难以在灵活性和计算开销之间取得平衡 。</p>
+</li>
+<li>
+<p><strong>显式方法（Explicit）：</strong> 利用 Target Model 特征直接预测 Draft 长度（如 AdaEAGLE）。但随着预测序列长度的增加，特征的判别力下降，导致长序列的 <strong>预测准确率较低</strong> 。</p>
+</li>
+<li>
+<p><strong>共同缺陷：</strong> 现有的这些工作都没有从根本上解决 <strong>回滚（Rollback）</strong> 问题，即 Draft 生成了无效 token 从而阻碍并行性的核心瓶颈 。</p>
+</li>
+</ul>
+<p>因此，本文提出了 <strong>SpecBranch</strong>，旨在通过混合框架结合隐式置信度终止与显式序列建模，大幅减少回滚并提升并行效率 。</p>
+<h2 id="2-contribution">2. Contribution</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure1.png"></p>
+<p>本文提出了 <strong>SpecBranch</strong>，主要贡献如下：</p>
+<ol>
+<li>
+<p><strong>Branch-Parallel Architecture（分支并行架构）：</strong>
+作者首先建立了理论模型来量化理想的并行推测，并将其扩展以考虑实际中的回滚惩罚 。基于这些理论洞察，作者提出了一种新颖的 <strong>分支重采样机制（Branch Resampling）</strong>，它引入并行推测分支来抢先对冲（Hedge）可能的拒绝风险，同时保证生成分布与原模型一致（Lossless）。这是首个具有混合 Drafting 结构且无需额外训练 Draft Model 的并行框架 。</p>
+</li>
+<li>
+<p><strong>Hybrid Adaptive Drafting（混合自适应 Drafting）：</strong>
+基于对自适应 Draft 结构的广泛实证分析，作者首次将 <strong>隐式方法（Draft Model 置信度）</strong> 和 <strong>显式方法（Target Model 特征）</strong> 统一到一个混合框架中（H-RAD），以动态优化 Draft 长度 。这种方法有效地利用了 Target Model 特征对 “全接受/全拒绝” 的高判别力，以及置信度对中间状态的细粒度控制，从而大幅降低回滚率并提升并行效率 。</p>
+</li>
+<li>
+<p><strong>Extensive Evaluation and Discussion（广泛的评估与讨论）：</strong>
+作者在多种模型和任务上进行了广泛实验，证明 SpecBranch 在无需训练 Draft Model 的情况下，一致地实现了 <strong>1.8× 到 4.5×</strong> 的加速，并且对于对齐较差的模型对，将回滚 token 减少了 <strong>50%</strong> 。</p>
+</li>
+</ol>
+<h2 id="3-analysis-of-parallel-decoding">3. Analysis of Parallel Decoding</h2>
+<p>本节通过深入的理论推导和实证数据分析，剖析了并行解码中加速潜力与回滚代价之间的核心矛盾，并论证了为何需要一种混合的自适应策略。</p>
+<h3 id="31-theoretical-speedup理论加速比">3.1 Theoretical Speedup（理论加速比）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section3-1.png"></p>
+<h3 id="32-parallel-sd-with-rollback带回滚的并行-sd-分析">3.2 Parallel SD with Rollback（带回滚的并行 SD 分析）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section3-2-1.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section3-2-2.png"></p>
+<h3 id="33-analysis-of-adaptive-draft-structures自适应-draft-结构的实证分析">3.3 Analysis of Adaptive Draft Structures（自适应 Draft 结构的实证分析）</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure3.png"></p>
+<p>为了解决上述权衡，作者深入对比了隐式和显式 Draft 长度预测方法的优劣：</p>
+<ol>
+<li><strong>Implicit Methods（隐式方法）：</strong> 依赖 Draft Model 的输出分布（如置信度 Confidence 或熵 Entropy）。</li>
+</ol>
+<ul>
+<li><strong>缺点：</strong> 阈值  难以确定，随任务、模型、温度变化敏感（见 Fig. 14, 15, 16）。且逐 token 预测会导致 <strong>误差累积</strong>，不同任务间的不稳定性高 。</li>
+</ul>
+<ol start="2">
+<li><strong>Explicit Methods（显式方法）：</strong> 直接利用 Target Model 的特征预测长度（如 AdaEAGLE）。</li>
+</ol>
+<ul>
+<li><strong>缺点：</strong> 如图 3(a) t-SNE 可视化所示，随着接受长度增加，Target Model 特征的簇重叠严重，判别力下降。这导致长序列的预测准确率甚至低于隐式方法（Fig. 3(c)）。</li>
+</ul>
+<p><strong>双峰现象与混合策略的动机：</strong></p>
+<p>作者发现了一个有趣的 <strong>双峰现象（Bimodal Phenomenon）</strong>：Target Model 的特征对于 <strong>“全接受（All Accept）”</strong> 和 <strong>“全拒绝（All Reject）”</strong> 这两种极端情况具有很强的可分性（Fig. 3(b)），而中间状态则很难通过特征区分，但可以通过隐式置信度来有效处理 。这直接启发了 <strong>SpecBranch</strong> 的混合设计。</p>
+<h2 id="4-method">4. Method</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure4.png"></p>
+<p>SpecBranch 是一个包含 <strong>H-RAD（混合回滚感知 Draft 结构）</strong> 和 <strong>Branch Resampling（分支重采样）</strong> 的并行 SD 框架，旨在解决流水线气泡和回滚代价放大的双重挑战 。</p>
+<h3 id="41-h-rad-hybrid-rollback-aware-draft-structure">4.1 H-RAD: Hybrid Rollback-aware Draft Structure</h3>
+<p>H-RAD 的核心目标是在 Drafting 阶段，利用 Target Model 的特征提前预测最佳 Draft 长度和策略，以最大程度减少回滚。</p>
+<p><strong>混合长度预测机制（Hybrid Drafting Length Prediction）</strong>
+H-RAD 将复杂的长度回归问题简化为一个 <strong>3分类问题</strong>。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section4-1.png"></p>
+<p>基于  的混合决策策略  ：</p>
+<ol>
+<li><strong>(Hard Signal: All Reject):</strong> 预测当前 token 极大概率被拒绝。</li>
+</ol>
+<ul>
+<li><strong>策略：</strong> 仅生成该 token，<strong>Branch Point（分支点）</strong> 设为当前 token。这对应于 Fig. 4 中的 <strong>Case 3</strong>。</li>
+</ul>
+<ol start="2">
+<li><strong>(Soft Signal: Confidence):</strong> 处于中间状态，特征无法确信。</li>
+</ol>
+<ul>
+<li><strong>策略：</strong> 这是一个“软信号”，退回使用 Draft Model 的 **置信度 ** 进行判断。当  时继续生成。<strong>Branch Point</strong> 由第一个置信度不足的 token 决定。这对应于 Fig. 4 中的 <strong>Case 1</strong>。</li>
+</ul>
+<ol start="3">
+<li><strong>(Hard Signal: All Accept):</strong> 预测接下来的序列全被接受。</li>
+</ol>
+<ul>
+<li><strong>策略：</strong> 继续生成直到最大长度。<strong>Branch Point</strong> 设为下一轮的第一个 token。这对应于 Fig. 4 中的 <strong>Case 2</strong>。</li>
+</ul>
+<p><strong>优势：</strong> 这种混合方法利用了“全接受/全拒绝”的高特征可分性，同时用置信度处理模糊地带，既提高了显式方法的预测准确率，又减少了隐式方法的误差累积 。</p>
+<h3 id="42-branch-resampling-parallel-drafting-during-verification">4.2 Branch Resampling: Parallel Drafting During Verification</h3>
+<p>一旦 H-RAD 确定了 <strong>Branch Point</strong>（通常是置信度不足的 token ），SpecBranch 启动并行分支机制，以消除串行瓶颈。</p>
+<p><strong>Top-k 分支生成（Top-k Branching）</strong>
+<img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section4-2-1.png"></p>
+<p><strong>分支验证（Branch Verification）</strong>
+<img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section4-2-2.png"></p>
+<h3 id="43-posterior-drafting-handling-temporal-mismatch">4.3 Posterior Drafting (Handling Temporal Mismatch)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/section4-3.png"></p>
+<h3 id="44-specbranch-算法流程概览">4.4 SpecBranch 算法流程概览</h3>
+<p>SpecBranch 的执行是一个闭环状态机：</p>
+<ol>
+<li><strong>Draft Stage（草稿阶段）：</strong> 如果有 Target 特征，H-RAD 预测策略   Draft Model 生成直到遇到 Branch Point（由  决定是 Confidence 还是 Hard Signal）。</li>
+<li><strong>Transition（转换）：</strong> 启动并行。Target Model 验证前缀；Draft Model 并行生成 Top-k 分支。</li>
+<li><strong>Verification Stage（验证阶段）：</strong> Target 完成验证，确定保留哪个分支（或触发 Rollback 回到 Draft Stage）。</li>
+<li><strong>Posterior Decision（后验决策）：</strong> 利用验证后的最新特征再次调用 H-RAD，决定保留分支中的哪些 token 用于下一轮  回到 Draft Stage。</li>
+</ol>
+<p>整个过程通过 <strong>Branch Speculative Sampling (Algorithm 2)</strong> 保证了生成的分布与 Target Model 严格一致（Lossless），即温度为 0 时结果一致，其他温度下分布一致 。</p>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-实验设置">5.1 实验设置</h3>
+<ul>
+<li>
+<p><strong>Benchmarks:</strong> HumanEval (代码生成), GSM8K (数学推理), CNN/DM (摘要), Spec-Bench (综合任务) 。</p>
+</li>
+<li>
+<p><strong>Models:</strong> 覆盖了不同参数量和对齐程度的模型对 ：</p>
+<ul>
+<li><strong>Poorly Aligned（对齐较差）:</strong> LLaMA (68M/7B), Vicuna (68M/13B)。</li>
+<li><strong>Well Aligned（对齐较好）:</strong> DeepSeek-Coder (1.3B/33B), LLaMA-3.1 (8B/70B)。</li>
+</ul>
+</li>
+<li>
+<p><strong>Baselines:</strong> Autoregressive, SpS , AdaEDL , Lookahead , PEARL 。</p>
+</li>
+<li>
+<p><strong>Metrics:</strong> Mean Accepted Length (M), Wall-Time Speedup, Speed (tokens/s), <strong>Rollback Rate (RB)</strong> 。</p>
+</li>
+</ul>
+<h3 id="52-主要结果-main-results">5.2 主要结果 (Main Results)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/table3.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure5.png"></p>
+<p>Table 2 &amp; 3 结果总结 ：</p>
+<ol>
+<li><strong>显著加速（Speedup）：</strong> SpecBranch 在 HumanEval, GSM8K, CNN/DM 上实现了 <strong>1.9× 到 4.0×</strong> 的加速。在 Spec-Bench 的六个子任务上实现了 <strong>1.8× 到 4.5×</strong> 的加速，全面超越 Baseline。</li>
+<li><strong>对齐差的模型 (Poorly Aligned - Vicuna/LLaMA)：</strong></li>
+</ol>
+<ul>
+<li>
+<p><strong>Rollback 降低：</strong> 对于这些模型，回滚是并行效率的杀手。SpecBranch 将 Rollback Rate 从 PEARL 的 66-90% 大幅降低到了 <strong>40% 以下</strong> (见 Fig. 5) 。</p>
+</li>
+<li>
+<p><strong>性能提升：</strong> 相比 PEARL 提升了约 15% 的性能。这验证了 H-RAD 能够准确识别 &ldquo;All Reject&rdquo; 并提前终止无效路径的能力 。</p>
+</li>
+</ul>
+<ol start="3">
+<li><strong>对齐好的模型 (Well Aligned - DeepSeek/LLaMA-3.1)：</strong></li>
+</ol>
+<ul>
+<li><strong>并行效率提升：</strong> 此时回滚不再是主导因素，SpecBranch 利用 <strong>Branch Resampling</strong> 进一步提升了并行度。</li>
+<li></li>
+</ul>
+<p><strong>数据：</strong> 在代码生成任务上，相比 SpS 提升了平均接受长度 M (4.14×)；相比 PEARL 速度提升了 10.2%，回滚率降低了 10% 。</p>
+<h3 id="53-消融实验-ablation-studies">5.3 消融实验 (Ablation Studies)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure6.png"></p>
+<p>通过分别移除 Branch Resampling 或 H-RAD 组件进行分析 (Fig. 6) ：</p>
+<ul>
+<li><strong>H-RAD 的贡献：</strong> 在 <strong>对齐差的模型</strong>（如 Vicuna 68M-13B）中起主导作用。移除 H-RAD 后，加速比从 1.95× 显著降至 1.72×。说明此时遏制 Rollback 是关键。</li>
+<li><strong>Branch Resampling 的贡献：</strong> 在 <strong>对齐好的模型</strong>（如 LLaMA-3.1 8B-70B）中起主导作用。移除分支机制会导致显著性能下降。说明在模型能力强时，利用并行分支探索更多可能性更能带来收益。</li>
+<li><strong>结论：</strong> 两个组件互补，分别解决了 Rollback（防守）和 Parallelism 利用率（进攻）的问题 。</li>
+</ul>
+<h3 id="54-资源消耗-resource-consumption">5.4 资源消耗 (Resource Consumption)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/SpecBranch/figure7.png"></p>
+<ul>
+<li>
+<p><strong>显存占用 (Memory - Fig. 7a):</strong> 由于使用了共享前缀 KV-Cache 和 <strong>稀疏分支（Sparse Branching）</strong>，SpecBranch 的显存占用极低。即使分支数 ，显存增加也仅为 Baseline 的 28%。这与呈指数级增长的 Dense Tree 方法形成鲜明对比 。</p>
+</li>
+<li>
+<p><strong>能耗 (Energy - Fig. 7b, Table 10/11):</strong> 相比 PEARL，SpecBranch 显著降低了能耗（减少约 <strong>43%</strong>）。这是因为 H-RAD 减少了大量无效的 Draft token 生成和 Target Model 对无效分支的 Forward 计算 。</p>
+</li>
+<li>
+<p><strong>延迟开销 (Latency - Fig. 7c):</strong> H-RAD 的预测开销极小（单步仅 0.24ms），相对于整个推理步骤（~30ms）不足 1%，几乎可以忽略不计 。</p>
+</li>
+</ul>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>本文提出了 <strong>SpecBranch</strong>，这是一个具有回滚感知能力的并行 LLM 加速框架。通过 <strong>分支重采样（Branch Resampling）</strong> 和 <strong>混合 Draft 结构（H-RAD）</strong> 两项关键创新，SpecBranch 成功实现了 Drafting 和 Verification 的并行化，打破了串行执行的瓶颈 。</p>
+<p>实验结果表明，SpecBranch 实现了 <strong>1.8× ~ 4.5×</strong> 的加速比，特别是对于对齐较差的模型，它能减少高达 <strong>50%</strong> 的计算浪费 。虽然相比自回归解码，它在资源消耗上仍有增加，但相比同类并行方法（如 PEARL），它在能耗和效率上都取得了显著的优化，为大模型的实时应用提供了更高效的解决方案 。</p>
+
+    </section>
+  
+    <section data-source="posts\Taming the Long-Tail - Efficient Reasoning RL Training with Adaptive Drafter - Asplos&#39;26.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/title.png"></p>
+<p><strong>Conference:</strong> <strong>ASPLOS'26</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/mit-han-lab/fastrl">https://github.com/mit-han-lab/fastrl</a></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>强化学习（RL）已成为赋予大语言模型（LLMs）强大推理能力（如OpenAI-o1, DeepSeek-R1）的标准方法。然而，这种RL方法面临独特的效率挑战。通过分析自收集的轨迹和来自字节跳动（ByteDance）的生产环境轨迹，作者确定了推理RL过程中的关键特征：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure1.png"></p>
+<p><em>(Figure 1展示了推理RL中的长尾生成问题和工作负载不平衡)</em></p>
+<ul>
+<li><strong>(1) 极不平衡的Rollout（采样）与训练时间 (Unbalanced Rollout and Training Time):</strong><br>
+在RL过程中，最耗时的阶段是Rollout（模型生成大量候选回答）。这一阶段占据了总步长时间的绝大部分（约 <strong>85%</strong>），成为主要的瓶颈。</li>
+<li><strong>(2) 持续的长尾分布 (Persistent Long-Tail Distribution):</strong><br>
+Rollout响应长度呈现长尾分布是导致效率低下的主要原因。虽然大多数生成的序列相对较短，但一小部分序列会达到极长的长度（例如达到最大上下文限制）。这种长尾模式并非偶发，而是贯穿整个长期训练过程的持续模式。在大多数RL步骤中，少数响应达到最大配置长度，而绝大多数则短得多，导致显着的资源未充分利用（即GPU在等待最长序列完成时处于闲置状态）。</li>
+<li><strong>(3)巨大的时间和资源需求 (Substantial Time and Resource Demands):</strong></li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure2.png"></p>
+<p>ByteDance的生产轨迹显示，使用128个GPU训练一个32B模型，仅完成385步就需要11天。单步训练平均耗时约40分钟，极度消耗资源。</p>
+<p><strong>为什么选择投机解码 (Why Speculative Decoding - SD)?</strong><br>
+作者认为投机解码（SD）是非常适合解决此问题的方法。SD利用轻量级草稿模型（Draft Model）快速生成token序列，然后由目标模型并行验证。SD适合RL训练主要基于两个优点：</p>
+<ol>
+<li><strong>数学上的无损性 (Mathematically Lossless):</strong> 输出分布与目标模型的原始分布完全一致。这对RL至关重要，因为近似方法可能会改变策略优化轨迹。</li>
+<li><strong>对长尾效率高 (Efficient for Long-Tail):</strong> SD通过将过程从**内存受限（Memory-Bound）<strong>转变为</strong>计算受限（Compute-Bound）**来提高吞吐量。这对于RL Rollout的长尾阶段特别有效，因为此时有效批大小（Batch Size）通常很小，标准解码无法充分利用GPU计算能力。</li>
+</ol>
+<p><strong>在RL中应用SD的挑战 (Challenges in Reasoning RL):</strong><br>
+现有的SD技术主要针对静态推理场景设计，应用于动态推理RL训练面临三大挑战：</p>
+<ol>
+<li><strong>C1. 演进的目标模型 (Evolving Target Model):</strong> RL训练期间目标模型权重不断更新。固定的草稿模型会迅速变得“过时”（Stale），导致投机接受率下降，严重削弱SD效果。</li>
+<li><strong>C2. 草稿模型训练成本 (Draft Model Training Costs):</strong> 高效的SD通常依赖专门的草稿模型（如EAGLE等），这需要额外的训练来与目标模型对齐，引入了额外的开销和复杂性。</li>
+<li><strong>C3. 波动的批大小 (Fluctuating Batch Sizes):</strong> 现有SD通常针对小批次优化。然而，RL Rollout的特征是有效批大小动态剧烈波动（开始时很大，随着短响应完成迅速减小）。如果不进行管理，在大批次下性能可能会下降甚至发生显存溢出（OOM）。</li>
+</ol>
+<h2 id="2-contribution">2. Contribution</h2>
+<p>为了解决上述挑战，论文提出了 <strong>TLT</strong>，这是一个具有自适应投机解码的高效推理RL训练系统。</p>
+<p>TLT的核心设计基于两个洞察：</p>
+<ol>
+<li><strong>利用Rollout的气泡 (Exploiting Rollout Bubbles):</strong> RL Rollout的长尾特性导致大量GPU资源逐渐空闲。这些释放的资源可以被重新用于草稿模型训练等任务，而无需额外成本。</li>
+<li><strong>非阻塞的草稿器训练 (Non-Blocking Drafter Training):</strong> 草稿模型训练可以与Rollout解耦。利用部分数据或已完成的数据进行异步训练，可以有效地与正在进行的Rollout重叠。</li>
+</ol>
+<p><strong>TLT包含两个协同组件：</strong></p>
+<ul>
+<li><strong>(1) 自适应草稿器 (Adaptive Drafter - §4):</strong> 采用轻量级草稿模型，通过<strong>Spot Trainer</strong>持续调整。Spot Trainer利用长尾Rollout期间的闲置GPU资源进行机会性、可抢占的更新，确保草稿器在不增加额外成本的情况下与不断演进的目标模型保持对齐。</li>
+<li><strong>(2) 自适应Rollout引擎 (Adaptive Rollout Engine - §5):</strong> 维护一个内存高效的预捕获 <strong>CUDAGraphs</strong> 池，并利用 <strong>BEG-MAB 调优器</strong> 为每个输入批次自适应地选择合适的SD策略。</li>
+</ul>
+<p><strong>主要成果：</strong><br>
+评估表明，TLT在端到端RL训练速度上比最先进的系统（如VeRL）快 <strong>1.7倍</strong> 以上，同时保持模型准确性（无损），并免费产生一个高质量的、适合未来部署的草稿模型。</p>
+<h2 id="3-background">3. Background</h2>
+<h3 id="31-reasoning-and-reinforcement-learning">3.1 Reasoning and Reinforcement Learning</h3>
+<p><strong>推理大模型与测试时扩展 (Reasoning LLMs &amp; Test-Time Scaling):</strong><br>
+OpenAI-o1和DeepSeek-R1等模型在复杂推理任务中表现出色，这得益于<strong>测试时扩展（Test-Time Scaling）</strong>。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure3.png"></p>
+<ul>
+<li>这些模型具有<strong>长思维链（Long Chain-of-Thought）</strong>，在得出最终答案前生成大量中间步骤。</li>
+<li>它们具备**自我反思（Self-Reflection）**能力，即在推理过程中评估、修正自己的错误（如图3(b)所示）。</li>
+<li>这种延长的生成时间使模型能够探索更深更广的思维路径，但显著加剧了<strong>长尾</strong>问题。</li>
+</ul>
+<p><strong>GRPO算法 (Group Relative Policy Optimization):</strong><br>
+论文主要关注DeepSeek使用的GRPO算法。单个GRPO训练步骤包含三个主要阶段（如图4所示）：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure4.png"></p>
+<ol>
+<li><strong>Rollout阶段 (Rollout Stage):</strong> 目标模型针对每个提示（Prompt）生成多个候选响应。这是性能瓶颈所在，尤其是长尾分布导致资源浪费。</li>
+<li><strong>推理阶段 (Inference Stage):</strong>
+<ul>
+<li>生成的响应由目标模型和参考模型（Reference Model）处理，计算logits以得出KL散度惩罚，限制模型更新幅度。</li>
+<li>同时，基于规则的策略（如答案正确性）计算奖励（Reward），而非依赖单独的价值模型（Critic），这减少了内存开销。</li>
+</ul>
+</li>
+<li><strong>训练阶段 (Training Stage):</strong> 使用奖励和KL散度构建损失函数，并更新目标模型权重。</li>
+</ol>
+<h3 id="32-speculative-decoding-for-efficient-reasoning-rl">3.2 Speculative Decoding for Efficient Reasoning RL</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure5.png"></p>
+<p><strong>SD机制 (Mechanism):</strong><br>
+如图5(b)所示，轻量级草稿模型快速生成候选token序列，然后由巨大的目标模型在一次前向传播中并行验证。系统接受匹配的token，直到第一个不匹配的token为止，并保留目标模型在该位置生成的正确token。</p>
+<p><strong>Roofline模型分析:</strong><br>
+如图5(c)所示，SD通过将自回归生成从**内存受限（Memory-Bound）<strong>转变为</strong>计算受限（Compute-Bound）**来提高吞吐量。这对于RL Rollout的长尾阶段（有效Batch Size很小）尤为有效，能够更充分地利用GPU资源。</p>
+<h2 id="4-tlt-design">4. TLT Design</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure6.png">
+<em>(Figure 6展示了TLT的整体架构和工作流)</em></p>
+<h3 id="41-overview">4.1 Overview</h3>
+<p>TLT的设计遵循四个原则：(a) <strong>无损保证</strong>（数学上等价），(b) <strong>无干扰</strong>（草稿训练不影响主RL任务），(c) <strong>自动且简单</strong>，(d) <strong>通用可扩展</strong>。<br>
+系统由两个紧密集成的组件组成：<strong>Adaptive Drafter（自适应草稿器）</strong> 和 <strong>Adaptive Rollout Engine（自适应Rollout引擎）</strong>。</p>
+<h3 id="42-adaptive-drafter-自适应草稿器">4.2 Adaptive Drafter (自适应草稿器)</h3>
+<p>该组件负责在不干扰主要RL工作负载的情况下持续更新草稿模型，解决目标模型演进（C1）和训练成本（C2）问题。</p>
+<h4 id="421-draft-model-architecture-草稿模型架构">4.2.1 Draft Model Architecture (草稿模型架构)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure7.png"></p>
+<ul>
+<li><strong>轻量化设计:</strong> TLT采用了类似EAGLE的单层解码器设计，而不是使用单独的小型LLM（如Qwen-0.5B）。
+<ul>
+<li><strong>复用权重:</strong> 草稿器复用目标模型的原始Embedding层和LM Head层（在训练期间冻结）。</li>
+<li><strong>仅训练一层:</strong> 仅添加并训练<strong>一个</strong>Transformer解码器层。参数量极小（约为目标模型的1/Layer_Num），推理和训练开销极低。</li>
+<li><strong>性能优势:</strong> 实验表明，TLT的单层草稿器比Qwen2.5-0.5B快2.4倍。</li>
+</ul>
+</li>
+<li><strong>统一训练框架:</strong> 支持多种训练策略（如EAGLE, HASS, EAGLE-3），默认使用EAGLE策略，因为它在低训练成本下提供了高接受长度。</li>
+</ul>
+<h4 id="422-spot-trainer-机会性训练器">4.2.2 Spot Trainer (机会性训练器)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure8.png"></p>
+<p>Spot Trainer旨在利用长尾Rollout期间释放的GPU资源，以非阻塞方式对抗模型漂移。</p>
+<ul>
+<li>
+<p><strong>Worker Coordinator (工作者协调器):</strong></p>
+<ul>
+<li>基于ZeroMQ实现的集中式协调器，监控所有Rollout Worker的状态。</li>
+<li><strong>状态管理:</strong> Worker在三种状态间循环：<code>BUSY</code>（正在Rollout）、<code>IDLE</code>（推理完成，内存释放）、<code>TRAINING</code>（正在更新草稿器）。</li>
+<li><strong>资源调度:</strong> 当空闲Worker数量超过阈值时，协调器将其提升为训练模式。当Rollout整体完成需要进入下一步时，协调器立即发送<strong>抢占信号</strong>，优雅地停止草稿器训练，确保不干扰主RL流程。</li>
+</ul>
+</li>
+<li>
+<p><strong>Spot Training with DataBuffer (带数据缓冲的机会性训练):</strong></p>
+<ul>
+<li><strong>问题:</strong> 仅仅依赖当前步骤早完成的响应（短响应）进行训练会导致分布不匹配，因为草稿器看不到长序列。</li>
+<li><strong>解决方案 (DataBuffer):</strong> 引入DataBuffer将训练与Rollout完成解耦。Buffer缓存推理阶段产生的隐藏状态（Hidden States）。</li>
+<li><strong>One-Step Offset (一步偏移):</strong> 支持跨步持久化Buffer。训练数据混合了当前步骤的部分数据和<strong>上一步骤</strong>的完整长尾数据。这确保了草稿器能接触到长序列样本，尽管样本略有陈旧，但实验证明依然有效。</li>
+</ul>
+</li>
+</ul>
+<h4 id="423-efficiency-optimizations-效率优化">4.2.3 Efficiency Optimizations (效率优化)</h4>
+<ul>
+<li><strong>Selective Asynchronous Checkpointing (选择性异步检查点):</strong>
+<ul>
+<li>为了支持抢占式设计，必须频繁保存检查点。TLT采用了异步检查点技术，将保存过程卸载到后台线程。</li>
+<li><strong>优化:</strong> 仅保存可训练参数（过滤掉冻结的Embedding和LM Head），将检查点延迟降低了 <strong>9.2倍</strong>，最大限度减少了因抢占导致的工作丢失。</li>
+</ul>
+</li>
+<li><strong>Sequence Packing (序列打包):</strong>
+<ul>
+<li>训练数据长度差异巨大。TLT使用序列打包技术，将多个变长序列拼接成单一打包序列，利用Attention Mask保持独立性。</li>
+<li>这消除了Padding带来的计算浪费，将训练吞吐量提高了 <strong>2.2倍</strong>。</li>
+</ul>
+</li>
+</ul>
+<h3 id="43-adaptive-rollout-engine-自适应rollout引擎">4.3 Adaptive Rollout Engine (自适应Rollout引擎)</h3>
+<p>该组件解决RL中批大小动态波动（C3）的问题，通过动态调整SD策略来最大化吞吐量。</p>
+<h4 id="431-adaptive-sd-manager-自适应sd管理器">4.3.1 Adaptive SD Manager (自适应SD管理器)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure9.png"></p>
+<ul>
+<li><strong>Tree-based Drafting (基于树的草稿生成):</strong>
+<ul>
+<li>与线性生成不同，TLT构建候选Token树以并行探索多个路径。</li>
+<li>参数包括：<code>topK</code>（每个节点的分支数）、<code>Draft_Depth</code>（树深）、<code>Tokens_to_Verify</code>（验证Token数）。</li>
+<li>这种方法显著增加了每次验证接受的Token数量。</li>
+</ul>
+</li>
+<li><strong>Adaptivity is Necessary (自适应的必要性):</strong>
+<ul>
+<li>RL Rollout的批大小从很大（如128）迅速减小到很小（如1）。静态策略不仅效率低，且在大批次下可能导致显存溢出（OOM）。</li>
+<li>SD管理器根据当前剩余请求数动态调整参数，并采用弹性机制：仅在剩余请求低于阈值（默认32）时激活SD，以平衡计算开销。</li>
+</ul>
+</li>
+</ul>
+<h4 id="432-memory-efficient-cudagraph-capture-内存高效的cudagraph捕获">4.3.2 Memory-Efficient CUDAGraph Capture (内存高效的CUDAGraph捕获)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure10.png"></p>
+<ul>
+<li><strong>问题:</strong> CUDAGraph需要为每个批大小和策略组合捕获静态图。多策略会导致内存爆炸（例如从7.81GB增加到30.39GB），挤占KV Cache空间。</li>
+<li><strong>Bucketed CUDAGraph Capture (分桶捕获优化):</strong>
+<ol>
+<li><strong>分桶批大小 (Bucketed batch sizes):</strong> 将批大小分组到桶中（例如B1~B4），而非为每个具体大小捕获。</li>
+<li><strong>解耦捕获 (Disaggregated capture):</strong> 分别捕获目标模型和草稿模型的图。因为某些参数（如topK）只影响草稿器，避免了乘法级的内存增长。</li>
+<li><strong>合并捕获 (Merged captures):</strong> 合并共享参数配置的图。</li>
+</ol>
+</li>
+<li><strong>结果:</strong> 将内存占用降低到 <strong>10.69 GB</strong>（降低2.8倍），仅比单一静态策略略高，使自适应切换成为可能。</li>
+</ul>
+<h4 id="433-auto-tune-algorithm-自动调优算法">4.3.3 Auto-Tune Algorithm (自动调优算法)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/algorithm1.png"></p>
+<ul>
+<li><strong>Bucketed $\epsilon$-Greedy MAB (BEG-MAB):</strong>
+<ul>
+<li>TLT设计了一种在线决策算法来自动选择最佳策略元组 $(Draft_Depth, topK, Verify_Tokens)$。</li>
+<li><strong>奖励定义:</strong> \(r_s = \frac{\text{accepted tokens}}{\text{step latency}}\)，即单位时间的生成效率。</li>
+<li><strong>算法逻辑:</strong>
+<ul>
+<li>将策略按验证Token数分组并映射到批大小桶。</li>
+<li><strong>探索 ($\epsilon$):</strong> 以概率 $\epsilon$ 随机选择策略。</li>
+<li><strong>利用 ($1-\epsilon$):</strong> 选择滑动窗口内中位数奖励最高的策略。</li>
+</ul>
+</li>
+<li>这种方法避免了手动调参，并能适应RL训练中的非平稳动态。</li>
+</ul>
+</li>
+</ul>
+<h4 id="434-model-free-drafter-无模型草稿器">4.3.4 Model-free Drafter (无模型草稿器)</h4>
+<ul>
+<li>作为补充，TLT包含一个基于检索的非参数化草稿器。它利用同一Prompt生成的不同Rollout之间的相似性，构建n-gram检索库。</li>
+<li>作为**Fallback（后备）**机制：在训练初期草稿模型尚未就绪时，或者预测学习型草稿器效率低时，动态激活该无模型草稿器，确保全程加速。</li>
+</ul>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-experimental-setup">5.1 Experimental Setup</h3>
+<ul>
+<li><strong>实现:</strong> 基于VeRL框架，使用Ray进行分布式执行，SGLang作为Rollout后端，PyTorch DCP进行异步检查点。</li>
+<li><strong>硬件:</strong> 8台 NVIDIA DGX H100 (共64 GPU) 和 DGX A100集群。</li>
+<li><strong>模型:</strong> Qwen2.5-7B, DeepSeek-R1-Distill-Qwen-7B, Qwen2.5-32B, Llama-3.3-70B。</li>
+<li><strong>数据集:</strong> Eurus-2-RL (数学和代码任务)。</li>
+<li><strong>基线:</strong> Open-R1, VeRL (SOTA开源框架), TLT-Base (仅无模型草稿器)。</li>
+</ul>
+<h3 id="52-end-to-end-evaluation-端到端评估">5.2 End-to-End Evaluation (端到端评估)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure11.png">
+<em>(Figure 11展示了端到端训练速度对比)</em></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure12.png"></p>
+<ul>
+<li><strong>加速效果:</strong> 如图11所示，TLT在不同模型规模和硬件平台上均显著优于VeRL。在H100上，TLT实现了 <strong>1.7x - 2.1x</strong> 的端到端训练吞吐量加速。Open-R1由于GPU利用率低表现最差。</li>
+<li><strong>无损性验证:</strong> 图12展示了Qwen2.5-7B和32B的平均奖励曲线。TLT与VeRL的曲线几乎完全重合，证明了TLT的加速是无损的，未改变RL算法的学习动态。</li>
+</ul>
+<h3 id="53-detailed-component-analysis-详细组件分析">5.3 Detailed Component Analysis (详细组件分析)</h3>
+<h4 id="531-evaluation-of-adaptive-sd-自适应sd评估">5.3.1 Evaluation of Adaptive SD (自适应SD评估)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure13.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/table3.png"></p>
+<ul>
+<li><strong>策略影响:</strong> 图13显示，单纯增加<code>Draft_Depth</code>并不总能带来加速（边际效益递减）。必须根据实际性能（加速比）而非中间指标（接受长度）来调优参数。</li>
+<li><strong>批大小敏感性:</strong> Table 2表明，最佳SD配置随批大小变化。例如，大批次时减少<code>Tokens_to_Verify</code>效果更好。BEG-MAB选择器能有效识别这些配置。</li>
+<li><strong>Case Study:</strong> 图14的分析显示，TLT仅在请求数降至阈值（32）以下时启用SD，并动态调整配置，相比无SD基线实现了 <strong>2.44x</strong> 的Rollout加速。</li>
+<li><strong>内存优化:</strong> Table 3显示，分桶CUDAGraph将内存占用从30.39GB降至 <strong>10.69GB</strong>，使得在有限显存下支持多种策略成为可能。</li>
+</ul>
+<h4 id="532-evaluation-of-spot-trainer-spot-trainer评估">5.3.2 Evaluation of Spot Trainer (Spot Trainer评估)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure15.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/table4.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/TLT/figure16.png"></p>
+<ul>
+<li><strong>训练曲线:</strong> 图15展示了草稿器的Top-3准确率。在目标模型更新后（RL Step结束），草稿器准确率会暂时下降（分布偏移），但能在随后的几次Spot训练迭代中迅速恢复。</li>
+<li><strong>有效性:</strong> Table 4对比显示，自适应草稿器在RL训练后维持了更高的平均接受长度（Target-R: <strong>6.53</strong>），而静态草稿器（Target-Base）仅为 <strong>4.59</strong>，证明了持续适应的重要性。</li>
+<li><strong>接受率:</strong> 图16显示，自适应草稿器在预测远端Token（distant tokens）时保持了更高的接受概率，而静态模型因误差累积表现不佳。</li>
+<li><strong>系统开销:</strong>
+<ul>
+<li><strong>检查点:</strong> 选择性异步检查点将延迟降低了 <strong>9.2倍</strong>。</li>
+<li><strong>打包:</strong> 序列打包通过消除Padding计算，将训练吞吐量提升了 <strong>2.2倍</strong>。</li>
+<li><strong>总体开销:</strong> 阶段转换、SD切换和协调开销总计极低（&lt;1%步长时间），远小于性能增益。</li>
+</ul>
+</li>
+</ul>
+<h2 id="6-discussion">6. Discussion</h2>
+<p><strong>更多应用场景 (More Application Scenarios):</strong><br>
+虽然本文主要研究利用SD缓解RL训练中的长尾Rollout问题，但这开启了更广泛的应用前景：</p>
+<ul>
+<li><strong>(1) 统一长响应 (Uniformly long responses):</strong> 当所有请求都很长（无长尾）时，KV Cache压力巨大导致批大小受限。此时工作负载天然处于SD的“甜蜜点”，适合利用SD加速。</li>
+<li><strong>(2) 工具调用RL的多轮Rollout (Multi-turn rollouts with tool-calling RL):</strong> 在涉及工具调用的多轮RL中，部分请求在执行工具（不占用GPU计算），这减少了活跃解码请求数，再次创造了适合SD的小批次环境。</li>
+<li><strong>(3) 在线服务与边缘部署 (Online serving and edge deployment):</strong> 固定目标模型后，通过TLT训练的草稿模型可直接部署。自适应SD在处理变动负载时依然高效。</li>
+</ul>
+<p><strong>我们可以打破RL同步吗？(Can We Break RL Synchronization?):</strong><br>
+TLT旨在不修改On-Policy要求的前提下提升效率。</p>
+<ul>
+<li><strong>异步更新风险:</strong> 尝试在长解码阶段使用部分Rollout异步更新模型可能会引入Off-Policy漂移，偏置梯度估计，损害收敛性和模型质量。</li>
+<li><strong>未来方向:</strong> 虽然需要额外的算法修改来安全地适应异步模式，但在保留正确性的前提下允许有限的异步性是一个有趣的方向。即使在异步设置下，长尾问题依然存在，TLT的SD方法可以与之结合进一步加速。</li>
+</ul>
+<p><strong>TLT能否应用于其他RL算法？(Can TLT be applied to other RL algorithms?):</strong><br>
+GRPO是推理RL的代表性算法。其他替代算法如 <strong>RLOO</strong>, <strong>DAPO</strong>, <strong>REINFORCE</strong>, 和 <strong>REINFORCE++</strong> 共享相似的训练工作流，主要区别在于奖励公式和KL正则化。TLT的自适应草稿器和Spot Training设计与这些算法完全兼容，表明TLT可以加速广泛的RL方法。</p>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>总之，<strong>TLT</strong> 通过引入<strong>自适应草稿器 (Adaptive Drafter)</strong> 缓解了推理RL训练中关键的长尾瓶颈。其自适应性体现在两个方面：</p>
+<ol>
+<li><strong>训练期间:</strong> 通过Spot Trainer适应目标模型的更新。</li>
+<li><strong>推理期间:</strong> 通过Adaptive Rollout Engine适应变化的批大小。</li>
+</ol>
+<p>结果表明，TLT在保持模型质量的同时实现了巨大的吞吐量提升。</p>
+
+    </section>
+  
+    <section data-source="posts\Empower Vision Applications with LoRA LMM - Eurosys&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/title.png"></p>
+<p><strong>Conference:</strong> <strong>Eurosys'25</strong></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>尽管 LMMs (Large Multimodal Models) 在通用视觉任务上表现出色，但在应用于需要<strong>领域特定知识 (Domain-specific knowledge)</strong> 的实际场景时，其表现往往不如人意，类似于早期 LLM 的幻觉问题。</p>
+<p>虽然 RAG (Retrieval-Augmented Generation) 是 LLM 中常用的补充知识的方法，但对于<strong>时间敏感的视觉应用 (Time-sensitive vision applications)</strong> 来说并不适用：</p>
+<ul>
+<li>RAG 的检索过程和附加的长上下文请求会导致超过 10 倍的响应延迟。</li>
+<li>相比之下，<strong>LoRA (Low-Rank Adaptation)</strong> 提供了一种更有前景的方案。它通过在运行时将微调后的 Adapter 合并到 LMM 中，能够高效地生成高质量且一致的领域特定响应，且没有额外的推理开销。</li>
+</ul>
+<p>然而，现有的 LoRA 服务系统（如 Punica, S-LoRA, dLoRA）主要针对纯文本 LLM 优化，无法满足视觉应用的高效性和多样化需求：</p>
+<ol>
+<li><strong>Unmerged Inference (不合并推理)</strong>：为了支持多 Adapter 并行，现有系统通常采用不合并推理模式。虽然这解决了并发问题，但额外引入的计算开销导致了极高的延迟。</li>
+<li><strong>Vision Workloads (视觉负载)</strong>：视觉任务通常包含大量的视觉 Token 处理，对计算资源的消耗与纯文本不同，现有系统的 Batching 策略效率低下。</li>
+</ol>
+<p><strong>Research Question:</strong> 我们能否利用 LoRA LMM 来丰富视觉应用，同时满足其严格的性能要求？
+作者认为答案是肯定的，但必须解决 Capacity、Batching Efficiency 和 Orchestration Flexibility 三大挑战。</p>
+<h2 id="2-contribution">2. Contribution</h2>
+<p>本文提出了 <strong>VaLoRA</strong>，这是一个端到端的 LoRA LMM 服务系统，包含 LoRA Adapter 的准备阶段 (§4.2) 和推理运行时 (§4.3, §4.4)。VaLoRA 通过以下核心技术解决了上述挑战：</p>
+<ul>
+<li>
+<p><strong>Accuracy-aware LoRA Adapter Generation (精度感知的 LoRA Adapter 生成):</strong></p>
+<ul>
+<li>提出了一种 LoRA 生成器，旨在生成富含领域特定知识的 Adapter，以满足特定应用的精度要求。</li>
+<li>将 LoRA 生成问题建模为<strong>约束装箱问题 (Constrained Bin Packing Problem)</strong>：给定外部知识（如小模型或特定数据集），目标是生成最少数量的 LoRA Adapters，同时保证满足视觉应用的精度要求。</li>
+<li>设计了一种<strong>贪婪启发式算法 (Greedy heuristic algorithm)</strong> 来解决这一问题。此外，引入了 <strong>Vision Task Head (视觉任务头)</strong> 作为 LoRA Adapter 的一部分，显著降低了视觉任务的响应延迟。</li>
+</ul>
+</li>
+<li>
+<p><strong>Adaptive-tiling LoRA Adapters Batching (自适应分块 LoRA Adapter 批处理):</strong></p>
+<ul>
+<li>提出了一种并发 LoRA Adapters 批处理方法，核心是 <strong>ATMM (Adaptive-Tiling Matrix Multiplication)</strong> 算子及其最优分块搜索算法。</li>
+<li><strong>Offline Phase:</strong> 搜索算法识别每个可能的输入矩阵形状的最佳分块配置 (Tiling configurations)，建立哈希表存储这些“输入-最优分块”对，并预编译代码实现。</li>
+<li><strong>Runtime:</strong> ATMM 根据并发请求和调用的 LoRA Adapters 的输入形状，自适应地从哈希表中选择最佳分块配置，并以极高的效率执行相应的代码实现。</li>
+</ul>
+</li>
+<li>
+<p><strong>Flexible LoRA Adapters Orchestration (灵活的 LoRA Adapter 编排):</strong></p>
+<ul>
+<li>针对视觉应用的多样化需求，提出了一个编排器 (Orchestrator)，在运行时高效、灵活地调度 LoRA Adapters。</li>
+<li>开发了两个工具：
+<ol>
+<li><strong>Switcher:</strong> 利用 ATMM 和统一内存管理，实现快速的推理模式切换 (Merge/Unmerge) 和 LoRA Adapter 交换 (Swap)。</li>
+<li><strong>Mixture Inference Mode (deLoRA):</strong> 一种混合推理模式，缓解请求饥饿 (Starvation) 问题。</li>
+</ol>
+</li>
+<li>设计了一种调度算法，在三种推理模式之间动态切换，调度请求并管理 Adapters，以实现最低的平均响应延迟。</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-challenges">3. Challenges</h2>
+<p>为了利用 LoRA LMM 赋能视觉应用，系统必须克服以下三个主要挑战：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure5.png"></p>
+<ul>
+<li>
+<p><strong>C1: Limited capacity of LoRA adapter (LoRA Adapter 的容量限制)</strong>
+虽然将领域知识（如现有的小模型或特定数据集）集成到 LMM 中是必要的，但 LoRA Adapter 的容量有限。如图 5 所示，简单地为每个任务训练一个 Adapter 是不经济的；而试图将过多的外部知识（如多个小模型）融合到单个 Adapter 中，会导致不可避免的精度下降。如何在“Adapter 数量”和“任务精度”之间找到平衡点是一个难题。</p>
+</li>
+<li>
+<p><strong>C2: Inefficient concurrent requests batching (低效的并发请求批处理)</strong></p>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure6.png"></p>
+<p>一个视觉应用通常涉及多个小模型，这意味着服务多个应用时，极有可能需要同时调用多个异构的 LoRA Adapters。
+现有的 LoRA 推理系统（如 Punica, S-LoRA, dLoRA）在处理高并发异构 Adapter 时效率低下。</p>
+<ul>
+<li>
+<p><strong>Unmerged Inference Overhead:</strong> 如图 6 所示，Unmerged 推理模式引入了额外的矩阵乘法和加法，导致高达 140ms 的额外延迟。</p>
+</li>
+<li>
+<p><strong>Hardware Underutilization:</strong> 现有的 Batching 算子由于存在大量的 Padding（填充）或采用了不合理的矩阵分块 (Matrix Tiling) 策略，无法充分利用 GPU 计算单元。</p>
+</li>
+<li>
+<p><strong>C3: Inflexible LoRA adapters orchestration (不灵活的 LoRA Adapter 编排)</strong></p>
+</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure7.png"></p>
+<p>不同的视觉应用有截然不同的性能需求（例如，视频分析需要低延迟，视觉检索偏好高吞吐）。
+现有的编排器（如 dLoRA）虽然支持模式切换，但开销巨大。如图 7 所示，仅模式切换就可能耗时 <strong>53ms</strong>，这主要是由于低效的内存管理导致的 LoRA 矩阵拷贝，以及通过 PyTorch <code>addmm</code> 调用计算 LoRA 权重 \(\Delta W\) 的巨大开销。这导致了服务请求的长时间等待（Starvation）。</p>
+<h2 id="4-valora-design">4. VaLoRA Design</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure8.png"></p>
+<p>VaLoRA 是一个端到端系统，设计包含离线 (Offline) 和在线 (Online) 两个阶段，如图 8 所示。</p>
+<h3 id="42-accuracy-aware-lora-adapter-generation-离线阶段">4.2 Accuracy-aware LoRA Adapter Generation (离线阶段)</h3>
+<p>该阶段的目标是利用外部知识生成<strong>最少数量</strong>的 LoRA Adapters，同时确保每个 Adapter 都能满足视觉应用指定的精度要求。</p>
+<h4 id="421-accuracy-aware-knowledge-fusion-algorithm-精度感知知识融合算法">4.2.1 Accuracy-aware knowledge-fusion algorithm (精度感知知识融合算法)</h4>
+<p>这是一个<strong>约束装箱问题 (Constrained Bin Packing Problem)</strong> 的变体。由于寻找最优解是 NP-hard 的，且不存在能预知任意知识组合后精度的 Oracle，作者设计了一种基于贪婪启发式 (Greedy Heuristic) 的算法：</p>
+<ol>
+<li><strong>Dataset Collection:</strong> 收集领域特定小模型的训练数据（Label 由小模型生成或直接使用原数据集）。</li>
+<li><strong>Greedy Fusion:</strong> 算法从一个空的 LoRA Adapter 开始，按顺序尝试融合每一个领域的数据集（Knowledge）。</li>
+<li><strong>Training &amp; Validation:</strong> 使用交叉熵损失 $L=CE(y, \hat{y})$ 进行训练。每融合一个新数据集，就在该 Adapter 负责的所有任务上验证精度。</li>
+<li><strong>Rollback &amp; Split:</strong> 如果融合某个数据集导致 Adapter 在任一先前任务上的精度低于阈值，则<strong>回滚 (Rollback)</strong> 权重，并在前一个状态结束该 Adapter 的生成（封箱）。然后初始化一个新的 Adapter 继续尝试融合当前数据集。</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure9.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure10.png"></p>
+<p><em>例如：</em> 如图 10，当 Adapter 1 试图融合 &ldquo;vegetation&rdquo; 任务时，导致 &ldquo;license plate&rdquo; 的精度降至 80% 以下（违背要求），算法会回滚并完成 Adapter 1，然后创建 Adapter 2 来承载 &ldquo;vegetation&rdquo; 及其后续任务。</p>
+<h4 id="422-vision-task-head-视觉任务头">4.2.2 Vision task head (视觉任务头)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure11.png"></p>
+<p>为了降低推理延迟，VaLoRA 将 LMM 原有的语言建模头 (LM Head) 替换为 <strong>Vision Task Head</strong>。</p>
+<ul>
+<li><strong>Structure:</strong> 这是一个作为 LoRA Adapter 一部分的可训练线性层 (Linear Layer)。</li>
+<li><strong>Benefit:</strong> 许多视觉任务（如动作识别、计数）的输出是有限的离散集合。使用 Vision Task Head 可以避免 LLM 昂贵的自回归生成过程（逐 Token 生成）。如图 11 所示，它可以将原本需要 5 轮推理的过程缩减为 <strong>1 轮</strong>，节省约 180ms。</li>
+<li><strong>Coexistence:</strong> 对于需要自然语言接口的任务（如 VQA），系统仍保留 LM Head。得益于 ATMM 算子，不同类型的 Head 可以并发执行。</li>
+</ul>
+<h3 id="43-adaptive-tiling-lora-adapters-batching-在线运行时---核心算子">4.3 Adaptive-tiling LoRA Adapters Batching (在线运行时 - 核心算子)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure12.png"></p>
+<p>为了高效处理并发的异构 LoRA Adapters，VaLoRA 提出了 <strong>ATMM (Adaptive-Tiling Matrix Multiplication)</strong> 算子。</p>
+<h4 id="431-atmm-operator-自适应分块矩阵乘法算子">4.3.1 ATMM Operator (自适应分块矩阵乘法算子)</h4>
+<p>传统的 Batched GEMM 需要将异构矩阵填充 (Pad) 到统一形状，导致计算浪费；而 S-LoRA 和 Punica 的自定义 Kernel 使用<strong>静态分块 (Static Tiling)</strong>，无法适应多变的输入形状，导致 GPU 利用率低或显存访问频繁（见图 12）。</p>
+<p>ATMM 的核心设计：</p>
+<ol>
+<li><strong>Adaptive Tiling (自适应分块):</strong> 针对每一个具体的输入矩阵形状 $(M, K, N)$，ATMM 会动态选择最优的分块策略（Tile Shape）。它将矩阵划分为 Thread Block Tiles，再细分为 Warp Tiles。</li>
+<li><strong>Pipeline Data Loading &amp; Double Buffering:</strong>
+<ul>
+<li>为了掩盖数据加载延迟，ATMM 在 Shared Memory 和 Register File 中分配了<strong>双倍空间 (Double Buffering)</strong>。</li>
+<li>一组 Buffer 用于当前 Tile 的计算，另一组用于<strong>预取 (Prefetch)</strong> 下一个 Tile 的数据。这是一种纯 Cache 策略，不增加显存开销。</li>
+</ul>
+</li>
+</ol>
+<h4 id="432-profile-based-optimal-tiling-search-基于分析的最优分块搜索">4.3.2 Profile-based optimal tiling search (基于分析的最优分块搜索)</h4>
+<p>为了支持运行时的自适应分块，VaLoRA 在离线阶段进行搜索：</p>
+<ol>
+<li><strong>Search Space Reduction:</strong> 利用硬件限制（Shared Memory 大小）和模型特征（LMM 维度通常是 64 或 128 的倍数）将搜索空间缩小 20 倍。</li>
+<li><strong>Profiling:</strong> 使用 CUTLASS Profiler 遍历所有可能的输入形状，测量不同分块配置的执行时间。</li>
+<li><strong>Compilation:</strong> 将每个输入形状对应的<strong>最优分块配置</strong>存储在哈希表中，并将对应的 Kernel 代码预编译为可执行文件。</li>
+<li><strong>Runtime Mapping:</strong> 运行时，ATMM 直接根据输入形状查表并调用对应的 Kernel，几乎无额外开销。</li>
+</ol>
+<h3 id="44-flexible-lora-adapters-orchestration-在线运行时---编排与调度">4.4 Flexible LoRA Adapters Orchestration (在线运行时 - 编排与调度)</h3>
+<p>VaLoRA 的编排器旨在满足不同应用的延迟需求。</p>
+<h4 id="441-swift-inference-mode-switch-极速模式切换">4.4.1 Swift Inference Mode Switch (极速模式切换)</h4>
+<p>为了解决 dLoRA 模式切换慢的问题（&gt;50ms），VaLoRA 实现了 <strong>Swift Switcher</strong>，将切换时间降至 <strong>&lt;10ms</strong>：</p>
+<ol>
+<li><strong>Contiguous Memory Allocation:</strong> 预先为权重矩阵分配连续内存，避免了 Tensor Reshape 时的内存拷贝。</li>
+<li><strong>Runtime Computation:</strong> 不在显存中存储巨大的预计算权重 ($W + BA$)，而是仅存储小巧的 Adapter ($A, B$)。利用 ATMM 算子，在运行时高效地计算 $\Delta W = B \times A$ 并将其一次性加/减到 Base Model 上。</li>
+<li><strong>Async Swap:</strong> 当 Adapter 数量超出 GPU 显存时，仅在主存和 GPU 间异步交换 $A$ 和 $B$ 矩阵（极小，约 43MB），而非巨大的完整模型权重。</li>
+</ol>
+<h4 id="442-mixture-inference-mode-混合推理模式--delora">4.4.2 Mixture Inference Mode (混合推理模式 / deLoRA)</h4>
+<p>为了解决请求<strong>饥饿 (Starvation)</strong> 问题（即：当系统运行在 Merged 模式处理 Adapter 1 时，请求 Adapter 2 的任务必须等待），VaLoRA 引入了 <strong>deLoRA</strong> 模式，允许 Merged 和 Unmerged 模式并行。</p>
+<p><strong>原理公式：</strong>
+假设 Base Model 已经融合了 Adapter 1 ($W_{merge} = W_{base} + W_{LoRA_1}$)。对于需要 Adapter $x$ 的请求 $input_x$，计算逻辑为：
+</p>
+$$
+output_x = input_x \times (W_{merge} - W_{deLoRA_1} + W_{LoRA_x})
+$$<p>
+其中 $W_{deLoRA_1}$ 等同于 $W_{LoRA_1}$。这相当于在数学上先“减去”当前融合的 Adapter，再“加上”目标 Adapter，从而在不进行物理权重回滚的情况下，正确处理异构请求。</p>
+<h4 id="443-scheduling-policy-调度策略">4.4.3 Scheduling Policy (调度策略)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/algorithm1.png"></p>
+<p>调度算法 (Alg. 1) 遵循贪婪原则：</p>
+<ol>
+<li><strong>优先 Merged Mode:</strong> 只要可能，就使用 Merged 模式，因为它最快（无额外计算）。</li>
+<li><strong>Starvation Handling:</strong> 给每个等待的请求分配 Credit（等待时间 + 执行时间）。</li>
+<li><strong>Mode Switching:</strong>
+<ul>
+<li>当饥饿请求出现时，首先切换到 <strong>Mixture Mode</strong>（开销最小）。</li>
+<li>只有当饥饿请求数量超过 Max Batch Size 的一半时，才切换到完全的 <strong>Unmerged Mode</strong>。</li>
+</ul>
+</li>
+</ol>
+<h2 id="5-implementation-and-evaluation">5. Implementation and Evaluation</h2>
+<h3 id="51-implementation">5.1 Implementation</h3>
+<ul>
+<li><strong>Codebase:</strong> 约 7.1K 行代码，基于 PyTorch, Triton, CUTLASS 和 <strong>vLLM (LightLLM version)</strong>。</li>
+<li><strong>Key Tech:</strong>
+<ul>
+<li>ATMM 使用 <strong>CUDA C++</strong> 基于 CUTLASS 3.5.1 实现。</li>
+<li>利用 Pybind11 封装预编译的 Kernel。</li>
+<li>集成 <strong>PagedAttention</strong> 和 Unified Memory Management (统一 KV Cache 和 Adapter 内存)。</li>
+<li>实现了 <strong>Prefix Caching</strong> 以复用多轮对话中的图像特征。</li>
+</ul>
+</li>
+</ul>
+<h3 id="52-evaluation-setup">5.2 Evaluation Setup</h3>
+<ul>
+<li><strong>Hardware:</strong> NVIDIA A100 (80GB), Intel Xeon Platinum CPU.</li>
+<li><strong>Models:</strong> Qwen-VL-7B, LLaVA-1.5-7B/13B.</li>
+<li><strong>Tasks:</strong>
+<ul>
+<li><strong>Visual Retrieval:</strong> Visual QA (VQAv2), Image Captioning. (Workload: Azure LLM trace).</li>
+<li><strong>Video Analytics:</strong> Object Detection (YODA, Cityscapes), Video Understanding (UCF101). (Workload: 1 video chunk/sec).</li>
+</ul>
+</li>
+<li><strong>Baselines:</strong> S-LoRA, Punica, dLoRA (State-of-the-Art).</li>
+</ul>
+<h3 id="53-experimental-results">5.3 Experimental Results</h3>
+<h4 id="531-end-to-end-performance-端到端性能">5.3.1 End-to-End Performance (端到端性能)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure14.png"></p>
+<ul>
+<li><strong>Visual Retrieval:</strong> 如图 14 (上)，VaLoRA 相比 dLoRA, Punica, S-LoRA 分别降低了 <strong>72%, 50%, 20%</strong> 的平均 Token 延迟。这得益于 ATMM 的高效和 Mixture Mode 避免了频繁的重型切换。</li>
+<li><strong>Video Analytics:</strong> 如图 14 (下)，性能提升更为显著，延迟降低了 <strong>89%, 83%, 71%</strong>。主要归功于 Vision Task Head 消除了多轮自回归推理，以及对长 Input Token 的高效处理。</li>
+</ul>
+<h4 id="532-accuracy-精度表现">5.3.2 Accuracy (精度表现)</h4>
+<ul>
+<li>VaLoRA 生成的 Adapter 使 Qwen-VL 在 Visual QA 和 Image Caption 上提升了 4.3-5% 的精度。</li>
+<li>在传统小模型擅长的任务（如目标检测）上，VaLoRA 提升了 Base Model <strong>24.5-62.2%</strong> 的精度，达到与 SOTA 专用小模型（如 YOLO, VisionMamba）相当的水平。</li>
+</ul>
+<h4 id="533-component-analysis-组件分析">5.3.3 Component Analysis (组件分析)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/VaLora/figure17.png"></p>
+<ol>
+<li><strong>Vision Task Head:</strong> 相比原始 LM Head，在视频分析任务中减少了 <strong>41-63%</strong> 的延迟，仅需一轮推理。</li>
+<li><strong>ATMM Efficiency:</strong>
+如图 17，ATMM 在各种 Batch Size 下均保持最低延迟，速度是 S-LoRA 的 2.7倍，Punica 的 2.3倍。特别是在 Batch Size &gt; 1024 时，自适应大 Tile 优势明显。
+稳定性方面，ATMM 将延迟波动降低了 2-3 倍。</li>
+<li><strong>Orchestration:</strong>
+在不同负载倾斜度 (Skewness) 下，VaLoRA 的混合调度策略比 dLoRA 降低了 <strong>21%</strong> 的延迟，比纯 Unmerge 模式降低了 <strong>59%</strong>。Swift Switcher 将切换速度提升了 &gt;5 倍。</li>
+</ol>
+<h4 id="534-scalability-扩展性">5.3.4 Scalability (扩展性)</h4>
+<p>在多 GPU 环境下表现出良好的线性扩展能力。从 1 张到 4 张 A100，系统总吞吐量从 6.07 req/s 提升至 23.97 req/s。</p>
+<h2 id="6-discussion-and-limitations">6. Discussion and Limitations</h2>
+<ul>
+<li><strong>Limited flexibility of vision task head:</strong> Vision Task Head 是针对特定任务（如分类数）定制的线性层，灵活性不如自然语言接口。因此 VaLoRA 对于 VQA 等任务仍保留 LM Head，通过 ATMM 实现两者的并发执行。</li>
+<li><strong>Knowledge fusion order:</strong> 知识融合的顺序会影响最终 LoRA 的质量（如图 5 所示）。目前主要依赖启发式方法，未来可引入 Curriculum Learning 等技术优化融合顺序。</li>
+<li><strong>Knowledge pre-clustering:</strong> 数据聚类方式也会影响效果。目前 VaLoRA 按视觉任务类型聚类，未来可探索更细粒度的聚类方法。</li>
+</ul>
+<h2 id="7-conclusion">7. Conclusion</h2>
+<p>本文首次探索了利用 LMM 作为视觉应用的基础模型，旨在实现高效的服务和用户友好的自然语言接口。为此，作者提出了 <strong>VaLoRA</strong>，这是一个端到端的系统，通过 Accuracy-aware LoRA Adapter Generation 适配领域特定任务，并通过 Adaptive-tiling Batching 和 Flexible Orchestration 在运行时高效管理这些 Adapters。在两个典型的视觉应用中，VaLoRA 证明了单个 LMM 可以有效替代多个专用小模型，在大幅降低延迟（20-89%）的同时保持相当的精度表现。这为未来基于 LMM 的多任务视觉应用设计奠定了基础。</p>
+
+    </section>
+  
+    <section data-source="posts\Venus - An Efficient Edge Memory-and-Retrieval System for VLM-based Online Video Understanding - Infocom&#39;26.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/title.png"></p>
+<p><strong>Conference:</strong> <strong>INFOCOM'26</strong></p>
+<hr>
+<h2 id="1-motivation-动机">1. Motivation (动机)</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure1.png"></p>
+<p>图 1 抽象了一个部署在智能家居场景中的<strong>基于VLM（视觉-语言模型）的在线视频理解应用</strong>。在这个应用中，家庭成员可以随时发起针对当前或历史录制视频片段的查询。该应用包含三个关键模块：</p>
+<ol>
+<li><strong>流媒体感知模块 (Streaming Perception Module):</strong> 配备板载计算能力的边缘摄像头持续捕获家庭场景的视频，并即时处理多模态数据。</li>
+<li><strong>历史记忆模块 (Historical Memory Module):</strong> 构建历史视频流并存储在记忆数据库中，以支持高效准确地检索与查询相关的信息。</li>
+<li><strong>推理模块 (Reasoning Module):</strong> 在接收到用户查询后，利用云托管的 VLM 进行推理并生成答案，由历史记忆提供上下文基础 (contextual grounding)。</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure2.png"></p>
+<p>AI 社区中新兴的研究工作（如 [13]–[15]）探索了 VLM 在视频理解中的有效性，但大多数工作都侧重于<strong>算法性能 (algorithmic performance)</strong>，而<strong>忽略了部署相关的约束 (deployment-related constraints)</strong>，这限制了它们在边缘智能场景中的直接适用性。</p>
+<ul>
+<li><strong>纯云端部署 (Fully Cloud-based Deployment):</strong>
+<ul>
+<li>利用强大的服务器端计算来减少设备端处理。</li>
+<li><strong>缺点：</strong> 需要上传<strong>整个相关视频 (entire relevant video)</strong>，导致显著的<strong>通信延迟 (communication latency)</strong>。图 2 显示，通信延迟可占总响应延迟的 <strong>80%</strong>，且随着视频时长的增加而大幅增长。</li>
+</ul>
+</li>
+<li><strong>边缘-云端策略（边缘执行选择算法）(Edge-Cloud Strategy):</strong>
+<ul>
+<li>一些方法 [3], [13] 通过在推理前执行**帧选择 (frame selection)**来提高准确性。</li>
+<li>在边缘设备上执行选择算法，只将选定的帧上传到云端，可以显著减少通信开销。</li>
+<li><strong>缺点：</strong> 边缘设备的计算能力有限，导致<strong>逐帧处理</strong>产生<strong>巨大的设备端处理成本 (substantial on-device processing costs)</strong>，例如高达 <strong>924秒</strong> 的设备端延迟（图 2）。</li>
+</ul>
+</li>
+<li><strong>现有方法的共同限制：</strong> 除了通信和计算开销，现有方法<strong>固有地受限于离线执行 (offline execution)</strong>，不适用于涉及<strong>在线用户查询</strong>并需要**长期上下文记忆 (long-term contextual memory)**的在线流媒体应用。</li>
+</ul>
+<hr>
+<h2 id="2-contribution-贡献">2. Contribution (贡献)</h2>
+<p>为解决上述限制，作者提出了 <strong>Venus</strong>，一种新颖的<strong>设备端记忆和检索系统 (on-device memory-and-retrieval system)</strong>，专为高效在线边缘视频理解而设计。</p>
+<p>Venus 具备两个基本能力：</p>
+<ol>
+<li><strong>记忆 (Memory):</strong> 通过嵌入多模态输入并将向量表示插入到历史记忆中，实现<strong>实时视频感知 (real-time video perception)</strong>，支持高效召回和低延迟查询推理。</li>
+<li><strong>检索 (Retrieval):</strong> 支持自然语言查询，实现<strong>精确且自适应的关键帧检索 (precise and adaptive retrieval)</strong>，最大限度地减少传输到云托管 VLM 的数据，从而降低通信和计算开销，实现低延迟响应。</li>
+</ol>
+<p>Venus 利用一种新颖的<strong>边缘-云解耦架构 (edge–cloud disaggregated architecture)</strong>，在<strong>边缘</strong>执行多模态记忆构建和关键帧检索，在<strong>云端</strong>执行 VLM 推理。该架构包含两个主要阶段：</p>
+<ul>
+<li><strong>摄取阶段 (Ingestion Stage):</strong>
+<ul>
+<li>边缘摄像头连续记录流媒体视频。</li>
+<li>应用**场景分割 (scene segmentation)<strong>和</strong>帧聚类 (frame clustering)<strong>来消除冗余，选择</strong>簇中心 (cluster centroids)**作为索引帧。</li>
+<li>索引帧使用**多模态嵌入模型 (MEM)**嵌入为向量表示，并辅以轻量级辅助模型。</li>
+<li>索引向量及其关联簇中的原始帧构成了支持准确高效召回和检索的<strong>分层记忆 (hierarchical memory)</strong>。</li>
+</ul>
+</li>
+<li><strong>查询阶段 (Querying Stage):</strong>
+<ul>
+<li>接收到查询时激活，查询使用相同的 MEM 编码并计算与记忆中向量的相似性得分。</li>
+<li>采用<strong>采样式策略 (sampling-based strategy)</strong>（而非贪婪的 Top-K 算法）来平衡关键帧选择的<strong>相关性 (relevance)和多样性 (diversity)</strong>。</li>
+<li>引入<strong>阈值驱动的渐进式采样算法 (threshold-driven progressive sampling algorithm)</strong>，自适应地调整选定帧的数量，实现系统成本和推理准确性之间的灵活权衡。</li>
+</ul>
+</li>
+</ul>
+<p>作者的广泛评估显示，与最先进的方法相比，Venus 在总响应延迟方面实现了 <strong>$15\times–131\times$ 的加速</strong>，同时保持了相当甚至更优的推理准确性。</p>
+<p><strong>主要贡献总结如下：</strong></p>
+<ul>
+<li>作者重新审视了 AI 社区现有算法的部署限制，并提出了一个<strong>边缘-云解耦架构</strong>，以服务于基于 VLM 的在线视频理解。</li>
+<li>作者设计了一个<strong>场景分割和聚类模块</strong>以实现实时设备端感知。流媒体视频帧被嵌入并组织成<strong>分层记忆</strong>，以支持准确和高效的召回和检索。</li>
+<li>作者提出了一个<strong>阈值驱动的渐进式采样算法</strong>用于关键帧选择，它增强了多样性，并自适应地平衡了系统成本和推理准确性。</li>
+<li>作者将作者的设计整合并实现为一个系统 <strong>Venus</strong>，并在真实的边缘设备上进行了评估。作者的广泛评估显示，与基线方法相比，Venus 在总响应延迟方面实现了 $15\times–131\times$ 的加速。</li>
+</ul>
+<hr>
+<h2 id="3-background-背景">3. BackGround (背景)</h2>
+<h3 id="31-limitations-of-existing-vlm-based-video-understanding-现有基于-vlm-视频理解的局限性">3.1 Limitations of Existing VLM-based Video Understanding (现有基于 VLM 视频理解的局限性)</h3>
+<p>现有基于 VLM 的视频理解方法普遍忽略了部署相关的约束，这阻碍了它们在边缘智能场景中的直接适用性。</p>
+<ul>
+<li><strong>LLaVA-OneVision [14]</strong>: 逐帧处理视频，不进行任何 token 缩减，导致一小时 8 FPS 的视频产生约 <strong>600 万个 token</strong>，引入了显著的视频传输和推理开销。</li>
+<li><strong>Video-RAG [15] 和 MDF [21]</strong>: 采用<strong>统一采样 (Uniform Sampling)</strong> 或 <strong>冗余帧移除 (Redundant Frame Removal)</strong> 等<strong>查询无关策略 (query-agnostic strategies)</strong> 来减少冗余。这种方法假设帧重要性均等，容易在复杂场景中表现不佳，<strong>采样过稀</strong>可能错过关键内容，<strong>过度采样</strong>则增加传输和推理成本。</li>
+<li><strong>BOLT [13] 和 AKS [3] (查询相关方法)</strong>: 利用<strong>视觉-语言相似性</strong>识别查询相关帧，使用对比编码器将帧与文本关联。虽然其<strong>自适应选择</strong>有助于平衡信息量和推理效率，但它们仍需将<strong>整个相关视频</strong>传输到云端进行处理，导致显著的通信延迟。将这些算法在边缘设备上逐帧执行以减少传输开销，由于边缘设备缺乏运行基于 Transformer 编码器的实时计算能力，对于<strong>在线场景</strong>是<strong>不切实际</strong>的。</li>
+</ul>
+<p><strong>图 2</strong> 比较了现有方法在不同部署策略下的延迟分解。</p>
+<ul>
+<li><strong>Cloud-Only (纯云端):</strong> 强大的服务器计算减少了设备端开销，但需要上传整个视频流，导致<strong>通信延迟</strong>占总响应延迟的 <strong>80%</strong>。</li>
+<li><strong>Edge-Cloud (边缘-云端，例如 BOLT/AKR):</strong> 显著减少了通信开销，但由于边缘设备的计算能力限制，<strong>逐帧处理</strong>导致高达 <strong>924 秒</strong> 的设备端延迟。</li>
+</ul>
+<p>所有上述方法都<strong>限制于离线执行</strong>，不适合需要在线查询和长期上下文记忆的流媒体场景。</p>
+<h3 id="32-our-design-goals-作者的设计目标">3.2 Our Design Goals (作者的设计目标)</h3>
+<p>作者的目标是提出一个高效的记忆和检索系统，以解决现有方法的限制：</p>
+<ol>
+<li><strong>支持实时视频处理</strong>，将多模态表示<strong>连续注入</strong>到历史记忆数据库中，实现高效召回和低延迟的基于查询的推理。</li>
+<li><strong>支持自然语言查询</strong>，并实现<strong>准确且自适应</strong>地检索记忆中的关键帧和多模态上下文，以最小化发送到云端 VLM 的数据量，从而降低通信和计算开销，实现低延迟响应。</li>
+</ol>
+<hr>
+<h2 id="4-edge-cloud-disaggregated-architecture-for-online-video-understanding-在线视频理解的边缘-云解耦架构">4. EDGE-CLOUD DISAGGREGATED ARCHITECTURE FOR ONLINE VIDEO UNDERSTANDING (在线视频理解的边缘-云解耦架构)</h2>
+<h3 id="41-an-edge-cloud-disaggregated-architecture-边缘-云解耦架构">4.1 An Edge-Cloud Disaggregated Architecture (边缘-云解耦架构)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure3.png"></p>
+<p>图 3 展示了作者提出的工作流程，包含两个主要阶段：<strong>摄取阶段 (Ingestion Stage)</strong> 和 <strong>查询阶段 (Querying Stage)</strong>。</p>
+<ul>
+<li><strong>摄取阶段 (Ingestion Stage - 边缘设备):</strong>
+<ol>
+<li>摄像头连续捕获视频流。</li>
+<li>每个视频帧经 <strong>MEM (Multimodal Embedding Model)</strong> 处理，生成统一的图像-文本嵌入空间内的向量表示。</li>
+<li>向量表示随后插入到**向量数据库 (Vector Database)**中，构建索引结构以加速相似性搜索。</li>
+</ol>
+</li>
+<li><strong>查询阶段 (Querying Stage - 边缘到云端):</strong>
+<ol>
+<li>用户自然语言查询通过相同的 MEM 映射到统一多模态嵌入空间。</li>
+<li>查询向量通过相似性计算与向量数据库中存储的索引向量进行比较。</li>
+<li>检索 <strong>Top-K</strong> 最相关的视频帧。</li>
+<li>检索到的帧随后传输给<strong>云托管的 VLM 服务</strong>（如 LLaVA、GPT、Qwen-VL）进行推理，生成最终推理结果。</li>
+</ol>
+</li>
+</ul>
+<h3 id="42-challenges-in-naive-deployment-朴素部署中的挑战">4.2 Challenges in Naive Deployment (朴素部署中的挑战)</h3>
+<p>上述架构虽然概念简单，但在现实世界部署中面临几个关键挑战：</p>
+<p><strong>1. High latency hinders real-time embedding and ingestion (高延迟阻碍实时嵌入和摄取)</strong></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure4.png"></p>
+<ul>
+<li><strong>问题：</strong> 典型边缘摄像头以 <strong>25–60 FPS</strong> 捕获视频，对每帧应用 MEMs 的开销在资源受限的边缘设备上是巨大的。</li>
+<li><strong>结果：</strong> 输入 FPS 超过设备嵌入吞吐量时，帧会积压，查询到达时必须先嵌入所有积压帧，引入延迟。</li>
+<li><strong>可行性评估 (Figure 4):</strong>     * 在原生帧率（如 25 FPS）下，嵌入延迟<strong>超过 212 分钟</strong>，在线查询不切实际。
+<ul>
+<li><strong>实时嵌入的阈值 FPS</strong> 极低：Jetson TX2 为 0.3 FPS；Jetson Xavier NX 为 0.7 FPS；Jetson AGX Orin 为 1.8 FPS。</li>
+<li><strong>风险：</strong> 激进的统一降采样会导致<strong>严重信息损失</strong>，可能丢失关键帧，导致视频理解失败。</li>
+</ul>
+</li>
+</ul>
+<p><strong>2. Excessively redundant frames overwhelm the memory database and degrade retrieval performance (过度冗余的帧淹没记忆数据库并降低检索性能)</strong></p>
+<ul>
+<li><strong>问题：</strong> 嵌入和保留所有帧虽然能保留细节，但会因记忆数据库中包含大量<strong>时间相邻且视觉相似</strong>的帧，导致检索算法返回<strong>冗余、近似重复的内容</strong>。</li>
+<li><strong>结果 (Figure 5(a)):</strong> 准确性并非随帧数线性增加，实验显示在 Video-MME 短片段上，保留 <strong>64 帧</strong> 时常能达到最高准确性。</li>
+<li><strong>副作用：</strong> 冗余帧增加了数据库的<strong>索引复杂性</strong>和<strong>存储开销</strong>。</li>
+</ul>
+<p><strong>3. Lack of diversity and adaptivity in Top-K selection algorithm (Top-K 选择算法缺乏多样性和自适应性)</strong></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure5.png"></p>
+<ul>
+<li><strong>缺乏多样性：</strong> Top-K 采样通常选择<strong>时间上相邻的冗余帧</strong>，尤其当数据库密集填充时。检索结果可能缺乏<strong>上下文多样性</strong>，无法捕获准确视频问答所需的<strong>场景覆盖范围</strong>。例如，图 5(b) 显示 Top-K 集中在索引 75，而忽略了索引 190-210 的相关场景。</li>
+<li><strong>缺乏自适应性：</strong> Top-K 需要<strong>手动指定、静态的 $K$ 值</strong>，难以适应不同查询、网络条件和延迟要求下的自适应调整。</li>
+</ul>
+<hr>
+<h2 id="5-venus-system-design-venus-系统设计">5. VENUS SYSTEM DESIGN (Venus 系统设计)</h2>
+<h3 id="51-venus-system-overview-venus-系统概览">5.1 Venus System Overview (Venus 系统概览)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure6.png"></p>
+<p>Venus 的核心在于其<strong>边缘-云解耦架构</strong>和两个主要阶段：</p>
+<ul>
+<li><strong>摄取阶段 (Ingestion Stage) - 边缘端:</strong>
+<ul>
+<li><strong>实时感知和过滤 (Step 1):</strong> 场景分割和帧聚类，选择索引帧 $\mathcal{K}$。</li>
+<li><strong>多模态嵌入 (Step 2):</strong> 索引帧和辅助提示经 <strong>MEMs</strong> 嵌入为向量 $\mathcal{O}$。</li>
+<li><strong>记忆构建 (Step 3):</strong> 索引向量和原始帧形成<strong>分层记忆 (Hierarchical Memory)</strong>。</li>
+</ul>
+</li>
+<li><strong>查询阶段 (Querying Stage) - 边缘到云端:</strong>
+<ul>
+<li><strong>查询嵌入 (Step 4):</strong> 用户查询 $Q$ 经 MEM 编码并计算与索引向量的相似性分数。</li>
+<li><strong>自适应关键帧检索 (Step 5 - AKR):</strong> 采用<strong>自适应采样算法</strong>确保选择帧的<strong>相关性</strong>和<strong>多样性</strong>。</li>
+<li><strong>VLM 推理 (Step 6):</strong> 查询和选定的关键帧发送到云端 VLM 进行推理。</li>
+</ul>
+</li>
+</ul>
+<h3 id="52-scene-segmentation-and-clustering-for-frame-filtering-用于帧过滤的场景分割和聚类">5.2 Scene Segmentation and Clustering for Frame Filtering (用于帧过滤的场景分割和聚类)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure7.png"></p>
+<p><strong>目的:</strong> 在保证信息完整性的前提下，减少流媒体视频的冗余，确保<strong>实时设备端感知 (real-time on-device perception)</strong>。</p>
+<h5 id="1-场景分割-scene-segmentation">1) 场景分割 (Scene Segmentation)</h5>
+<ul>
+<li><strong>方法:</strong> 采用基于<strong>时间差分 (temporal difference)的轻量级启发式算法 (lightweight heuristic algorithm)</strong>。</li>
+<li><strong>机制:</strong> 通过比较<strong>连续帧之间的差异</strong>来高效识别<strong>场景边界 (scene boundaries)</strong>。</li>
+<li><strong>优势:</strong> 计算开销极小，可以实时运行在资源受限的边缘设备上。</li>
+<li><strong>输出:</strong> 视频流 $\mathcal{F}$ 被分割成场景分区 (scene partitions) $\mathcal{M}={m_{1}, m_{2}, \dots}$。</li>
+</ul>
+<h5 id="2-帧聚类-frame-clustering">2) 帧聚类 (Frame Clustering)</h5>
+<ul>
+<li><strong>目的:</strong> 在每个场景分区内，以更细粒度分组视觉相似的帧，进一步减少冗余；并选择**簇中心 (cluster centroids)**作为稀疏索引的代表帧。</li>
+<li><strong>策略:</strong> 采用<strong>增量聚类策略 (incremental clustering strategy)</strong>。</li>
+<li><strong>机制:</strong> 对于场景分区 $m_{i}\in\mathcal{M}$:
+<ol>
+<li>第一个帧 $f_{1}$ 分配给初始簇 $c_{1}$。</li>
+<li>新帧 $f_{i}$ 展平像素值向量后，计算与每个现有簇中心的 $L_{2}$ 距离。</li>
+<li>如果最小 $L_{2}$ 距离<strong>小于预定义阈值 $\delta$</strong>，将 $f_{i}$ 添加到最近的簇并<strong>更新簇中心 (update the cluster centroid)</strong>。</li>
+<li>否则，创建一个新的簇 $c_{j}$。</li>
+</ol>
+</li>
+<li><strong>索引帧选择 $\mathcal{K}$:</strong> 每个簇的<strong>中心帧 (centroid frame)</strong> 被选为<strong>索引帧 (index frame)</strong> $\mathcal{K}={k_{1}, k_{2}, \dots}$。</li>
+</ul>
+<h3 id="53-memory-construction-and-management-记忆构建与管理">5.3 Memory Construction and Management (记忆构建与管理)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure8.png"></p>
+<h5 id="1-multimodal-embedding-多模态嵌入">1) Multimodal Embedding (多模态嵌入)</h5>
+<ul>
+<li><strong>辅助模型 (AuxModels):</strong> 一组轻量级模型（如 <strong>OCR [36]</strong> 和 <strong>YOLO [37]</strong>）。它们根据应用需求配置，输出被格式化为<strong>文本模板</strong>以构建<strong>辅助提示 $\mathcal{T}$ (auxiliary prompts)</strong>。</li>
+<li><strong>嵌入过程:</strong> 索引帧 $k_{i}$ 和关联的辅助提示 $t_{i}$ 被送入 <strong>MEMs</strong>（Multimodal Embedding Models），生成统一图像-文本嵌入空间内的向量表示 $\mathcal{O}$：
+$$
+    \mathcal{O}=\{o_{i}=MEM(k_{i},t_{i})|k_{i}\in\mathcal{K},t_{i}\in\mathcal{T}\} \tag{3}
+    $$</li>
+</ul>
+<h5 id="2-hierarchical-memory-management-with-semantic-indexing-分层记忆管理与语义索引">2) Hierarchical Memory Management with Semantic Indexing (分层记忆管理与语义索引)</h5>
+<p>记忆管理架构分为两个层级：</p>
+<ul>
+<li><strong>原始数据层 (Raw Data Layer):</strong> 存储边缘摄像头捕获的原始、未处理格式的流媒体视频帧。作为历史数据的<strong>持久档案 (persistent archive)</strong>，为准确的用户查询推理提供可靠源头。</li>
+<li><strong>索引数据层 (Index Data Layer):</strong> 构建了一个<strong>结构化和语义化的索引</strong>，存储<strong>索引向量 $\mathcal{O}$</strong>、它们关联的原始帧元数据（时间戳、位置）和辅助提示 $\mathcal{T}$。索引向量 $\mathcal{O}$ 存储在<strong>向量数据库</strong>中，实现查询驱动的检索。</li>
+</ul>
+<h3 id="54-query-relevant-keyframe-retrieval-查询相关关键帧检索">5.4 Query-Relevant Keyframe Retrieval (查询相关关键帧检索)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure9.png"></p>
+<ul>
+<li>
+<p><strong>步骤 1: 查询嵌入和相似性计算 (Query Embedding and Similarity Calculation):</strong></p>
+<ul>
+<li>用户查询 $Q$ 通过相同的 MEM 模型嵌入。</li>
+<li>与稀疏索引帧计算**余弦相似性 (cosine similarity)**分数 $\mathcal{S}$：
+$$
+        \mathcal{S}=\{s_{i}=cos(MEM(Q),o_{i})|o_{i}\in\mathcal{O}\} \tag{4}
+        $$</li>
+</ul>
+</li>
+<li>
+<p><strong>步骤 2: 自适应关键帧检索 (Adaptive Keyframe Retrieval - AKR):</strong> 采用<strong>采样式策略</strong>而非贪婪 Top-K，以平衡<strong>相关性</strong>和<strong>多样性</strong>。</p>
+<ul>
+<li>
+<p><strong>概率分布 $P$:</strong> 基于相似性分数 $\mathcal{S}$ 构建一个离散、查询引导的概率分布：</p>
+$$
+        P(i) = \frac{\exp(s_{i}/\tau)}{\sum_{j} \exp(s_{j}/\tau)} \tag{5}
+        $$<p>其中，$\tau$ 是<strong>温度参数 (temperature parameter)</strong>。较小的 $\tau$ 强调相关性，分布更集中；较大的 $\tau$ 强调多样性，分布更平坦。</p>
+</li>
+<li>
+<p><strong>采样:</strong> 从分布 $P$ 中<strong>独立且有放回地 (independently and with replacement)采样 $N_{max}$ 个帧</strong>，增加了非 Top-K 高分帧的选中概率，增强了时间多样性**。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>步骤 3: 阈值驱动的渐进式采样算法 (Threshold-driven Progressive Sampling Algorithm):</strong></p>
+<ul>
+<li><strong>目标:</strong> 动态调整选定帧的数量 $N$，在<strong>系统成本</strong>和<strong>推理准确性</strong>之间实现灵活权衡。</li>
+<li><strong>初始阶段:</strong> 采样一个固定大小的初始批次 \(\mathcal{K}_{N_{init}}\) 并发送 VLM 推理。</li>
+<li><strong>迭代阶段 (Progressive Selection):</strong>
+<ol>
+<li>
+<p><strong>推理质量评估:</strong> <strong>推理质量评估器 (Reasoning Quality Evaluator)评估 VLM 的推理结果（如选择题的答案置信度</strong>，生成式 QA 的信息熵或语义清晰度）。</p>
+</li>
+<li>
+<p><strong>阈值判断:</strong> 如果评估得分<strong>低于预定义阈值 $\lambda$</strong>，则认为当前帧集不足。</p>
+</li>
+<li>
+<p><strong>渐进式采样:</strong> 从<strong>排除已选帧 \(\mathcal{K}_{N}\)</strong> 的剩余分布 $P&rsquo;$ 中<strong>再采样一个较小的增量批次 $\Delta \mathcal{K}$</strong>：</p>
+$$
+            \Delta \mathcal{K} \sim P'
+            $$</li>
+<li>
+<p><strong>重复:</strong> VLM 使用新的帧集 \(\mathcal{K}_{N} \cup \Delta \mathcal{K}\) 再次推理，直到达到<strong>最大预算 \(N_{max}\)</strong> 或<strong>评估得分达到 $\lambda$</strong> 为止。</p>
+</li>
+</ol>
+</li>
+<li><strong>优势:</strong> 实现了<strong>自适应停止采样和推理</strong>，避免了不必要的通信和计算，同时保证了准确性。</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="6-implementation-and-evaluation-实现与评估">6. Implementation and Evaluation (实现与评估)</h2>
+<h3 id="60-implementation-实现">6.0 Implementation (实现)</h3>
+<p>Venus 的原型系统和基线已在 PyTorch 之上使用 Python 实现，代码量约为 <strong>1000 行</strong> ($\sim1000$ LoC)。</p>
+<h3 id="61-experimental-setup-实验设置">6.1 Experimental Setup (实验设置)</h3>
+<ul>
+<li><strong>边缘测试平台:</strong> NVIDIA Jetson AGX Orin, Jetson Xavier NX, 和 Jetson TX2。</li>
+<li><strong>数据集:</strong> 用于 VQA (Video Question Answering) 的 <strong>Video-MME [38]</strong> (900 视频, 2,700 问题, 部分视频超一小时) 和 <strong>EgoSchema [39]</strong> (超 5,000 多项选择 QA 对, 基于 250 小时第一人称视频)。所有输入视频统一以 <strong>8 FPS</strong> 采样。</li>
+<li><strong>查询模拟:</strong> 假设查询在每个视频片段播放后立即到达，模拟在线视频理解场景。</li>
+<li><strong>模型:</strong>
+<ul>
+<li><strong>云端 VLM:</strong> LLaVA-OV-7B [14] 和 Qwen2-VL-7B [40]。</li>
+<li><strong>MEM:</strong> 使用 <strong>BGE-VL-large [25]</strong>。</li>
+<li><strong>辅助模型 (Auxiliary Models):</strong> 使用 EasyOCR [36] 和 YOLO-NAS [42]。</li>
+</ul>
+</li>
+<li><strong>基线方法:</strong>
+<ul>
+<li><strong>查询无关:</strong> Uniform Sampling, MDF [21], Video-RAG [15]。</li>
+<li><strong>查询相关:</strong> BOLT [13], AKS [3] (采用 <strong>Cloud-Only</strong> 和 <strong>Edge-Cloud</strong> 两种部署策略)。</li>
+<li><strong>Vanilla 基线:</strong> 使用 Venus 的场景分割和聚类进行记忆构建，但在检索阶段使用<strong>贪婪 Top-K 选择算法</strong>（固定采样预算 $N=32$）。</li>
+</ul>
+</li>
+</ul>
+<h3 id="62-comparison-with-query-irrelevant-baselines-与查询无关基线的比较">6.2 Comparison with Query-Irrelevant Baselines (与查询无关基线的比较)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/table1.png"></p>
+<p>（以 LLaVA-OV-7B 模型， $N=32$ 帧的准确性为例）</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Model</th>
+          <th style="text-align: left">Method</th>
+          <th style="text-align: left">Video-MME (Short)</th>
+          <th style="text-align: left">Video-MME (Medium)</th>
+          <th style="text-align: left">Video-MME (Long)</th>
+          <th style="text-align: left">Video-MME (Overall)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">Uniform Sampling</td>
+          <td style="text-align: left">63.1</td>
+          <td style="text-align: left">48.6</td>
+          <td style="text-align: left">52.3</td>
+          <td style="text-align: left">54.6</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">MDF</td>
+          <td style="text-align: left">61.0</td>
+          <td style="text-align: left">48.8</td>
+          <td style="text-align: left">44.6</td>
+          <td style="text-align: left">51.5</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">Video-RAG</td>
+          <td style="text-align: left">63.7</td>
+          <td style="text-align: left">51.3</td>
+          <td style="text-align: left">46.3</td>
+          <td style="text-align: left">53.8</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>LLaVA-OV-7B</strong></td>
+          <td style="text-align: left"><strong>Venus</strong></td>
+          <td style="text-align: left"><strong>67.4</strong></td>
+          <td style="text-align: left"><strong>59.6</strong></td>
+          <td style="text-align: left"><strong>56.4</strong></td>
+          <td style="text-align: left"><strong>60.3</strong></td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li><strong>结论:</strong> Venus 在所有 Video-MME 划分和总体准确性上均<strong>优于</strong>所有查询无关基线。</li>
+</ul>
+<h3 id="63-comparison-with-query-relevant-baselines-与查询相关基线的比较">6.3 Comparison with Query-Relevant Baselines (与查询相关基线的比较)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/table2.png"></p>
+<p>（以 LLaVA-OV-7B 模型为例，准确性/延迟对比）</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Model</th>
+          <th style="text-align: left">Method</th>
+          <th style="text-align: left">Video-MME (Short) Acc./Latency</th>
+          <th style="text-align: left">Video-MME (Medium) Acc./Latency</th>
+          <th style="text-align: left">Video-MME (Long) Acc./Latency</th>
+          <th style="text-align: left">EgoSchema (Full) Acc./Latency</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">AKS (Cloud-Only)</td>
+          <td style="text-align: left">65.9 / 46.8s</td>
+          <td style="text-align: left">52.1 / 2.7min</td>
+          <td style="text-align: left">52.2 / 11.2min</td>
+          <td style="text-align: left">51.6 / 78.38s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">BOLT (Cloud-Only)</td>
+          <td style="text-align: left">67.9 / 43.9s</td>
+          <td style="text-align: left">55.9 / 2.5min</td>
+          <td style="text-align: left">56.2 / 10.7min</td>
+          <td style="text-align: left">52.4 / 70.1s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">AKS (Edge-Cloud)</td>
+          <td style="text-align: left">65.9 / 419.1s</td>
+          <td style="text-align: left">52.1 / 43.7min</td>
+          <td style="text-align: left">52.2 / 212.1min</td>
+          <td style="text-align: left">51.6 / 924.0s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">BOLT (Edge-Cloud)</td>
+          <td style="text-align: left">67.9 / 398.1s</td>
+          <td style="text-align: left">55.9 / 41.8min</td>
+          <td style="text-align: left">56.2 / 206.7min</td>
+          <td style="text-align: left">52.4 / 896.9s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">LLaVA-OV-7B</td>
+          <td style="text-align: left">Vanilla</td>
+          <td style="text-align: left">63.6 / 379.0s</td>
+          <td style="text-align: left">52.5 / 39.6min</td>
+          <td style="text-align: left">51.0 / 192.2min</td>
+          <td style="text-align: left">50.8 / 852.7s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>LLaVA-OV-7B</strong></td>
+          <td style="text-align: left"><strong>Venus</strong></td>
+          <td style="text-align: left"><strong>67.4 / 4.7s</strong></td>
+          <td style="text-align: left"><strong>59.6 / 4.9s</strong></td>
+          <td style="text-align: left"><strong>56.4 / 5.1s</strong></td>
+          <td style="text-align: left"><strong>53.3 / 4.8s</strong></td>
+      </tr>
+  </tbody>
+</table>
+<ul>
+<li><strong>准确性:</strong> Venus 在 Video-MME (Medium) 上实现最高准确性 (59.6)，在其他数据集上与最优基线保持<strong>可比或略优</strong>。</li>
+<li><strong>延迟:</strong> Venus 在所有数据集上均取得<strong>压倒性的最低延迟</strong>。与最先进方法相比，实现了 <strong>$15\times–131\times$</strong> 的总响应延迟加速。例如，在 Video-MME (Short) 上，Venus (4.7s) 远低于 BOLT (Cloud-Only) 的 43.9s 和 BOLT (Edge-Cloud) 的 398.1s。</li>
+</ul>
+<h3 id="64-comparison-of-top-k-and-sampling-based-retrieval-top-k-与采样式检索的比较">6.4 Comparison of Top-K and Sampling-Based Retrieval (Top-K 与采样式检索的比较)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure10.png"></p>
+<ul>
+<li><strong>目的:</strong> 比较 Vanilla 贪婪 Top-K 选择和 Venus 采样式检索在<strong>多样性</strong>和<strong>覆盖范围</strong>上的差异（固定预算 $N=8$ 帧）。</li>
+<li><strong>案例研究 (Figure 10):</strong> 对于同一问题，Top-K 选择<strong>仅覆盖</strong>选项 C 相关内容，而采样式检索则包括与选项 B、C 和 D <strong>相关的内容</strong>。</li>
+<li><strong>结论:</strong> 采样式检索提供了更广的覆盖范围和<strong>时间多样性</strong>，能帮助模型排除不正确选项。</li>
+</ul>
+<h3 id="65-ablation-study-on-adaptive-keyframe-retrieval-自适应关键帧检索的消融研究">6.5 Ablation Study on Adaptive Keyframe Retrieval (自适应关键帧检索的消融研究)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure9.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure11.png"></p>
+<ul>
+<li><strong>目的:</strong> 评估 <strong>AKR (Adaptive Keyframe Retrieval)</strong> 模块的影响。</li>
+<li><strong>发现:</strong> Venus with AKR ($N_{max}=32$) 在推理准确性方面与固定预算 $N=32$ 或 $N=64$ 的采样方法<strong>保持可比性</strong>。</li>
+<li><strong>优势:</strong> AKR 实现了<strong>最低的平均延迟和通信开销</strong>。这证明 AKR 能够根据评估得分<strong>自适应地停止采样和推理</strong>，避免了不必要的帧传输和 VLM 推理，同时保证了准确性。</li>
+</ul>
+<h3 id="66-end-to-end-query-latency-breakdown-端到端查询延迟分解">6.6 End-to-end Query Latency Breakdown (端到端查询延迟分解)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Venus/figure12.png"></p>
+<ul>
+<li><strong>结果 (Figure 12):</strong>     * Venus 在所有处理步骤中始终实现<strong>最低延迟</strong>。
+<ul>
+<li><strong>总加速比:</strong> 相比基线，Venus 实现了 <strong>$15\times–131\times$</strong> 的总响应延迟加速。</li>
+</ul>
+</li>
+<li><strong>延迟优势原因:</strong>
+<ol>
+<li><strong>Ingestion Stage:</strong> Venus 的场景分割和聚类实现了<strong>实时设备端嵌入和记忆构建</strong>，确保在查询到达时<strong>只需嵌入查询文本</strong>，从而大幅减少了设备端延迟。</li>
+<li><strong>Querying Stage:</strong> AKR 自适应选择关键帧进行上传，<strong>显著减少</strong>了通信和云端 VLM 推理延迟。</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h2 id="7-conclusion-结论">7. Conclusion (结论)</h2>
+<p>Venus 采用了一种<strong>边缘-云解耦架构 (edge–cloud disaggregated architecture)</strong>，实现了<strong>实时设备端感知</strong>、<strong>分层历史记忆构建</strong>和<strong>高效关键帧检索</strong>。系统仅将<strong>最相关的上下文</strong>转发给云托管的 VLM 进行准确推理。作者的广泛评估表明，与最先进的方法相比，Venus 在总响应延迟方面实现了 <strong>$15\times–131\times$ 的加速</strong>。</p>
+
+    </section>
+  
+    <section data-source="posts\Elastic On-Device LLM Service - Mobicom&#39;25.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/title.png"></p>
+<p><strong>Conference</strong>: <strong>MobiCom &lsquo;25</strong></p>
+<p><strong>Github:</strong> <a href="https://github.com/yinwangsong/ElastiLM">https://github.com/yinwangsong/ElastiLM</a></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p><strong>端侧 LLM 需要弹性（Elasticity）</strong>。LLM 虽然能够处理广泛的语言任务，但其巨大的参数量使得在设备上为每个任务部署独立的模型既不“必要”也不“实际”。因此，端侧 LLM 通常作为系统服务（LLM-as-a-Service）被多个任务和 APP 共享。然而，<strong>单一的静态 LLM 无法满足不同任务对服务水平目标（Service-Level Objectives, SLOs）的多样化需求</strong>。</p>
+<p>因此，端侧 LLM 必须具备弹性。由于 LLM 推理包含两个截然不同的阶段，这种弹性的需求变得更加复杂：</p>
+<ol>
+<li><strong>Prefill（预填充阶段）</strong>：处理 Prompt 的速度，由 <strong>Time-To-First-Token (TTFT)</strong> 衡量。</li>
+<li><strong>Decode（解码阶段）</strong>：生成 Token 的速度，由 <strong>Time-Per-Output-Token (TPOT)</strong> 衡量。</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/table1.png"></p>
+<p>不同的应用对这两个指标有截然不同的要求（如上表所示）：</p>
+<ul>
+<li><strong>Chatbot</strong>：需要低 TTFT 和低 TPOT 以匹配人类阅读速度。</li>
+<li><strong>UI 自动化 Agent</strong>：需要低 TTFT 来快速响应首个动作，但对 TPOT 要求较低（因为生成过程可以与 UI 操作重叠）。</li>
+<li><strong>后台屏幕录制器</strong>：对 TTFT/TPOT 的容忍度都很高。</li>
+</ul>
+<p>如果无法满足 SLO，会导致用户体验严重下降或 Agent 交互失败。理想情况下，请求发送给弹性 LLM 时会附带 Prompt 和预期的 SLO，LLM 需要在不违反 SLO 的前提下提供最高的文本生成质量。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure2.png"></p>
+<p>作者的先导实验表明（如图2）：</p>
+<ul>
+<li><strong>TTFT</strong> 与 Prompt 长度和模型大小均成正比：$TTFT \propto PromptLength \times ModelSize$。</li>
+<li><strong>TPOT</strong> 在 KV Cache 的帮助下，主要与模型大小成正比：$TPOT \propto ModelSize$。</li>
+</ul>
+<p>这意味着作者需要同时从 <strong>模型维度（Model Dimension）</strong> 和 <strong>Prompt 维度（Prompt Dimension）</strong> 进行弹性化。</p>
+<p><strong>面临的挑战 (Challenges)</strong>：
+尽管现有的剪枝技术（Pruning）和 Prompt 压缩技术存在，但在端侧实现弹性服务面临独特挑战：</p>
+<ol>
+<li>
+<p><strong>昂贵的运行时切换开销 (Costly runtime switching)</strong>：</p>
+<ul>
+<li>传统的结构化剪枝（Structural Pruning）产生的子模型（Sub-models）在内存中是不连续的（如图3a）。</li>
+<li>为了利用端侧深度优化的密集计算内核（Dense Kernels），必须在推理前重新排列权重以保证内存连续性（Data movement），或者在内存中维护多份模型副本（内存不可接受）。</li>
+<li><strong>数据：</strong> 例如，在 Redmi K60 上，将 LLaMA-7B 的 20% 子模型切换到 30% 子模型需要 <strong>8.2秒</strong>，这对于实时服务是不可接受的，且这部分时间会计入 TTFT。</li>
+</ul>
+</li>
+<li>
+<p><strong>敏感的 Prompt-Model 编排策略 (Sensitive prompt-model orchestration)</strong>：</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure5.png"></p>
+<ul>
+<li>对于一个特定的 SLO，存在多种“Prompt 压缩率 + 模型剪枝率”的组合策略。</li>
+<li><strong>数据：</strong> 如图 5 所示，对于 ARC_E 数据集的一个 Prompt，策略 A（50% Prompt / 80% Model）和策略 B（80% Prompt / 50% Model）虽都能满足延时要求，但只有策略 A 能生成正确答案。</li>
+<li>随机选择策略会导致显著的精度下降（在 Octopus 数据集上相比 Oracle 策略下降 15.2%）。</li>
+</ul>
+</li>
+</ol>
+<h2 id="2-contribution">2. Contribution</h2>
+<p><strong>作者的解决方案：ElastiLM</strong>。作者提出了 ElastiLM，这是一个为端侧 LLM 设计的弹性服务系统。它通过以下核心技术解决了上述挑战：</p>
+<ol>
+<li>
+<p><strong>One-shot reordering of permutation consistent units (置换一致单元的一次性重排序)</strong>：</p>
+<ul>
+<li>利用 Transformer 模型中固有的“置换一致性（Permutation Consistency）”特性。</li>
+<li><strong>核心思想</strong>：识别出可以任意重新排列且不改变模块输出的单元（即 Attention Heads 和 MLP Neurons）。</li>
+<li><strong>方法</strong>：离线通过可解释性 AI（XAI）方法分析单元重要性，依据重要性对单元进行重排序，确保存储时重要单元在内存上是连续的。</li>
+<li><strong>优势</strong>：在线推理时，模型切换（升级/降级）变成了零成本的内存指针移动（Slicing），无需任何数据搬运。</li>
+</ul>
+</li>
+<li>
+<p><strong>Dual-head Tiny Language Model (TLM) for prompt-model orchestration (双头微型语言模型用于编排)</strong>：</p>
+<ul>
+<li>设计了一个仅有 40M 参数的轻量级模型（基于 MobileBert）。</li>
+<li><strong>Score-head</strong>：用于评估 Token 重要性并进行 Prompt 压缩。</li>
+<li><strong>Decision-head</strong>：用于根据当前 Prompt 和 SLO，预测最佳的 Prompt 压缩率和模型大小组合。</li>
+<li><strong>优势</strong>：通过离线的“自诱导标注（Self-induced labelling）”进行训练，实现了端到端的最佳策略选择。</li>
+</ul>
+</li>
+<li>
+<p><strong>全面的评估</strong>：</p>
+<ul>
+<li>在 3 款商用智能手机和 5 个 LLM（3B-7B）上进行了实现。</li>
+<li>ElastiLM 在满足所有请求 SLO 的前提下，端到端准确率平均比强基线高出 <strong>10.45%</strong>（最高达 14.83%）。</li>
+<li>切换开销小于 TTFT 的 1%，且离线处理成本极低（&lt;100 GPU hours）。</li>
+</ul>
+</li>
+</ol>
+<h2 id="3-elastilm-design">3. ElastiLM Design</h2>
+<h3 id="31-overview">3.1 Overview</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure6.png"></p>
+<p>如图 6 所示，ElastiLM 采用 <strong>两阶段工作流（Two-stage workflow）</strong>：</p>
+<ol>
+<li>
+<p><strong>云端离线阶段 (Cloud Offline Stage)</strong>：</p>
+<ul>
+<li><strong>模型弹性化</strong>：对 LLM 进行处理，生成一系列共享内存权重的子模型。利用重排序技术确保子模型间的切换成本极低。</li>
+<li><strong>Prompt 弹性化</strong>：微调一个双头 TLM（Tiny Language Model），用于在线决策。</li>
+</ul>
+</li>
+<li>
+<p><strong>设备在线阶段 (Device Online Stage)</strong>：</p>
+<ul>
+<li>部署弹性化后的 LLM 和微调后的 TLM。</li>
+<li>当请求到达时（包含 Prompt 和 SLO $&lt; \alpha_{TTFT}, \alpha_{TPOT} &gt;$），TLM 接收输入并输出压缩后的 Prompt 以及合适的子模型大小。</li>
+<li>LLM 基于选定的配置执行推理。</li>
+</ul>
+</li>
+</ol>
+<h3 id="32-model-elastification-模型弹性化">3.2 Model elastification (模型弹性化)</h3>
+<p>这是 ElastiLM 解决“昂贵切换开销”的核心设计。</p>
+<h4 id="321-permutation-consistent-units-置换一致性单元">3.2.1 Permutation Consistent Units (置换一致性单元)</h4>
+<p>ElastiLM 利用了 Transformer 模型的数学特性——<strong>置换一致性</strong>。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure7.png"></p>
+<ul>
+<li><strong>Property 1</strong>：如果在神经网络的一个 Block 内部重新排列单元（Units）的顺序，只要输入/输出保持不变，计算结果就是等价的。这是因为 Reduce 算子（如 Sum/Add）满足交换律和结合律。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure8.png"></p>
+<ul>
+<li><strong>Property 2</strong>：在 Transformer 中，<strong>Attention Heads（注意力头）</strong> 和 <strong>MLP Neurons（MLP 神经元）</strong> 是相互独立的置换一致性单元。
+<ul>
+<li><em>Attention Head Unit</em>: 包含 $W_Q, W_K, W_V$ 的对应列以及 $W_O$ 的对应行。</li>
+<li><em>MLP Neuron Unit</em>: 包含 $W_{up}$ 的对应列和 $W_{down}$ 的对应行。</li>
+</ul>
+</li>
+</ul>
+<h4 id="322-one-shot-unit-reordering-一次性单元重排序">3.2.2 One-shot Unit-reordering (一次性单元重排序)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure9.png"></p>
+<p>ElastiLM 不像传统剪枝那样直接删除权重，而是通过 <strong>重排序（Reordering）</strong> 来构造子模型。</p>
+<ol>
+<li>
+<p><strong>Unit Importance Profiling (单元重要性分析)</strong>：</p>
+<ul>
+<li>
+<p>使用 <strong>XAI (可解释 AI)</strong> 的思想，通过梯度来衡量单元的重要性。</p>
+</li>
+<li>
+<p>定义单元 $i$ 的重要性 $imp_i$ 为移除该单元后 Loss 的变化量。基于泰勒展开近似：</p>
+$$
+        imp_i = |L - L_{W_i=0}| \approx |\frac{\partial L}{\partial W_i}W_i|
+        $$</li>
+<li>
+<p>使用校准数据集（如 Bookcorpus）计算上述重要性得分。</p>
+</li>
+</ul>
+</li>
+<li>
+<p><strong>Offline Reordering (离线重排序)</strong>：</p>
+<ul>
+<li>根据 $imp_i$ 对 Block 内部的单元进行降序排列。</li>
+<li><strong>结果</strong>：最重要的单元被移动到了权重矩阵的前部（Base address），最不重要的在后部。</li>
+<li><strong>Sub-model Construction</strong>：子模型被定义为从基地址开始的连续内存段。例如，50% 大小的子模型就是重排序后权重矩阵的前 50% 部分。</li>
+</ul>
+</li>
+<li>
+<p><strong>Sub-model Recovery with LoRA (基于 LoRA 的子模型恢复)</strong>：</p>
+<ul>
+<li>剪枝（即只取前 N% 的单元）可能会导致精度损失。ElastiLM 为每个子模型级别（如 50%, 60%&hellip;）训练一个对应的 <strong>Low-Rank Adapter (LoRA)</strong>。</li>
+<li>LoRA 参数量极小（&lt; 0.5%），不会带来显著的内存开销。</li>
+</ul>
+</li>
+<li>
+<p><strong>Online Switching (在线切换)</strong>：</p>
+<ul>
+<li><strong>零拷贝（Zero-copy）</strong>：由于子模型在物理内存上是连续的（都在前部），从 20% 切换到 50% 只需要移动内存指针（Memory Pointer），这在 C++ 中几乎是零成本的操作。</li>
+<li><strong>操作流程</strong>：Detach 当前 LoRA -&gt; 移动权重指针 -&gt; Attach 新的 LoRA。</li>
+<li><strong>数据</strong>：在 Redmi K60 上，升级 $W_O$ 矩阵仅需 <strong>2ms</strong>，而传统方法的数据搬运需要 140ms。</li>
+</ul>
+</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure10.png"></p>
+<h4 id="323-anchor-layers-locking-锚点层锁定">3.2.3 Anchor Layers Locking (锚点层锁定)</h4>
+<p>作者发现层的重要性分布遵循 <strong>幂律分布（Power-law distribution）</strong>（80/20 法则）。约 20% 的层（称为 Anchor Layers）对模型性能至关重要。</p>
+<ul>
+<li><strong>策略</strong>：ElastiLM 锁定这些锚点层，不对其进行弹性化（即始终保持完整大小），只对剩余层进行弹性化。这显著提升了子模型的质量。</li>
+</ul>
+<h3 id="33-prompt-elastification-prompt-弹性化">3.3 Prompt elastification (Prompt 弹性化)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure11.png"></p>
+<p>ElastiLM 使用一个 <strong>Dual-head TLM</strong> 来解决 Prompt 压缩和 Prompt-Model 编排问题。</p>
+<h4 id="331-dual-head-tlm-architecture-双头-tlm-架构">3.3.1 Dual-head TLM Architecture (双头 TLM 架构)</h4>
+<ul>
+<li><strong>Backbone</strong>: 基于 <strong>MobileBert</strong>（仅为 BERT_base 参数量的 20%），轻量且高效。</li>
+<li><strong>Input</strong>: 原始 Prompt + <strong>SLO Special Tokens</strong>。
+<ul>
+<li>SLO 被编码为特殊 Token 插入 Embedding 层，例如 <code>[05]</code> 代表 50% TTFT，<code>&lt;08&gt;</code> 代表 80% TPOT。</li>
+</ul>
+</li>
+<li><strong>Head 1: Score-head (打分头)</strong>：
+<ul>
+<li><strong>任务</strong>：二分类问题。判断每个 Token 是“保留（Retain）”还是“丢弃（Discard）”。</li>
+<li><strong>输出</strong>：Token 的重要性分数，用于后续压缩。</li>
+</ul>
+</li>
+<li><strong>Head 2: Decision-head (决策头)</strong>：
+<ul>
+<li><strong>任务</strong>：多分类问题。</li>
+<li><strong>输出</strong>：选择最佳的 <strong>Prompt 压缩率</strong>（如 60%）和 <strong>模型大小</strong>（如 80%）。</li>
+</ul>
+</li>
+<li><strong>Shared Bottom Layers</strong>: 两个头共享底层的 12 层 Transformer，以最小化开销。</li>
+</ul>
+<h4 id="332-training-strategy-训练策略">3.3.2 Training Strategy (训练策略)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure12.png"></p>
+<ul>
+<li><strong>Score-head Training</strong>: 使用 MeetingBank 数据集（由 GPT-4 标注 Token 重要性）进行微调。</li>
+<li><strong>Decision-head Training (Self-induced labelling)</strong>：
+<ul>
+<li>为了解决“不知道哪个策略组合最好”的问题，ElastiLM 采用 <strong>自诱导标注</strong>。</li>
+<li><strong>过程</strong>：离线遍历所有可能的 Prompt 压缩率和模型大小组合，找到能够满足 SLO 且能够输出正确答案的最轻量级组合作为 Label（标签）。</li>
+<li>使用 MMLU-Pro 等数据集生成训练样本。</li>
+</ul>
+</li>
+</ul>
+<h4 id="333-inference-workflow-推理流程">3.3.3 Inference Workflow (推理流程)</h4>
+<ol>
+<li>TLM 接收 Prompt 和 SLO。</li>
+<li><strong>Decision-head</strong> 输出推荐的配置（例如：60% Prompt + 80% Model）。</li>
+<li><strong>Score-head</strong> 计算每个 Token 的保留概率。</li>
+<li>根据推荐的 Prompt 比例（60%），保留 Score 最高的 Top-60% Token。</li>
+<li>如果 Decision-head 的决策无法满足 SLO（极少数情况），系统会回退到满足 SLO 的随机安全策略。</li>
+</ol>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure13.png"></p>
+<h2 id="4-implementation-and-evaluation">4. Implementation and Evaluation</h2>
+<h3 id="40-implementation-实现细节">4.0 Implementation (实现细节)</h3>
+<ul>
+<li><strong>Offline</strong>: 基于 PyTorch 和 HuggingFace Transformers 库修改，增加了单元重要性分析和重排序功能。</li>
+<li><strong>Online</strong>: 基于 <strong>mllm</strong>（一个轻量级端侧 LLM 推理库，C++/Assembly 编写）。</li>
+<li><strong>Kernel</strong>: 实现了 <code>ElasticLinear</code> 算子，替换了标准的 <code>Linear</code> 算子。该算子封装了原始的 Dense Kernel，增加了一个内存指针用于指定子模型的权重地址，从而支持零拷贝切换。</li>
+<li><strong>LoRA</strong>: 使用 ARM NEON 指令集优化了 LoRA 的矩阵乘法和加法。</li>
+</ul>
+<h3 id="41-experimental-settings-实验设置">4.1 Experimental settings (实验设置)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/table2.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/table3.png"></p>
+<ul>
+<li><strong>Devices</strong>: Redmi K60 Champion (SD 8Gen2), Mi 14 (SD 8Gen3), Redmi K70 Pro.</li>
+<li><strong>Models</strong>: LLaMA-7B, Llama3-8B, Vicuna-V1.5-7B, Orca-mini-3B.</li>
+<li><strong>Baselines</strong>:
+<ul>
+<li><strong>PFS (Pre-trained From Scratch)</strong>: 为每个 SLO 部署一个独立大小的模型（如 OPT-1.3B, 2.7B）。</li>
+<li><strong>LLMPruner (LPruner)</strong>: SOTA 结构化剪枝方法。</li>
+<li><strong>LLMLingua2 + Contextual Sparsity (LG2+CS)</strong>: Prompt 压缩 + 上下文稀疏化。</li>
+<li><strong>Layer-wise Elastification (LE)</strong> / <strong>LaCo</strong>: 层级剪枝方法。</li>
+</ul>
+</li>
+<li><strong>Workload</strong>: 6 个数据集（ARC_E, Octopus 等）和合成的端到端 Trace（模拟不同 SLO 分布）。</li>
+</ul>
+<h3 id="42-end-to-end-performance-端到端性能">4.2 End-to-end performance (端到端性能)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure14.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure16.png"></p>
+<ul>
+<li><strong>Accuracy</strong>: 在混合 SLO 的 Trace 测试中，ElastiLM 的准确率显著优于所有基线，平均提升 <strong>10.45%</strong>，最高提升 <strong>14.83%</strong>（如图 14）。
+<ul>
+<li>优于 PFS 的原因：PFS 无法充分利用 SLO 之间的空间，且 ElastiLM 继承了大模型的涌现能力。</li>
+<li>优于 LPruner 的原因：ElastiLM 结合了 Prompt 弹性化，且没有切换开销。</li>
+</ul>
+</li>
+<li><strong>Switching Overhead (切换开销)</strong>（如图 16b）：
+<ul>
+<li>PFS (Swap) 和 LPruner 需要 <strong>6.2s - 8.3s</strong> 来切换模型（因为涉及内存数据搬运或磁盘 I/O）。</li>
+<li>ElastiLM 仅需 <strong>0.31s</strong>，低于平均 TTFT 的 1%，几乎可以忽略不计。</li>
+</ul>
+</li>
+</ul>
+<h3 id="43-performance-on-standalone-datasets-独立数据集性能">4.3 Performance on standalone datasets (独立数据集性能)</h3>
+<ul>
+<li>在给定的特定 SLO 下，ElastiLM 在所有数据集上均表现出色。</li>
+<li>特别是在 <strong>紧缩的 SLO (Tight SLOs)</strong> 下，ElastiLM 通过同时压缩 Prompt 和模型，能够在基线方法无法运行或精度极低的情况下保持较高的准确率（提升高达 <strong>40%</strong>）。</li>
+</ul>
+<h3 id="44-offline-stage-overhead-离线阶段开销">4.4 Offline stage overhead (离线阶段开销)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure17.png"></p>
+<ul>
+<li><strong>GPU Hours</strong>: 弹性化 LLaMA-7B 仅需 <strong>68.3 GPU hours</strong>（约 100 美元成本）。</li>
+<li>相比之下，PFS 需要从头训练多个模型，耗时超过 100,000 GPU hours（相差 1000 倍）。</li>
+<li>ElastiLM 的主要时间花费在 Model Recovery (40.4h) 和 Self-induced labelling (26.3h) 上，这是一次性成本。</li>
+</ul>
+<h3 id="45-sensitivity-analysis-敏感性分析">4.5 Sensitivity analysis (敏感性分析)</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure18.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure19.png"></p>
+<ul>
+<li><strong>Ablation Study (消融实验)</strong>（图 18c）：
+<ul>
+<li>移除 <strong>Reordering (重排序)</strong> 导致最大的性能下降（&gt;10%），证明了保留重要权重位置的重要性。</li>
+<li>移除 Decision-head 或 LoRA 也会导致明显的精度损失。</li>
+</ul>
+</li>
+<li><strong>Data Scale</strong>: 增加恢复数据量带来的收益呈边际递减，当前的配置（50M Token）是性价比最高的甜点。</li>
+<li><strong>Quantization</strong>: 结合 8-bit 量化几乎无损，4-bit 量化仅损失 3% 精度。</li>
+</ul>
+<h2 id="5-discussion">5. Discussion</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure20.png"></p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/ElasticLM/figure21.png"></p>
+<p><strong>Generalization to other SLOs (泛化到其他 SLO)</strong>。虽然本文主要关注推理延迟（Latency），但 ElastiLM 的方法可以轻松泛化到其他指标。</p>
+<ul>
+<li><strong>Total Time SLO ($SLO_{time}$)</strong>: 端到端总时间（Prefill + Decode）。</li>
+<li><strong>Energy Consumption SLO ($SLO_{energy}$)</strong>: 推理能耗。
+作者在 Mi 14 上进行了实验（如图 20），结果表明 ElastiLM 在这些新的 SLO 定义下依然持续优于基线。这是因为这些资源约束本质上都可以分解为 Prompt 和 Model 维度的计算量缩减。</li>
+</ul>
+<p><strong>Apps with competing demands (多应用竞争资源)</strong>。在常规端侧 LLM 服务模型中，通常没有并发请求。但在极端场景下，如果有多个 App 竞争资源，ElastiLM 可以通过上层调度机制（如 Batching）来处理，这对开发者是透明的。</p>
+<p><strong>On mobile SoC accelerators (移动 SoC 加速器)</strong>。目前（2024年8月），移动端的 NPU/DSP SDK（如 SNPE, QNN）尚不支持 ElastiLM 所需的动态 Shape、动态图构建或非稀疏内核的无缝运行。因此，作者进行了一个 <strong>&ldquo;What if&rdquo; 实验</strong>：通过将理论计算/内存负载映射到 Profiling 数据来模拟性能。</p>
+<ul>
+<li>使用 MNN 和 mllm-NPU 分别在 Mi 14 的 GPU 和 NPU 上进行模拟。</li>
+<li>结果（如图 21）显示，即使在加速器上，ElastiLM 依然显著优于基线。作者相信随着 AI 硬件和编译器的成熟，ElastiLM 将变得更加实用。</li>
+</ul>
+<h2 id="6-conclusion">6. Conclusion</h2>
+<p>本文提出了 <strong>ElastiLM</strong>，一种面向端侧的弹性 LLM 服务，能够适应具有多样化 SLO 的 App 请求。</p>
+<ul>
+<li>通过 <strong>One-shot reordering of permutation consistent units</strong>，实现了零成本的运行时模型切换。</li>
+<li>通过 <strong>Dual-head TLM</strong>，实现了 Prompt 和 Model 弹性化的智能编排。</li>
+<li>实验证明，ElastiLM 在准确率上比竞争基线高出 <strong>14.83%</strong>（平均 10.45%），并且具有极低的切换开销和离线成本，是目前端侧弹性 LLM 服务的最佳解决方案。</li>
+</ul>
+
+    </section>
+  
+    <section data-source="posts\RServe - Overlapping Encoding and Prefill for Efficient  LMMInference.md">
+      <p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/title.png"></p>
+<h2 id="1-motivation">1. Motivation</h2>
+<p>大型多模态模型（LMMs）通常采用编码模块将多模态数据输入转换为 Embedding，然后将其馈送给语言模型进行进一步处理。然而，由于其推理流程的固有复杂性，高效地服务 LMM 仍然极具挑战性。传统的服务引擎将编码模块和语言模型部署在一起，导致显著的资源干扰和紧密的数据依赖。最近的研究通过将编码模块从模型中解（Disaggregating），采用预填充-解码（Prefill-Decode）分离的设计风格来缓解这一问题。尽管如此，这些方法未能充分利用单个请求内（Intra-request）和多个请求间（Inter-request）的并行性。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure1.png"></p>
+<p>与纯语言模型相比，多模态模型推理通常依赖于更丰富的提示输入，如图 1 所示。当前的 LMM 依赖额外的编码器来生成与传统 LLM 兼容的多模态输入 Embedding。尽管如此，LMM 面临另一个挑战：在单个请求内编码所有多模态数据会引入显著的延迟（其比例可高达 26%，如图 2 所示），这会干扰 LLM 的前向计算。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure2.png"></p>
+<p>随着模型规模的不断增长，LLM 或 LMM 的分布式部署已成为主流。最广泛使用的方法包括张量并行（Tensor Parallelism, TP）和流水线并行（Pipeline Parallelism, PP）。</p>
+<ul>
+<li><strong>张量并行 (TP):</strong> 通常用于具有高带宽互连的节点内，可有效降低推理延迟。</li>
+<li><strong>流水线并行 (PP):</strong> 通常用于带宽有限的节点间场景，可提高推理吞吐量。</li>
+</ul>
+<p>最近提出的 <strong>分块流水线并行 (Chunked Pipeline Parallelism, CPP)</strong> 1改变了这一格局，使流水线并行能够实现与张量并行相当的延迟降低。具体而言，CPP 将整个输入 Embedding 分割成多个块（Chunks），并按原始输入顺序对预填充（Prefill）计算进行流水线处理，允许单个请求的不同块在流水线内同时处理。如图 2 所示，对于单个多模态请求，流水线并行和张量并行可以保持相当的推理延迟。</p>
+<hr>
+<h2 id="2-contribution">2. Contribution</h2>
+<p>为了实现交错和重叠执行，作者提出了 <strong>RServe</strong>，这是一个 LMM 推理系统，能够以全并行方式高效编排请求内（Intra-request）和请求间（Inter-request）的流水线。</p>
+<ul>
+<li>
+<p><strong>请求内优化 (Intra-request Optimization):</strong> 对于具有丰富多模态输入（即大量图像）的请求，RServe 将多模态编码过程与 Prefill 执行重叠，构建请求内流水线。为实现这一点，RServe 将输入 Embedding 分为两类：</p>
+<ul>
+<li><strong>就绪 Embedding (Ready embeddings):</strong> 包括文本 Embedding 和已经编码完成的多模态 Embedding。</li>
+<li><strong>未就绪 Embedding (Not-ready embeddings):</strong> 指尚未被编码模块处理的那些数据。
+RServe 以细粒度从左到右顺序编码多模态数据，允许 LLM 在部分 Embedding 生成后立即启动 Prefill 执行。</li>
+</ul>
+</li>
+<li>
+<p><strong>请求间优化 (Inter-request Optimization):</strong> 为了保持高吞吐量和低延迟，RServe 进一步对不同请求进行批处理执行，并利用 <strong>可调度 Token (Schedulable Tokens)</strong> 来平衡各个微批次（Micro-batches）之间的计算负载，构建请求间流水线。</p>
+</li>
+<li>
+<p><strong>系统设计:</strong> RServe 的请求内流水线是一种独立于并行方法的优化，而请求间流水线则将请求内流水线与流水线并行相结合。</p>
+</li>
+</ul>
+<p><strong>本文的贡献如下：</strong></p>
+<ol>
+<li>作者强调了多模态编码和 LLM 前向传递之间的请求内并行性尚未被充分利用。</li>
+<li>作者提出了 RServe，这是一个高效的 LMM 推理系统，它编排请求内和请求间流水线，在保持高吞吐量的同时降低延迟。</li>
+<li>在代表性 LMM 上的实验结果表明，RServe 将延迟降低了高达 66%，并将吞吐量提高了高达 109%。</li>
+</ol>
+<hr>
+<h2 id="3-background">3. Background</h2>
+<h3 id="31-模型推理过程-model-inference-procedure">3.1 模型推理过程 (Model Inference Procedure)</h3>
+<h4 id="311-llm-推理过程">3.1.1 LLM 推理过程</h4>
+<ul>
+<li><strong>预填充阶段 (Prefill phase):</strong> 处理整个输入提示，构建 KV 缓存，并生成第一个输出 Token，通常导致高 GPU 利用率。</li>
+<li><strong>解码阶段 (Decode phase):</strong> 通过重用 KV 缓存生成后续 Token；该阶段的 GPU 利用率相对较低，因此通常采用跨多个请求的批处理来提高效率。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure3.png"></p>
+<p>为了缓解 Prefill 引入的延迟瓶颈，最近的工作提出了 Chunked Prefill，它将 Prefill 计算划分为更小的段，并将它们的执行与批处理解码交错进行。虽然这种策略减少了解码的延迟，但它不能完全消除 Prefill 和解码之间的资源干扰。为了解决这个问题，提出了 <strong>预填充-解码分离 (Prefill-Decode Disaggregated)</strong> 架构（如图 3 所示），其中 Prefill 和解码操作被分配到单独的节点，通过在它们之间传输 KV 缓存来实现高效协作。</p>
+<h4 id="312-lmm-推理过程">3.1.2 LMM 推理过程</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure4.png"></p>
+<p>如图 4 所示，LMM 最初采用多模态编码器将多模态输入转换为 Embedding。该编码器通常包含 3D 卷积层、注意力机制和前馈网络（FFN）等组件，旨在捕获不同数据模态之间的空间和时间依赖性。相比之下，文本数据仅需通过词表查找即可获得 Token Embedding，计算量微乎其微。因此，多模态输入的编码引入了巨大的计算开销，特别是在处理高分辨率图像、长视频序列和复杂音频信号时。</p>
+<p>源自多模态和文本输入的 Embedding 随后被整合并传入 LLM 以进行进一步的推理和生成任务。随着多模态数据量和复杂性的增加，编码阶段成为关键瓶颈，往往对整体推理延迟造成巨大影响。</p>
+<p>最近的研究表明，将编码和 Prefill 操作放在一起会加剧它们之间的干扰，因为每个操作都必须等待另一个完成。为了解决这个问题，最近的一项研究提出了 <strong>编码器-预填充-解码 (Encoder-Prefill-Decode, EPD)</strong> 分离架构（图 3），其中编码器和 Prefill 计算在单独的设备或节点上执行。在该设计中，编码器 Worker 专门负责多模态数据编码，并将结果 Embedding 传输给 Prefill Worker。一旦 Prefill Worker 接收到这些 Embedding，它可以立即开始 Prefill 计算。这种分离消除了编码和 Prefill 操作之间的相互干扰。</p>
+<h3 id="32-模型推理并行性-model-inference-parallelism">3.2 模型推理并行性 (Model Inference Parallelism)</h3>
+<h4 id="321-分块流水线并行-chunked-pipeline-parallelism-cpp">3.2.1 分块流水线并行 (Chunked Pipeline Parallelism, CPP)</h4>
+<p>当前的模型服务系统使用 Chunked Prefill 来处理超长上下文。具体来说，整个提示被分成多个块以便逐个处理。由于单个块的 Prefill 计算仅依赖于前面的块，作者可以对这些块的计算进行流水线处理，并重叠不同块的执行。一旦前一个块在一个阶段完成，下一个块就可以利用前一个块的 KV 缓存并开始 Prefill 计算。通过这种方式，CPP 可以大大降低 Prefill 计算的延迟。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure5.png"></p>
+<p>图 5 展示了传统流水线并行（Vanilla PP）和 CPP 的对比。</p>
+<ul>
+<li><strong>Vanilla PP:</strong> 下一个块的 Prefill 计算只能在前一个块完全完成所有阶段后才能开始。</li>
+<li><strong>CPP:</strong> 允许下一个块的 Prefill 操作在前一个块完成给定阶段后立即开始。</li>
+</ul>
+<h3 id="33-lmm-中的请求内与请求间并行-intra--and-inter-request-parallelism-in-lmm">3.3 LMM 中的请求内与请求间并行 (Intra- and Inter-request Parallelism in LMM)</h3>
+<p>CPP 利用了 LLM 推理中的请求内并行性。LMM 引入了额外的多模态数据编码操作，这可以自然地集成到 CPP 中。当前面的 Embedding 就绪时，作者可以立即开始就绪 Embedding 的 Prefill 计算，而不是等待请求中的所有多模态 Embedding 完成。在这种情况下，多模态编码可以与 Prefill 计算重叠，进一步缓解耗时的编码操作。</p>
+<p>然而，编码和 CPP 之间存在 <strong>数据依赖性</strong> 。图像 Token 必须在 Prefill 操作之前被编码。因此，作者需要仔细地交错编码和 Prefill 操作。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure7.png"></p>
+<p>图 7 展示了 LMM 推理过程中的请求内和请求间并行性：</p>
+<ul>
+<li><strong>Vanilla 服务系统:</strong> 第一个 Worker 负责编码和 Prefill 操作，两者相互干扰。</li>
+<li><strong>EPD 分离系统:</strong> 编码器 Worker 负责多模态编码计算，其余 Prefill Worker 以流水线方式执行语言模型。</li>
+<li><strong>请求间并行 (Inter-request parallelism):</strong> 请求 2 的编码与请求 1 的 Prefill 计算重叠时发生。</li>
+<li><strong>请求内并行 (Intra-request parallelism):</strong> 当同一请求内的编码或 Prefill 操作与其他 Prefill 计算并发执行时产生。</li>
+</ul>
+<p>为了充分实现请求内和请求间并行，必须解决几个关键挑战：</p>
+<ol>
+<li><strong>确定 Embedding 的 Prefill 资格:</strong> 只有当相应的文本或多模态 Embedding 就绪时，Prefill 操作才能开始，这使得依赖管理至关重要。</li>
+<li><strong>管理 Embedding 存储:</strong> 鉴于 GPU 显存有限，需要高效的驱逐策略来移除未使用的 Embedding，同时保持计算效率。</li>
+<li><strong>细粒度编码多模态数据:</strong> 编码粒度越小，重叠计算的机会越大；然而，编码的计算效率会降低。</li>
+<li><strong>跨多个请求调度 Prefill 计算:</strong> 这不仅涉及优化请求内执行，还需要协调请求间流水线以提高吞吐量。</li>
+</ol>
+<hr>
+<h2 id="4-design">4. Design</h2>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure8.png"></p>
+<p>为了更好地编排请求内和请求间流水线，作者设计了 <strong>RServe</strong>，这是一个高效的 LMM 服务系统，旨在降低富多模态请求的延迟。RServe 建立在 EP 分离架构之上，通过维护每个请求的 <strong>Embedding 追踪器 (Embedding Tracker)</strong> 来精心组织多模态编码和 Prefill 计算的执行。Tracker 指示哪些 Embedding 已经就绪（Ready）可以进行 Prefill，并在相应的 Prefill 操作完成后负责释放它们。为了实现细粒度的重叠，作者以分块（Chunked）粒度调度编码计算。为了配合多请求调度，作者提出了一种 <strong>Token 调度 (Token Scheduling)</strong> 方法来管理不同请求的执行进度。图 8 展示了 RServe 各个模块对 LMM 推理延迟和调度的影响。</p>
+<h3 id="41-embedding-tracker-for-intra-request-pipeline">4.1 Embedding Tracker for Intra-request Pipeline</h3>
+<p>为了协调多模态编码和 Prefill 操作的执行，RServe 采用了一个 Per-request Embedding Tracker（每个请求独立的 Embedding 追踪器。</p>
+<ul>
+<li><strong>功能与初始化:</strong> 该 Tracker 维护从多模态数据生成的 Embedding，并管理它们对 Prefill 计算的就绪状态。当创建一个新请求时，Tracker 会初始化其元数据，包括 Embedding 的维度和 <strong>就绪标记 (Readiness Tags)</strong>。</li>
+<li><strong>维度记录:</strong> 记录文本和多模态 Token 的数量，以及每个 Token Embedding 的隐藏层大小。</li>
+<li><strong>就绪标记:</strong> 对于 Embedding 已就绪的文本 Token 设置为 <code>true</code>，对于 Embedding 需要进一步计算的多模态 Token 设置为 <code>false</code>。</li>
+<li><strong>状态更新与存储:</strong> 随着多模态 Embedding 的生成，Tracker 会更新其就绪标记，并将新的 Embedding 存储在请求中的对应位置。</li>
+<li><strong>显存释放 (Memory Release):</strong> 一旦 Embedding 被送入 LLM 进行 Prefill，Tracker 会立即释放它们以避免显存泄漏（Memory Leaks）。这种机制确保了正确的执行顺序，并在 Embedding 可用时立即触发 Prefill 计算 。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure9.png"></p>
+<p><strong>工作流详解 (如图 9 所示):</strong>
+当请求创建时，RServe 首先获取所有文本 Embedding（开销可忽略），并为多模态 Embedding 预留位置。</p>
+<ul>
+<li><strong>Case 0 (并行执行):</strong> RServe 首先调度 Text1 的 Prefill，同时并发执行 MM1 的编码。一旦 MM1 编码完成，它会触发 MM1 和 Text2 的 Prefill，同时开始 MM2 的编码。当 MM2 Embedding 就绪时，RServe 执行 MM2 的 Prefill。</li>
+<li><strong>Case 1 (连续多模态项):</strong> 即使输入包含连续的多个多模态项（如 MM1 和 MM2），RServe 也能在 Prefill MM1 的同时编码 MM2。这表明 RServe 不要求输入遵循特定的模式（例如必须文本与图像交替），只要输入包含多个多模态元素，就能实现重叠计算。</li>
+</ul>
+<h3 id="42-encoder-scheduling-for-intra-request-pipeline">4.2 Encoder Scheduling for Intra-request Pipeline</h3>
+<p>当前的 LMM 服务系统通常将请求内的所有多模态输入作为一个批次（Batch）一起处理。虽然这种策略简化了执行，但它严格强制了一种依赖关系，即 Prefill 阶段必须等到所有多模态数据完全编码后才能开始 。这种僵化的顺序不仅增加了端到端延迟，还阻碍了编码和 Prefill 计算之间的有效重叠。</p>
+<p>为了解决这个瓶颈，理想情况下编码应以 <strong>流式 (Streaming)</strong> 方式进行，即一旦生成 Embedding 就立即转发给 LLM 进行 Prefill。这将实现编码器和 LLM Worker 之间的细粒度流水线并行。然而，在实践中，单个请求通常包含数十个多模态项（如多张图像、音频段或视频帧）。严格地逐个编码会导致执行效率极低，因为较小的 Batch Size 会严重低估 GPU 利用率，使编码计算变为内存受限（Memory-bound）。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/algorithm1.png"></p>
+<p>为了平衡延迟和硬件效率，RServe 采用了一种针对 Embedding 的 <strong>批处理策略 (Batching Strategy)</strong>（Algorithm 1）：</p>
+<ul>
+<li><strong>逻辑机制:</strong> 算法维护一个等待队列 $Q$ 和一个缓冲区 buffer 。</li>
+<li><strong>批量聚合:</strong> 多模态项（Multimodal items）被组织成包含至少 $C$ 个多模态 Token 的批次，每个批次一起编码。如果缓冲区内的数据量达到 $C$，则触发 Encode(buffer) 并重置缓冲区。</li>
+<li><strong>执行单元:</strong> 由于多模态编码无法在 Token 级别分割，RServe 将每个多模态项视为不可分割的执行单元并将它们聚合到批次中。</li>
+</ul>
+<p>这种策略确保编码器在不等待整个请求就绪的情况下实现足够的并行性，既利用了与 Prefill 计算的重叠，又保持了较高的编码效率。</p>
+<h3 id="43-token-scheduling-for-inter-request-pipeline">4.3 Token Scheduling for Inter-request Pipeline</h3>
+<p>除了请求内流水线，现代 LLM 服务系统还探索了请求间流水线，即多个请求在一个共享的 Token 预算（Token Budget）下被批处理在一起 98。然而，当扩展到 LMM 服务时，这种方法遇到了新的挑战。具体来说，Token 调度必须等到相应的多模态 Embedding 生成后才能进行，因为 Prefill 计算需要它们 。这在多模态编码和 Prefill 调度之间建立了紧密的数据依赖关系，因为在 Embedding 完全生成之前无法调度 Prefill，这使得高效调度策略的设计变得复杂。</p>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/algorithm2.png"></p>
+<p>为了解决这一挑战，RServe 引入了 <strong>可调度 Token (Schedulable Tokens)</strong> 的概念（Algorithm 2）：</p>
+<ul>
+<li><strong>定义:</strong> 一个 Token 变为“可调度”当且仅当：
+<ol>
+<li>其对应的多模态 Embedding 已经就绪（Ready）。</li>
+<li>其前序 Token 要么已经完成了 Prefill 计算，要么本身也已变为可调度。</li>
+</ol>
+</li>
+<li><strong>全局预算管理:</strong> 基于此机制，RServe 动态维护一个可调度 Token 池，并使用全局 Token 预算 $B$ 来跨不同请求对它们进行批处理 。</li>
+<li><strong>调度流程:</strong> 在每次调度迭代中，Token 被取出队列，评估其资格，如果剩余 Token 预算允许，则将其放入执行批次 $S$ 。</li>
+<li><strong>未完成请求处理:</strong> 无法完全调度的请求被标记为“不完整”（Incomplete）并重新插入等待队列 $Q$ 的头部，并更新状态，确保它们将在下一轮调度中被及时重新访问。</li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure10.png"></p>
+<p><strong>综合效果 (如图 10 所示):</strong>
+通过一旦 Embedding 可用就增量更新 Token 状态，RServe 实现了跨异构多模态请求的高效 Prefill 批处理。这种机制不仅支持请求内流水线，还有效构建了请求间流水线，从而在 LMM 服务中同时实现了低延迟和高吞吐量。</p>
+<p>图 10 展示了采用请求内和请求间流水线调度的优势。</p>
+<ul>
+<li>仅依赖请求内流水线时，系统难以充分利用每个微批次内的可用 Token 预算，导致显著的流水线气泡（Pipeline Bubbles）和计算资源利用不足。</li>
+<li>相比之下，通过结合请求内和请求间流水线，系统可以聚合来自多个请求的 Token 来填满微批次。这种策略不仅缓解了流水线中的空闲时间，还实现了延迟和吞吐量之间的平衡。</li>
+</ul>
+<h3 id="44-implementation">4.4 Implementation</h3>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure11.png"></p>
+<p>作者实现了 RServe，其组件图如图 11 所示。RServe 构建在 <strong>gLLM</strong>  之上，这是一个轻量级且高效的 LLM/LMM 服务框架，其性能与 vLLM 相当，同时保持了更简单和更灵活的架构。</p>
+<ul>
+<li><strong>Embedding Tracker 实现:</strong> Tracker 基于字典数据结构，其中每个 Request ID 用作键，相应的 Embedding 缓存作为值存储。Driver Worker 负责维护此 Tracker 并编排 Prefill 调度。具体来说，Tracker 用于确定每个请求的可调度 Token 数量并准备模型输入 Embedding。</li>
+<li><strong>就地更新 (In-place Update):</strong> 当 Driver Worker 接收到模型生成的新 Embedding 时，它会就地更新相应的缓存条目，以便调度决策始终依赖于最新的 Embedding 状态。</li>
+<li><strong>调度器修改:</strong> 此外，作者修改了 gLLM 调度器以支持 Token 级调度。调度器不再调度整个请求，而是基于可用可调度 Token 的数量进行操作 120。</li>
+<li><strong>适用性:</strong> RServe 适用于多种场景。特别是，请求内流水线优化与现有的并行策略正交。它可以无缝集成到流水线并行和张量并行中，并且同样适用于单 GPU 模型部署 。相比之下，请求间流水线与流水线并行固有耦合；它充当一种混合机制，将 RServe 的请求内流水线优化与流水线并行执行融合，以进一步提高多请求工作负载下的系统吞吐量并降低端到端延迟 。</li>
+</ul>
+<hr>
+<h2 id="5-evaluation">5. Evaluation</h2>
+<h3 id="51-实验设置-experimental-setup">5.1 实验设置 (Experimental Setup)</h3>
+<ul>
+<li><strong>架构:</strong> 作者的实验在 <strong>EPD 分离 (EPD disaggregated)</strong> 配置下进行。鉴于编码和 Prefill 操作主要影响首字延迟（TTFT），作者的评估重点关注首字延迟而非 Token 间延迟。</li>
+<li><strong>模型:</strong> 作者使用 Qwen2.5-VL 系列（7B, 32B 和 72B 变体）进行评估，考虑到其强大的多模态能力。</li>
+<li><strong>硬件:</strong>
+<ul>
+<li>主要实验：配备 140 核 Intel Xeon 处理器和 8 $\times$ H100 GPUs (NVLink) 的系统。</li>
+<li>鲁棒性验证：配备 64 核 AMD EPYC 处理器和 4 $\times$ A100 GPUs (PCIe) 的系统。</li>
+</ul>
+</li>
+<li><strong>工作负载:</strong> 使用 MMMU 数据集和 SGLang 中的开源基准。请求到达遵循泊松分布。作者改变图像分辨率以模拟多样化的多模态工作负载（1K 和 2K 分辨率）。</li>
+<li><strong>对比方案 (Schemes):</strong>
+<ul>
+<li><strong>vLLM (v0.10.1.1):</strong> 广泛采用的推理引擎，作为基准。</li>
+<li><strong>gLLM (v0.0.4):</strong> 轻量级推理系统，作为性能基准和实现基础。</li>
+<li><strong>gLLM-epd:</strong> 基于 gLLM 开发的 EP 分离版本。</li>
+<li><strong>RServe:</strong> 提出的高效 LMM 服务系统。</li>
+<li><strong>RServe-intra:</strong> 没有请求间流水线的 RServe。</li>
+</ul>
+</li>
+<li><strong>指标:</strong> 首字延迟 (TTFT)、吞吐量 (Throughput)、SLO 达成率 (SLO Attainment)。</li>
+</ul>
+<h3 id="52-性能提升-performance-improvement">5.2 性能提升 (Performance Improvement)</h3>
+<h4 id="521-延迟-latency---ttft">5.2.1 延迟 (Latency - TTFT)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure12.png"></p>
+<p>图 12 展示了对数坐标系下的延迟对比。</p>
+<ul>
+<li><strong>TP vs PP:</strong> 采用张量并行的 vLLM (TP4) 相比基于流水线并行的系统遭受显著更高的延迟（高达 3.77倍）。这主要是由于张量并行中频繁的同步通信导致系统性能严重下降 。</li>
+<li><strong>CPP 的优势:</strong> 流水线并行，特别是结合 CPP 时，不仅增加了吞吐量，还降低了单请求延迟。gLLM 的 TTFT 与 vLLM (PP4) 非常接近 。</li>
+<li><strong>RServe 的效果:</strong>
+<ul>
+<li>通过采用 EP 分离架构，gLLM-epd 相比 gLLM 实现了额外的 16%/20% 的 TTFT 降低。</li>
+<li>在此基础上，RServe 通过充分利用多模态编码和 LLM 前向传递之间的请求内并行性，相比 gLLM-epd 进一步降低了 18%/19% 的 TTFT 。</li>
+<li>总体而言，RServe 在低请求率下特别有效，此时请求内并行占主导地位。随着请求率增加，RServe 的性能逐渐收敛于 gLLM-epd。</li>
+</ul>
+</li>
+</ul>
+<h4 id="522-吞吐量-throughput">5.2.2 吞吐量 (Throughput)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure13.png"></p>
+<p>图 13 展示了输入 Token 处理吞吐量的对比。</p>
+<ul>
+<li><strong>TP vs PP:</strong> vLLM (TP4) 的吞吐量显著低于（26%/28%）流水线并行系统，这一趋势与延迟结果一致，证实了 CPP 赋能流水线并行在性能上超越张量并行。</li>
+<li><strong>RServe 的提升:</strong>
+<ul>
+<li>gLLM 和 vLLM (PP4) 表现出几乎相同的吞吐量。</li>
+<li>结合 EPD，gLLM-epd 实现了比 gLLM 高 6%/8.5% 的吞吐量提升。</li>
+<li>通过利用请求内和请求间并行，RServe 进一步扩展了吞吐量限制，达到了约 10600/11100 tokens/s，相比基线提升高达 109% 。</li>
+</ul>
+</li>
+</ul>
+<h4 id="523-slo-达成率-slo-attainment">5.2.3 SLO 达成率 (SLO Attainment)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure14.png"></p>
+<p>图 14 展示了服务指标的满足率。</p>
+<ul>
+<li>随着请求率增加，排队时间增长，SLO 达成率从 100% 逐渐下降到不足 20%。</li>
+<li>由于编码和 Prefill 操作之间的重叠计算，RServe 维持了比 gLLM-epd（平均 61%/59%）更高的 SLO 达成率（平均 71%/70%）。</li>
+<li>在曲线下面积（Coverage Area）方面，RServe 比 gLLM-epd 大 23%/23%，进一步证明了 RServe 具有更强的调度性能 。</li>
+</ul>
+<h3 id="53-性能剖析-performance-dissecting">5.3 性能剖析 (Performance Dissecting)</h3>
+<h4 id="531-embedding-批次大小-embedding-batch-size">5.3.1 Embedding 批次大小 (Embedding Batch Size)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure16.png"></p>
+<p>本节分析了不同 Embedding 批次大小在高质量和低质量多模态数据下的影响（图 16）。</p>
+<ul>
+<li><strong>高质量多模态数据 (1024 toks/MM item):</strong>
+<ul>
+<li>增加批次大小导致 TTFT 逐渐上升（高达 2.91倍），吞吐量稳步下降（高达 53%）。</li>
+<li><strong>结论:</strong> 对于高质量数据，即使单个多模态元素也足以充分利用编码计算能力 。因此，较小的批次大小通常更有利，因为它提供了更细粒度的重叠机会。</li>
+</ul>
+</li>
+<li><strong>低质量多模态数据 (32 toks/MM item):</strong>
+<ul>
+<li>TTFT 呈现“先降后升”的趋势 。</li>
+<li><strong>结论:</strong> 这反映了编码效率和重叠执行之间的权衡。批次太小，编码效率低；批次太大，重叠机会减少。实际部署应权衡两者。</li>
+</ul>
+</li>
+</ul>
+<h4 id="532-请求间流水线-inter-request-pipeline">5.3.2 请求间流水线 (Inter-request Pipeline)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure17.png"></p>
+<p>为了评估请求间流水线的影响，作者比较了 RServe 和 RServe-intra（仅包含请求内流水线）（图 17）。</p>
+<ul>
+<li>随着请求率增加，RServe-intra 的吞吐量比 RServe 低 32%，延迟高 172% 。</li>
+<li>缺乏请求间流水线显著降低了系统的处理速度，TTFT 的恶化主要归因于更长的等待时间。</li>
+</ul>
+<h3 id="54-扩展研究-extensive-studies">5.4 扩展研究 (Extensive Studies)</h3>
+<h4 id="541-rserve-结合张量并行-rserve-with-tensor-parallelism">5.4.1 RServe 结合张量并行 (RServe with Tensor Parallelism)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure18.png"></p>
+<p>张量并行也可以与 RServe 集成。</p>
+<ul>
+<li><strong>延迟:</strong> 如图 18 所示，EPD 架构并不总是由益的：在低请求率下，额外的 Embedding 传输开销实际上可能增加延迟。然而，随着请求率增长，利用请求间并行，EPD 变得更加有效。RServe (TP4+E1) 始终优于 gLLM 和 gLLM-epd 。当结合流水线并行时，RServe (PP4+E1) 显示出明显的延迟优势。</li>
+<li><strong>吞吐量:</strong> 低请求率下各方案差异不大；随着请求率上升，不同方案的效率差异显现。</li>
+<li><strong>SLO 达成率:</strong> 如图 19 所示，RServe 在严格 SLO 下始终优于 gLLM-epd 。</li>
+<li></li>
+</ul>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure19.png"></p>
+<h4 id="542-其他设置下的-rserve-rserve-with-varied-settings">5.4.2 其他设置下的 RServe (RServe with Varied Settings)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/figure20.png"></p>
+<ul>
+<li><strong>LLM 单 GPU 部署:</strong> 如图 20 所示，RServe 也能提升 LLM 单 GPU 部署的性能（TTFT 降低高达 26%）。在低请求率下优势更明显。</li>
+<li><strong>A100 GPU 评估:</strong> 在 A100 GPU 上，gLLM-epd 相比 gLLM 未显示出明显优势，但 RServe 进一步充分利用了并行潜力并实现了最佳性能 。</li>
+</ul>
+<h4 id="543-功能性研究-functional-study">5.4.3 功能性研究 (Functional Study)</h4>
+<p><img loading="lazy" src="http://localhost:14183/blog/image/Rserve/table1.png"></p>
+<p>为了评估推理框架的功能可用性，作者在 MMMU 验证集上评估了每个系统的推理性能（表 1）。vLLM (62.7)、gLLM (62.6)、gLLM-epd (62.4) 和 RServe (62.6) 的得分非常接近（波动小于 0.5%），这表明 RServe 能够保持功能正确性 。</p>
+<hr>
+<h2 id="6-结论-conclusion">6. 结论 (Conclusion)</h2>
+<p>本文介绍了 RServe，这是一个 LMM 推理系统，它高效地编排请求内和请求间流水线以实现低延迟和高并行性。</p>
+<ul>
+<li>在 <strong>请求内</strong> 层面，RServe 利用追踪器监控 Embedding 可用性，并采用基于 Embedding 块大小的流式调度策略，实现了编码与 Prefill 计算的细粒度重叠。</li>
+<li>在 <strong>请求间</strong> 层面，RServe 引入了可调度 Token 来协调多个请求的执行并充分利用系统并行性。</li>
+</ul>
+<p>在代表性 LMM 上的实验结果表明，RServe 将延迟降低了高达 66%，并将吞吐量提升了高达 109%，突显了其加速 LMM 推理的有效性。</p>
+
+    </section>
+  
+</body>
+</html>

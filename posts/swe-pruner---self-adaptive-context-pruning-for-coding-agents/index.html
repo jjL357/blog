@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents | JJ&#39;s Blog</title>
+<meta name="keywords" content="Agent, Coding Agent, Context Pruning, SWE-Bench, Paper Note">
+<meta name="description" content="SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents
+Status: arXiv v4, 2026-05-07
+Paper: https://arxiv.org/abs/2601.16746
+Github: https://github.com/Ayanami1314/swe-pruner
+Abstract
+Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 Context Wall。
+SWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 grep、cat 等文件读取工具时，可以额外提供一个描述当前信息需求的 Goal Hint。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。
+与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 task-aware line-level pruning。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。
+实验结果表明：
+
+在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 23.1%–38.3%，同时将成功率提升 1.2–1.4 个百分点；
+在 SWE-QA 上，不同仓库和 backbone 下获得 8.9%–54.4% 的 token 降低；
+在 Long Code QA 上，最高达到 14.84× 有效压缩率；
+0.6B skimmer 在 8K 输入下的首 token 延迟约为 102 ms。
+
+1. Introduction
+现代 Coding Agent 通常遵循以下交互流程：">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents">
+  <meta property="og:description" content="SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents Status: arXiv v4, 2026-05-07
+Paper: https://arxiv.org/abs/2601.16746
+Github: https://github.com/Ayanami1314/swe-pruner
+Abstract Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 Context Wall。
+SWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 grep、cat 等文件读取工具时，可以额外提供一个描述当前信息需求的 Goal Hint。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。
+与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 task-aware line-level pruning。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。
+实验结果表明：
+在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 23.1%–38.3%，同时将成功率提升 1.2–1.4 个百分点； 在 SWE-QA 上，不同仓库和 backbone 下获得 8.9%–54.4% 的 token 降低； 在 Long Code QA 上，最高达到 14.84× 有效压缩率； 0.6B skimmer 在 8K 输入下的首 token 延迟约为 102 ms。 1. Introduction 现代 Coding Agent 通常遵循以下交互流程：">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-07-20T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-07-20T00:00:00+00:00">
+    <meta property="article:tag" content="Agent">
+    <meta property="article:tag" content="Coding Agent">
+    <meta property="article:tag" content="Context Pruning">
+    <meta property="article:tag" content="SWE-Bench">
+    <meta property="article:tag" content="Paper Note">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents">
+<meta name="twitter:description" content="SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents
+Status: arXiv v4, 2026-05-07
+Paper: https://arxiv.org/abs/2601.16746
+Github: https://github.com/Ayanami1314/swe-pruner
+Abstract
+Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 Context Wall。
+SWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 grep、cat 等文件读取工具时，可以额外提供一个描述当前信息需求的 Goal Hint。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。
+与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 task-aware line-level pruning。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。
+实验结果表明：
+
+在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 23.1%–38.3%，同时将成功率提升 1.2–1.4 个百分点；
+在 SWE-QA 上，不同仓库和 backbone 下获得 8.9%–54.4% 的 token 降低；
+在 Long Code QA 上，最高达到 14.84× 有效压缩率；
+0.6B skimmer 在 8K 输入下的首 token 延迟约为 102 ms。
+
+1. Introduction
+现代 Coding Agent 通常遵循以下交互流程：">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents",
+      "item": "https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents",
+  "name": "📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents",
+  "description": "SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents Status: arXiv v4, 2026-05-07\nPaper: https://arxiv.org/abs/2601.16746\nGithub: https://github.com/Ayanami1314/swe-pruner\nAbstract Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 Context Wall。\nSWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 grep、cat 等文件读取工具时，可以额外提供一个描述当前信息需求的 Goal Hint。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。\n与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 task-aware line-level pruning。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。\n实验结果表明：\n在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 23.1%–38.3%，同时将成功率提升 1.2–1.4 个百分点； 在 SWE-QA 上，不同仓库和 backbone 下获得 8.9%–54.4% 的 token 降低； 在 Long Code QA 上，最高达到 14.84× 有效压缩率； 0.6B skimmer 在 8K 输入下的首 token 延迟约为 102 ms。 1. Introduction 现代 Coding Agent 通常遵循以下交互流程：\n",
+  "keywords": [
+    "Agent", "Coding Agent", "Context Pruning", "SWE-Bench", "Paper Note"
+  ],
+  "articleBody": "SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents Status: arXiv v4, 2026-05-07\nPaper: https://arxiv.org/abs/2601.16746\nGithub: https://github.com/Ayanami1314/swe-pruner\nAbstract Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 Context Wall。\nSWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 grep、cat 等文件读取工具时，可以额外提供一个描述当前信息需求的 Goal Hint。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。\n与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 task-aware line-level pruning。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。\n实验结果表明：\n在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 23.1%–38.3%，同时将成功率提升 1.2–1.4 个百分点； 在 SWE-QA 上，不同仓库和 backbone 下获得 8.9%–54.4% 的 token 降低； 在 Long Code QA 上，最高达到 14.84× 有效压缩率； 0.6B skimmer 在 8K 输入下的首 token 延迟约为 102 ms。 1. Introduction 现代 Coding Agent 通常遵循以下交互流程：\n$$ \\text{Reasoning} \\rightarrow \\text{Tool Call} \\rightarrow \\text{Observation} \\rightarrow \\text{Reasoning} \\rightarrow\\cdots $$在软件工程任务中，Observation 通常来自代码仓库，例如文件内容、目录结构、搜索结果、测试日志和异常堆栈。单次读取可能返回数百甚至数千行代码，而这些内容会在后续轮次中继续占用 prompt。\n作者统计了 Claude Sonnet 4.5 + Mini-SWE-Agent 在 SWE-Bench Verified 上的 token 开销：\nRead：76.1%（4.38M）； Execute：12.1%（0.69M）； Edit：11.8%（0.68M）。 在 GLM-4.6 上也观察到相同趋势：Read 占 67.5%，Execute 占 14.0%，Edit 占 18.5%。因此，Coding Agent 的主要 token 成本并不来自代码修改，而是来自仓库探索和文件读取。\n这一问题会在多轮交互中进一步放大：\nAgent 在任务初期需要粗粒度探索多个文件； 文件工具通常返回完整文件或大段代码； 早期读取结果会累积在后续上下文中； 无关代码会增加推理噪声，并可能引起重复搜索和重复读取。 现有上下文压缩方法并不完全适合 Coding Agent：\nToken-level pruning 可能删除缩进、括号或标识符的一部分，从而破坏代码语法； Embedding-based RAG 通常以 chunk 或函数为单位检索，可能遗漏细粒度实现； LLM summarization 会引入额外生成延迟，并可能丢失变量名、异常信息和精确逻辑； 结构化代码压缩 可以保护 AST，但通常使用固定规则，无法适应 Agent 在不同任务阶段的信息需求； Agent history compression 处理的是历史轨迹，而 SWE-Pruner 处理的是环境刚刚返回的代码观察，两者作用位置不同。 针对上述问题，SWE-Pruner 采用三个核心设计：\n使用 Goal Hint 显式描述 Agent 当前的信息需求； 使用轻量模型执行 query-aware 相关性打分； 以代码行为剪枝单位，并使用 CRF 保持相邻决策的连贯性。 从上下文管理的位置看，SWE-Pruner 与 history compression 并不冲突。前者压缩的是本轮工具刚返回的环境观察，后者压缩的是已经进入轨迹的历史消息。如果把 Agent 的上下文写成：\n$$ C_t=\\{H_{\\lt t}, O_t\\}, $$其中 \\(H_{\\lt t}\\) 是此前的交互历史，\\(O_t\\) 是本轮文件读取结果，那么 SWE-Pruner 作用于 \\(O_t\\)，在冗余内容进入 \\(H_{\\lt t}\\) 之前就完成过滤。这是它能够同时降低当前轮 prompt 和后续累积成本的原因。\n论文的贡献可以进一步概括为：\n将 Coding Agent 的文件读取建模为随推理目标变化的自适应剪枝问题，而不是使用固定压缩率； 设计 0.6B 的 dual-head neural skimmer，在一次前向中同时输出局部 retain/prune 决策和文档级相关性； 用 61K 合成样本提供细粒度监督，并覆盖九类真实 Agent 信息需求； 在多轮修复、仓库问答、长代码补全和长代码问答四类任务上验证效果，同时报告语法完整性、延迟、成本和行为轨迹。 2. SWE-Pruner Method 2.1 Overall Framework SWE-Pruner 作为 middleware 部署在 Coding Agent 与环境之间。整体流程如下：\nCoding Agent 调用 grep、cat 等文件工具； 环境返回包含大量候选代码的 Raw Context； Agent 同时提供描述当前信息需求的 Goal Hint； neural skimmer 根据 Goal Hint 对 Raw Context 进行行级打分； 只保留分数较高的代码行，并将 Pruned Context 返回 Agent。 SWE-Pruner 不需要改变 Agent 的主要推理流程，只需给文件工具增加一个可选参数 context_focus_question：\nraw_context = grep(file_path, pattern) if context_focus_question: return pruner(raw_context, context_focus_question) return raw_context 当 context_focus_question 为空时，系统直接返回完整工具输出。这一设计保证了向后兼容性，也允许 Agent 在两种模式之间切换：\n任务初期进行广泛探索时，不启用剪枝； 已经形成具体假设后，使用 Goal Hint 进行聚焦读取。 2.2 Goal Hint Generation Goal Hint 是一个完整、自包含的自然语言问题，用于描述 Agent 当前希望从代码中获得的信息。例如：\nFocus on the MRO resolution logic in InheritDocstrings. Goal Hint 与普通关键词搜索不同。关键词只能表示局部词面信息，而 Goal Hint 可以表达当前推理阶段的语义目标，例如：\n某个类的认证逻辑是如何实现的； 某个异常由哪条调用路径触发； 一个新参数需要在哪些函数中传播； 某个测试失败与哪些状态更新有关。 对于 Long Code QA 等本身已经包含问题的单轮任务，原始问题可以直接作为初始 Goal Hint。多轮 Agent 则可以随着调查过程不断更新 Goal Hint。\n2.3 Lightweight Neural Skimmer 2.3.1 Token Relevance Scoring 给定代码上下文：\n$$ C=\\{x_1,x_2,\\ldots,x_n\\}, $$以及 Goal Hint \\(q\\)，模型首先计算每个 token 的相关性：\n$$ s_i=F(q,x_i\\mid C;\\theta). $$其中 \\(F\\) 使用 Qwen3-Reranker-0.6B 作为 backbone。模型能够利用完整上下文判断某个 token 是否与当前 query 相关，而不是只依赖局部关键词匹配。\n2.3.2 Line-Level Aggregation SWE-Pruner 不直接按照 token 分数删除 token，而是将分数聚合到代码行。\n对于第 \\(j\\) 行代码 \\(\\ell_j\\)，令 \\(T_j\\) 表示该行包含的 token 集合，则行分数为：\n$$ \\bar{s}_j =\\frac{1}{|T_j|} \\sum_{t\\in T_j}s_t. $$推理时，如果：\n$$ \\bar{s}_j\u003e\\tau, $$则保留该行。默认阈值为 \\(\\tau=0.5\\)。\n这种设计同时利用了 token-level 表征和 line-level 输出：\ntoken 表征提供细粒度语义判断； 行级决策避免只删除半个表达式、部分标识符或部分缩进； 长文件可以分成多个 chunk 并行打分。 2.3.3 CRF-Based Structured Pruning 如果每一行独立进行二分类，剪枝结果可能在 retain 和 prune 之间频繁跳变。为了保持局部结构连续性，SWE-Pruner 将剪枝建模为序列标注问题，并使用 Conditional Random Field（CRF）。\n令输入序列为 \\(\\mathbf{x}\\)，保留/删除标签为 \\(\\mathbf{y}\\)，则 CRF 负对数似然为：\n$$ \\mathcal{L}_{\\mathrm{CRF\\text{-}NLL}}(\\mathbf{x},\\mathbf{y}) =\\log Z(\\mathbf{x})-\\mathrm{score}(\\mathbf{x},\\mathbf{y}). $$其中 score 同时包括：\n每个位置的 emission score； 相邻 retain/prune 标签之间的 transition score； 序列开头与结尾的状态分数。 展开后，标签序列的 score 为：\n$$ \\mathrm{score}(\\mathbf{x},\\mathbf{y}) =\\mathrm{start}_{y_1} +\\sum_{t=1}^{T}E_{t,y_t} +\\sum_{t=2}^{T}T_{y_t,y_{t-1}} +\\mathrm{end}_{y_T}. $$其中 \\(E_t=\\mathrm{MLP}(\\mathbf{h}_t)\\in\\mathbb{R}^{2}\\) 是当前位置对 retain/prune 的 emission，\\(T\\in\\mathbb{R}^{2\\times2}\\) 是相邻状态的 transition matrix。配分函数：\n$$ \\log Z(\\mathbf{x}) =\\log\\sum_{\\mathbf{y}'\\in\\mathcal{Y}} \\exp(\\mathrm{score}(\\mathbf{x},\\mathbf{y}')) $$对所有可能的标签序列进行归一化。CRF 的作用不是显式解析 AST，而是让模型学到“连续保留一段相关代码”通常比在相邻行间反复切换更合理。\n训练时使用按长度归一化的压缩损失：\n$$ \\mathcal{L}_{\\mathrm{compress}} =\\frac{1}{B}\\sum_{i=1}^{B} \\frac{ \\mathcal{L}_{\\mathrm{CRF\\text{-}NLL}} (\\mathbf{x}_i,\\mathbf{y}_i) }{L_i}. $$长度归一化用于避免长代码样本主导梯度。推理阶段使用 Viterbi decoding 得到结构连贯的最优标签序列。\n2.3.4 Inference Algorithm 完整推理过程可以写成以下步骤：\n将 Goal Hint 与候选代码共同送入 neural skimmer； 一次前向得到每个 token 的相关性分数、CRF emission 以及文档级相关性； 使用 Viterbi decoding 得到结构化 retain/prune 标签序列； 按原始换行符建立 token 到代码行的映射； 对每行 token 分数取平均，得到 \\(\\bar{s}_j\\)； 保留 \\(\\bar{s}_j\u003e\\tau\\) 的代码行，并保持它们在原文件中的顺序； 对多个检索 chunk 并行执行上述过程，最后将结果合并后返回 Agent。 用伪代码表示为：\nInput: raw context X, goal hint q, threshold tau S, Y_crf, S_doc = NeuralSkimmer(q, X) Y = ViterbiDecode(Y_crf) kept_lines = [] for line in split_lines(X): line_score = mean(S[token] for token in line) if line_score \u003e tau and CRF_allows_retain(line, Y): kept_lines.append(line) return join_in_original_order(kept_lines), S_doc 阈值控制保留强度，CRF 控制局部连贯性，二者承担不同职责。论文默认使用验证集上确定的 \\(\\tau=0.5\\)，而不是在每个任务上重新调整固定压缩率。\n2.4 Dual-Head Architecture neural skimmer 在 Qwen3-Reranker-0.6B 上增加了两个任务头：\nCRF pruning head：输出 token/行级的 retain-prune mask； Reranking head：输出整个代码文档与 query 的相关性分数。 模型从 backbone 的第 7、14、28 层提取隐藏状态并拼接，然后依次经过：\nself-attention block； 8-head multi-head attention； hidden size 为 256 的特征融合模块。 最终的联合训练目标为：\n$$ \\mathcal{L}_{\\mathrm{total}} =(1-\\lambda)\\mathcal{L}_{\\mathrm{compress}} +\\lambda\\mathcal{L}_{\\mathrm{rerank}}, $$其中 \\(\\lambda=0.05\\)。Reranking head 使用 MSE 拟合教师模型给出的文档级相关性分数，使模型在学习局部剪枝的同时保留全局语义判断能力。\n这里保留 reranking head 有两个好处。第一，它避免为了新任务完全丢弃原始 Qwen3-Reranker 的文档级能力；第二，同一次前向既能先判断候选文档整体是否相关，也能在文档内部进行行级精炼。因此 SWE-Pruner 可以作为粗粒度检索之后的二级 pruner，而不必替换现有检索系统。\n2.5 Training Dataset 真实 Agent 轨迹通常没有精确的行级保留标签，因此论文使用强模型合成训练数据。\nCode Source 代码来自 GitHub Code 2025。作者从 5,945 个仓库、195,370 个文件中采样 200,000 个代码片段，并覆盖：\nshort、medium、long 三种长度； low、medium、high 三种 query-context 相关度； 多种编程语言和项目类型。 GitHub Code 2025 本身包含超过 150 万个仓库，数据同时覆盖超过 2 stars 的成熟项目和 2025 年新建项目。预处理会移除 binary、build artifact、配置噪声和 minified code，以避免模型把不可读内容当成剪枝规律。\nAgentic Task Taxonomy 训练数据覆盖九类 Coding Agent 信息需求：\nTask Type 目标 code-summarize 概括代码功能 code-refactor 改善可读性、模块性或性能 find-relevant-part 找到实现某项功能的代码 code-locate 定位 bug、功能或关键逻辑 code-optimize 查找可优化的实现路径 code-explain 解释算法或设计选择 code-debug 调试异常和边界情况 feature-addition 判断新增功能需要关联的代码 code-completion 根据已有代码补全后续实现 这九类任务并不是只改变 query 的措辞，而是改变“哪些行应该保留”的定义。例如，code-summarize 偏向接口、控制流和核心功能；code-debug 更关注错误分支、状态更新与异常处理；feature-addition 则需要保留调用点、数据结构和扩展接口。任务条件化使同一段代码能够对应不同的 retain mask。\nData Generation and Filtering Qwen3-Coder-30B-A3B-Instruct 为每个代码片段生成四元组：\n$$ (q,C,M,S), $$分别表示 query、代码上下文、行级保留 mask 和文档级相关性分数。\n随后使用 Qwen3-Next-80B-A3B-Thinking 作为 LLM-as-a-Judge，检查推理质量、标签一致性和任务相关性。约六分之一的候选样本通过筛选，最终训练集包含 61,184 条样本。\n数据生成使用 temperature 0.7、top-p 0.9，以增加 query 和任务场景的多样性。整体管线如下：\n$$ \\text{Code Snippet} \\rightarrow \\text{Task Sampling} \\rightarrow \\text{Teacher Query + Mask + Score} \\rightarrow \\text{Judge Filtering} \\rightarrow \\text{Training Quadruplet}. $$采样时同时平衡九类 task、三档代码长度和三档相关性。Judge 不仅检查 query 是否自然，还检查 mask 是否覆盖回答 query 所需的实现、行级标签是否自洽以及文档相关性分数是否合理。最终样本的 query 平均为 39.98 words、中位数为 24 words；平均字符数 291.69、中位数 169，既包含简短定位问题，也包含较完整的工程需求。\n2.6 Training Configuration 主要训练配置如下：\nglobal batch size：128； 8 张 GPU，每卡 batch size 为 16； AdamW optimizer； learning rate：\\(3\\times10^{-5}\\)； weight decay：0.01； 训练 3 epochs； dropout：0.4； 只微调 backbone 最后两层、特征融合模块和 CRF； 推理阈值：\\(\\tau=0.5\\)。 训练目标中的 reranking 权重设为 \\(\\lambda=0.05\\)。Agent 推理使用 temperature 0，最大交互轮数为 250；适用时对三个随机种子取平均。只更新 backbone 最后两层能够控制训练和部署成本，同时让新增的 feature fusion 与 CRF 学到针对代码剪枝的结构信息。\n2.7 Integration in Multi-Turn and Single-Turn Workflows 多轮任务中，Goal Hint 随 Agent 的推理状态变化。例如，前几轮可能询问“哪个模块实现 query cloning”，定位到文件后则变为“Query.clone() 如何复制 combined_queries”。同一个读取工具由此可以从宽泛探索切换为局部核查。\n单轮任务中没有动态轨迹，问题本身直接作为 Goal Hint：\nLong Code Completion：待补全的代码片段作为 query，保留对下一行生成有帮助的定义和调用； Long Code QA：自然语言问题作为 query，保留回答所需的实现、注释和相关接口。 因此，SWE-Pruner 的核心接口始终是 \\((q,C)\\rightarrow C'\\)，区别只在于 query 来自当前 Agent 状态还是 benchmark 原始问题。\n3. Experiments 3.1 Experimental Setup 论文同时评测多轮 Agent 任务和单轮长代码理解任务。\nMulti-Turn Agent Tasks SWE-Bench Verified：500 个真实 GitHub issue，要求 Agent 生成能够通过测试的 patch； SWE-QA：在 Streamlink、Reflex、Conan 三个仓库上进行 repository-level question answering； Agent framework：Mini-SWE-Agent 和 OpenHands； Backbone：Claude Sonnet 4.5、GLM-4.6。 Single-Turn Tasks Long Code Completion：500 个 Python 样本，输入长度超过 5K token； Long Code QA：包含最长可达 1M token 的代码上下文； 下游模型：Qwen2.5-Coder-7B-Instruct，并使用 Seed-Coder-8B-Instruct 进行额外验证。 Baselines Full Context / No Context； Selective-Context； LLMLingua-2； UniXCoder RAG； LongCodeZip； LLM Summarize（多轮任务）。 这些 baseline 分别代表不同粒度：\nCategory Method Selection Unit Main Risk Token pruning Selective-Context subword token 按 self-information 删除 token，容易破坏语法 Token pruning LLMLingua-2 subword token XLM-R 分类器不包含代码结构约束 Retrieval RAG function chunk 粗粒度选择可能漏掉局部实现 Structural compression LongCodeZip AST chunk / high-entropy region 结构保留较好，但目标适应性有限 Generation LLM Summarize file summary 有生成延迟，且可能丢失精确标识符 Task-aware pruning SWE-Pruner source line 依赖 Goal Hint 与行级评分质量 RAG 使用 UniXCoder embedding 和 cosine similarity 做 function-level top-k 检索；LongCodeZip 结合 AST chunking 与 entropy-guided compression。单轮实验将 baseline 配置为相同的 4× / 8× compression constraint，但由于不同方法的选择单位不同，最终的有效压缩率并不完全相同。\nMetrics and Evaluation Protocol 论文同时报告任务质量和效率指标：\nLong Code Completion：Edit Similarity（ES）与 Exact Match（EM）； Long Code QA：Accuracy； SWE-Bench Verified：自动测试得到的 Resolve Rate； SWE-QA：LLM-as-a-Judge 平均分，覆盖 correctness、completeness、relevance、clarity 和 reasoning 五个维度； 效率：token consumption、agent rounds、API cost 与 TTFT。 压缩率定义为：\n$$ \\mathrm{Compression\\ Ratio} =\\frac{|C_{\\mathrm{original}}|}{|C_{\\mathrm{compressed}}|}. $$SWE-Bench Verified 包含 12 个 Python 仓库的 500 个真实 issue，patch 必须在 Docker 环境中通过目标测试且不引入 regression。SWE-QA 的三个仓库为 Streamlink、Reflex 和 Conan。Agent 侧分别接入 Mini-SWE-Agent 与 OpenHands，说明 middleware 接口不依赖某一种 agent loop。\n3.2 SWE-Bench Verified Agent Rounds Solved Success Tokens API Cost Claude Sonnet 4.5 51.0 353/500 70.6% 0.911M 0.504 + SWE-Pruner 41.7 360/500 72.0% 0.701M（-23.1%） 0.369（-26.8%） GLM-4.6 49.3 277/500 55.4% 0.791M 0.055 + SWE-Pruner 36.6 283/500 56.6% 0.488M（-38.3%） 0.035（-36.4%） SWE-Pruner 在两个 backbone 上都减少了交互轮数和 token 消耗，同时修复成功率分别提高 1.4 和 1.2 个百分点。这说明任务相关代码过滤不仅减少输入长度，也能降低重复读取和无效探索。\n进一步拆解可见，Claude 的平均 rounds 从 51.0 降至 41.7，减少 18.2%；GLM 从 49.3 降至 36.6，减少 25.7%。附录对 prompt / completion token 的轨迹级统计给出：\nBackbone Prompt Token Reduction Completion Token Reduction Total Token Reduction Round Reduction Claude Sonnet 4.5 38.7% 40.8% 39.2% 18.3% GLM-4.6 44.2% 44.0% 43.6% 34.6% 这里的轨迹级百分比来自附录 Figure 7 的完整分布分析，与主表按 instance 汇总的 23.1% / 38.3% 不是同一种统计口径。prompt 和 completion 同时下降，说明更干净的观察还会使主模型的回复更集中；效果不只来自机械缩短输入。\n作者还在 50 个随机样本上比较不同上下文管理方法：\nMethod Rounds Success Tokens Mini-SWE-Agent 52.3 62% 0.972M + LLMLingua-2 42.1 54% 0.856M + RAG 40.2 50% 0.771M + LLM Summarize 41.3 56% 0.794M + LongCodeZip 44.3 54% 0.889M + SWE-Pruner 41.1 64% 0.670M 在相同实验设置下，SWE-Pruner 获得最高成功率和最低 token 消耗。Token-level 方法可能破坏代码结构，而 RAG 的粗粒度检索可能遗漏完成修复所需的局部实现。\n3.3 SWE-QA Repo / Backbone Score Rounds Tokens Streamlink / Claude 8.36 → 8.59 23.4 → 23.9 611.2K → 557.1K（-8.9%） Streamlink / GLM 8.56 → 8.56 18.2 → 25.0 318.2K → 145.1K（-54.4%） Reflex / Claude 8.68 → 8.85 33.2 → 32.4 1081.6K → 866.8K（-19.9%） Reflex / GLM 8.37 → 8.23 26.1 → 36.7 142.3K → 101.2K（-28.9%） Conan / Claude 8.70 → 8.84 23.9 → 23.5 654.7K → 520.7K（-20.5%） Conan / GLM 8.58 → 8.45 21.4 → 27.7 175.9K → 116.6K（-33.7%） Claude Sonnet 4.5 在三个仓库中的交互轮数基本保持不变，GLM-4.6 的交互轮数则增加 29%–41%。轨迹分析显示，GLM 在获得聚焦上下文后会继续探索更多文件，但由于每轮输入更短，总 token 仍显著下降。\n这组结果也说明 rounds 不能单独作为效率指标。GLM 在 Streamlink 上从 18.2 增加到 25.0 rounds，但 token 从 318.2K 降到 145.1K；只看轮数会得出相反结论。更合理的评估应同时观察每轮上下文大小、总 token、最终分数和成本。\n3.4 Long Code Completion and Long Code QA Qwen2.5-Coder-7B-Instruct 完整结果如下。CR 表示实际 compression ratio，而不是目标 constraint：\nMethod LCC 4× CR ES EM LCC 8× CR ES EM QA 4× CR Acc QA 8× CR Acc Full Context 1.00 64.65 40.5 1.00 64.65 40.5 1.00 54.05 1.00 54.05 No Context ∞ 44.90 13.5 ∞ 44.90 13.5 ∞ 38.39 ∞ 38.39 Selective-Context 3.27 52.48 22.0 7.49 48.67 17.0 3.69 55.36 7.32 51.79 LLMLingua-2 3.32 49.47 15.5 7.89 44.74 13.0 3.57 55.36 7.68 51.33 RAG 3.29 58.97 30.5 6.60 55.82 29.0 3.06 58.04 5.87 55.86 LongCodeZip 2.77 57.77 28.0 7.85 56.08 27.5 3.98 52.25 7.39 54.95 SWE-Pruner 5.56 58.63 31.5 10.92 57.58 31.0 13.95 59.46 14.84 58.71 两个现象最关键。第一，token-level 方法在 8× constraint 下明显退化：LLMLingua-2 的 LCC ES / EM 降至 44.74 / 13.0，接近 No Context。第二，SWE-Pruner 实际压缩率可以超过名义 constraint，因为它按相关性阈值选择整行，而不是机械凑齐 token budget。在 Long Code QA 4× 设置中，实际已达到 13.95×，仍取得最高的 59.46 accuracy。\nSeed-Coder-8B-Instruct 作者进一步更换下游代码模型，验证结果是否只对 Qwen2.5-Coder 有效：\nMethod LCC 4× CR ES EM LCC 8× CR ES EM QA 4× CR Acc QA 8× CR Acc Full Context 1.00 65.03 40.5 1.00 65.03 40.5 1.00 49.11 1.00 49.11 No Context ∞ 43.85 14.0 ∞ 43.85 14.0 ∞ 37.50 ∞ 37.50 Selective-Context 3.27 53.68 24.5 7.49 49.89 17.5 2.71 51.33 6.69 46.43 LLMLingua-2 3.95 48.09 15.0 7.89 45.53 13.5 3.70 43.36 5.46 39.82 RAG 3.32 58.21 31.0 6.78 56.97 28.5 3.44 53.98 6.65 53.57 LongCodeZip 3.96 56.72 25.5 6.53 54.91 23.0 3.29 51.33 7.49 50.91 SWE-Pruner 4.22 57.71 31.0 8.13 56.73 28.5 9.98 56.25 14.68 55.75 Seed-Coder 上，SWE-Pruner 在 QA 8× constraint 下达到 14.68× / 55.75，明显高于 RAG 的 6.65× / 53.57。LCC 的 ES 略低于 RAG，但 compression ratio 更高，EM 相同。这说明它的优势更准确地说是在更高压缩率下保持竞争力，而不是每个单项分数都绝对最高。\n3.5 Syntactic Structure Preservation 作者使用 tree-sitter 检查剪枝后代码的 AST 正确率：\nMethod AST Correctness Full Context 98.5% LLMLingua-2 0.29% Selective-Context 12.4% Random Token Pruner 49.6% Function RAG 92.3% Function RAG + Random Line Pruner 78.2% Function RAG + SWE-Pruner 87.3% LongCodeZip 89.3% LongCodeZip + SWE-Pruner 76.8% LLMLingua-2 和 Selective-Context 的 AST 正确率分别只有 0.29% 和 12.4%，说明任意 token 删除会严重破坏代码结构。SWE-Pruner 作为 Function RAG 后的二级剪枝，将 AST 正确率从 92.3% 降到 87.3%，但仍明显高于 token-level compression。\n需要注意，line-level pruning 不等于 AST-preserving。删除完整一行仍可能移除函数头、分支条件或闭合结构，所以 Function RAG + SWE-Pruner 仍比未做二级剪枝的 92.3% 低 5 个百分点；在 LongCodeZip 之后继续剪枝时也从 89.3% 降到 76.8%。这张表证明的是“行级比 token 级更稳健”，不是“行级剪枝一定保持可解析”。\n3.6 Efficiency Model 64 128 512 2,048 8,192 Qwen3-0.6B 26.18 26.31 32.00 29.64 76.73 Qwen3-4B 64.75 97.24 104.93 99.10 241.97 Qwen3-14B 97.17 78.11 143.65 129.97 529.45 Qwen3-32B 73.99 55.46 84.01 274.22 1188.67 SWE-Pruner 44.70 43.91 42.05 49.05 102.00 SWE-Pruner 的延迟随输入长度增长较慢。8K 输入时，附录 Table 6 报告的 TTFT 为 102.00 ms，而 Qwen3-32B 为 1188.67 ms。由于剪枝减少了后续主模型的 prefill、decode 和 API token 成本，这部分前置开销可以在多轮交互中被摊薄。\n8K 输入下，SWE-Pruner 相比 Qwen3-14B 快约 5.2×，相比 Qwen3-32B 快约 11.7×。论文还指出真实闭源 API 一次往返通常远高于这几十毫秒的本地剪枝开销。更重要的是，多轮 Agent 中节省会累积：剪枝减少本轮 observation，较短 observation 又会进入后续每一轮 prompt，因此收益不是一次性的。\n3.7 Case Studies on SWE-Bench Case 1: From Resource Exhaustion to Success 任务 django__django-10554 要求修复 Query.clone() 对 combined_queries 缺少 deep copy 的问题。\nSetting Steps Read Search Exec Edit Tokens Outcome Baseline 164 59 39 1 25 7,001,934 Resource limit exhausted SWE-Pruner 56 20 10 0 11 1,170,160 Solved Baseline 的最大 prompt 达到 87,790 tokens，并采用 breadth-first 探索：先全仓搜索 union，再对多个文件反复执行分段 sed -n。这些旁支内容不断累积，最终在 164 steps 后耗尽资源。\nSWE-Pruner Agent 直接进入 django/db/models/sql/query.py，用带行号的读取定位 if self.combinator: 分支，在 56 steps 内完成修改。总 token 减少 83.3%，peak prompt 降到 38,226。这个案例展示的不是同一条成功轨迹变便宜，而是上下文控制将一次资源受限失败变成成功。\nCase 2: Lower Peak Context with the Same Outcome 任务 django__django-11740 要求在 migration autodetector 的 AlterField 中加入 foreign-key dependency tracking。两种 Agent 都成功：\nSetting Steps Read Search Exec Edit Tokens Baseline 42 12 8 1 18 857,371 SWE-Pruner 48 14 8 0 13 806,220 SWE-Pruner 多用了 6 steps，但 token 减少 6.0%，最大 prompt 缩短 30.2%。Baseline 多次分段读取 autodetector.py，还创建临时 Python 脚本验证理解；SWE-Pruner 一次读取带行号的完整文件后直接修改 _get_dependencies_for_foreign_key 相关位置。\n两个案例对应两类收益：\nCapacity benefit：避免 context overflow，使原本失败的任务完成； Structural efficiency benefit：结果不变，但降低总 token 与 peak context。 它们也再次说明 steps 与 token 不能等价：第二个案例 rounds 更多，却仍然使用更少上下文。\n4. Limitations 论文列出了以下限制：\n当前实现和主要 Agent 实验集中在 Python 仓库，跨语言和复杂构建系统仍需要进一步验证； 训练数据由教师模型合成，可能继承教师模型的标注偏差； Goal Hint 的质量会影响剪枝结果，过窄或错误的 Goal Hint 可能删除关键代码； 行级剪枝能够提高结构完整性，但无法完全避免删除语法依赖或跨行上下文； neural skimmer 仍会引入额外延迟，未来可以通过蒸馏或 early exit 进一步优化； 数据泄漏通过选择较新的仓库进行缓解，但仍需要持续在新发布项目上评测。 5. Conclusion SWE-Pruner 是一个面向 Coding Agent 文件观察的轻量级上下文剪枝框架。它通过 Goal Hint 描述 Agent 当前的信息需求，再使用 0.6B neural skimmer 对代码进行 query-aware line-level pruning。\n完整流程可以概括为：\n$$ \\text{Goal Hint} \\rightarrow \\text{Token Relevance Scoring} \\rightarrow \\text{Line-Level Aggregation} \\rightarrow \\text{CRF Structured Selection} \\rightarrow \\text{Pruned Context}. $$实验结果表明，SWE-Pruner 能够在 SWE-Bench Verified 上减少 23.1%–38.3% 的 token 和 26.8%–36.4% 的 API 成本，同时维持或提升任务成功率。在单轮长代码理解任务中，line-level 和 query-aware 设计也获得了比 token-level compression、RAG 和结构化压缩更高的有效压缩率与任务性能。\n",
+  "wordCount" : "1935",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-07-20T00:00:00Z",
+  "dateModified": "2026-07-20T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/swe-pruner---self-adaptive-context-pruning-for-coding-agents/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents
+    </h1>
+    <div class="post-meta"><span title='2026-07-20 00:00:00 +0000 UTC'>July 20, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><h1 id="swe-pruner-self-adaptive-context-pruning-for-coding-agents">SWE-Pruner: Self-Adaptive Context Pruning for Coding Agents<a hidden class="anchor" aria-hidden="true" href="#swe-pruner-self-adaptive-context-pruning-for-coding-agents">#</a></h1>
+<p><strong>Status:</strong> <strong>arXiv v4, 2026-05-07</strong></p>
+<p><strong>Paper:</strong> <a href="https://arxiv.org/abs/2601.16746">https://arxiv.org/abs/2601.16746</a></p>
+<p><strong>Github:</strong> <a href="https://github.com/Ayanami1314/swe-pruner">https://github.com/Ayanami1314/swe-pruner</a></p>
+<h2 id="abstract">Abstract<a hidden class="anchor" aria-hidden="true" href="#abstract">#</a></h2>
+<p>Coding Agent 在解决真实软件工程任务时，需要反复读取仓库中的文件、搜索符号、运行测试并修改代码。随着交互轮数增加，大量文件内容会进入并持续保留在上下文中，其中只有少部分代码与 Agent 当前的推理目标直接相关。这种由冗余观察引起的上下文瓶颈被论文称为 <strong>Context Wall</strong>。</p>
+<p>SWE-Pruner 是一个部署在 Coding Agent 与环境之间的轻量级上下文剪枝框架。Agent 在调用 <code>grep</code>、<code>cat</code> 等文件读取工具时，可以额外提供一个描述当前信息需求的 <strong>Goal Hint</strong>。SWE-Pruner 使用一个基于 Qwen3-Reranker-0.6B 的 neural skimmer，根据 Goal Hint 对原始代码进行相关性打分，并以代码行为单位保留与当前任务相关的内容。</p>
+<p>与 token-level prompt compression 不同，SWE-Pruner 不会删除任意 subword token，而是执行 <strong>task-aware line-level pruning</strong>。同时，模型使用 CRF 对相邻保留决策进行结构化建模，以减少碎片化剪枝对代码语法和局部逻辑的破坏。</p>
+<p>实验结果表明：</p>
+<ul>
+<li>在 SWE-Bench Verified 上，SWE-Pruner 将 token 消耗降低 <strong>23.1%–38.3%</strong>，同时将成功率提升 <strong>1.2–1.4 个百分点</strong>；</li>
+<li>在 SWE-QA 上，不同仓库和 backbone 下获得 <strong>8.9%–54.4%</strong> 的 token 降低；</li>
+<li>在 Long Code QA 上，最高达到 <strong>14.84×</strong> 有效压缩率；</li>
+<li>0.6B skimmer 在 8K 输入下的首 token 延迟约为 <strong>102 ms</strong>。</li>
+</ul>
+<h2 id="1-introduction">1. Introduction<a hidden class="anchor" aria-hidden="true" href="#1-introduction">#</a></h2>
+<p>现代 Coding Agent 通常遵循以下交互流程：</p>
+$$
+\text{Reasoning}
+\rightarrow
+\text{Tool Call}
+\rightarrow
+\text{Observation}
+\rightarrow
+\text{Reasoning}
+\rightarrow\cdots
+$$<p>在软件工程任务中，Observation 通常来自代码仓库，例如文件内容、目录结构、搜索结果、测试日志和异常堆栈。单次读取可能返回数百甚至数千行代码，而这些内容会在后续轮次中继续占用 prompt。</p>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SWE-Pruner/read-token-dominance.png"></p>
+<p>作者统计了 Claude Sonnet 4.5 + Mini-SWE-Agent 在 SWE-Bench Verified 上的 token 开销：</p>
+<ul>
+<li><strong>Read：76.1%（4.38M）</strong>；</li>
+<li><strong>Execute：12.1%（0.69M）</strong>；</li>
+<li><strong>Edit：11.8%（0.68M）</strong>。</li>
+</ul>
+<p>在 GLM-4.6 上也观察到相同趋势：Read 占 67.5%，Execute 占 14.0%，Edit 占 18.5%。因此，Coding Agent 的主要 token 成本并不来自代码修改，而是来自仓库探索和文件读取。</p>
+<p>这一问题会在多轮交互中进一步放大：</p>
+<ol>
+<li>Agent 在任务初期需要粗粒度探索多个文件；</li>
+<li>文件工具通常返回完整文件或大段代码；</li>
+<li>早期读取结果会累积在后续上下文中；</li>
+<li>无关代码会增加推理噪声，并可能引起重复搜索和重复读取。</li>
+</ol>
+<p>现有上下文压缩方法并不完全适合 Coding Agent：</p>
+<ul>
+<li><strong>Token-level pruning</strong> 可能删除缩进、括号或标识符的一部分，从而破坏代码语法；</li>
+<li><strong>Embedding-based RAG</strong> 通常以 chunk 或函数为单位检索，可能遗漏细粒度实现；</li>
+<li><strong>LLM summarization</strong> 会引入额外生成延迟，并可能丢失变量名、异常信息和精确逻辑；</li>
+<li><strong>结构化代码压缩</strong> 可以保护 AST，但通常使用固定规则，无法适应 Agent 在不同任务阶段的信息需求；</li>
+<li><strong>Agent history compression</strong> 处理的是历史轨迹，而 SWE-Pruner 处理的是环境刚刚返回的代码观察，两者作用位置不同。</li>
+</ul>
+<p>针对上述问题，SWE-Pruner 采用三个核心设计：</p>
+<ol>
+<li>使用 Goal Hint 显式描述 Agent 当前的信息需求；</li>
+<li>使用轻量模型执行 query-aware 相关性打分；</li>
+<li>以代码行为剪枝单位，并使用 CRF 保持相邻决策的连贯性。</li>
+</ol>
+<p>从上下文管理的位置看，SWE-Pruner 与 history compression 并不冲突。前者压缩的是<strong>本轮工具刚返回的环境观察</strong>，后者压缩的是<strong>已经进入轨迹的历史消息</strong>。如果把 Agent 的上下文写成：</p>
+$$
+C_t=\{H_{\lt t}, O_t\},
+$$<p>其中 \(H_{\lt t}\) 是此前的交互历史，\(O_t\) 是本轮文件读取结果，那么 SWE-Pruner 作用于 \(O_t\)，在冗余内容进入 \(H_{\lt t}\) 之前就完成过滤。这是它能够同时降低当前轮 prompt 和后续累积成本的原因。</p>
+<p>论文的贡献可以进一步概括为：</p>
+<ol>
+<li>将 Coding Agent 的文件读取建模为随推理目标变化的自适应剪枝问题，而不是使用固定压缩率；</li>
+<li>设计 0.6B 的 dual-head neural skimmer，在一次前向中同时输出局部 retain/prune 决策和文档级相关性；</li>
+<li>用 61K 合成样本提供细粒度监督，并覆盖九类真实 Agent 信息需求；</li>
+<li>在多轮修复、仓库问答、长代码补全和长代码问答四类任务上验证效果，同时报告语法完整性、延迟、成本和行为轨迹。</li>
+</ol>
+<h2 id="2-swe-pruner-method">2. SWE-Pruner Method<a hidden class="anchor" aria-hidden="true" href="#2-swe-pruner-method">#</a></h2>
+<h3 id="21-overall-framework">2.1 Overall Framework<a hidden class="anchor" aria-hidden="true" href="#21-overall-framework">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SWE-Pruner/swe-pruner-framework.png"></p>
+<p>SWE-Pruner 作为 middleware 部署在 Coding Agent 与环境之间。整体流程如下：</p>
+<ol>
+<li>Coding Agent 调用 <code>grep</code>、<code>cat</code> 等文件工具；</li>
+<li>环境返回包含大量候选代码的 Raw Context；</li>
+<li>Agent 同时提供描述当前信息需求的 Goal Hint；</li>
+<li>neural skimmer 根据 Goal Hint 对 Raw Context 进行行级打分；</li>
+<li>只保留分数较高的代码行，并将 Pruned Context 返回 Agent。</li>
+</ol>
+<p>SWE-Pruner 不需要改变 Agent 的主要推理流程，只需给文件工具增加一个可选参数 <code>context_focus_question</code>：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>raw_context <span style="color:#f92672">=</span> grep(file_path, pattern)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">if</span> context_focus_question:
+</span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">return</span> pruner(raw_context, context_focus_question)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">return</span> raw_context
+</span></span></code></pre></div><p>当 <code>context_focus_question</code> 为空时，系统直接返回完整工具输出。这一设计保证了向后兼容性，也允许 Agent 在两种模式之间切换：</p>
+<ul>
+<li>任务初期进行广泛探索时，不启用剪枝；</li>
+<li>已经形成具体假设后，使用 Goal Hint 进行聚焦读取。</li>
+</ul>
+<h3 id="22-goal-hint-generation">2.2 Goal Hint Generation<a hidden class="anchor" aria-hidden="true" href="#22-goal-hint-generation">#</a></h3>
+<p>Goal Hint 是一个完整、自包含的自然语言问题，用于描述 Agent 当前希望从代码中获得的信息。例如：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Focus on the MRO resolution logic in InheritDocstrings.
+</span></span></code></pre></div><p>Goal Hint 与普通关键词搜索不同。关键词只能表示局部词面信息，而 Goal Hint 可以表达当前推理阶段的语义目标，例如：</p>
+<ul>
+<li>某个类的认证逻辑是如何实现的；</li>
+<li>某个异常由哪条调用路径触发；</li>
+<li>一个新参数需要在哪些函数中传播；</li>
+<li>某个测试失败与哪些状态更新有关。</li>
+</ul>
+<p>对于 Long Code QA 等本身已经包含问题的单轮任务，原始问题可以直接作为初始 Goal Hint。多轮 Agent 则可以随着调查过程不断更新 Goal Hint。</p>
+<h3 id="23-lightweight-neural-skimmer">2.3 Lightweight Neural Skimmer<a hidden class="anchor" aria-hidden="true" href="#23-lightweight-neural-skimmer">#</a></h3>
+<h4 id="231-token-relevance-scoring">2.3.1 Token Relevance Scoring<a hidden class="anchor" aria-hidden="true" href="#231-token-relevance-scoring">#</a></h4>
+<p>给定代码上下文：</p>
+$$
+C=\{x_1,x_2,\ldots,x_n\},
+$$<p>以及 Goal Hint \(q\)，模型首先计算每个 token 的相关性：</p>
+$$
+s_i=F(q,x_i\mid C;\theta).
+$$<p>其中 \(F\) 使用 Qwen3-Reranker-0.6B 作为 backbone。模型能够利用完整上下文判断某个 token 是否与当前 query 相关，而不是只依赖局部关键词匹配。</p>
+<h4 id="232-line-level-aggregation">2.3.2 Line-Level Aggregation<a hidden class="anchor" aria-hidden="true" href="#232-line-level-aggregation">#</a></h4>
+<p>SWE-Pruner 不直接按照 token 分数删除 token，而是将分数聚合到代码行。</p>
+<p>对于第 \(j\) 行代码 \(\ell_j\)，令 \(T_j\) 表示该行包含的 token 集合，则行分数为：</p>
+$$
+\bar{s}_j
+=\frac{1}{|T_j|}
+\sum_{t\in T_j}s_t.
+$$<p>推理时，如果：</p>
+$$
+\bar{s}_j>\tau,
+$$<p>则保留该行。默认阈值为 \(\tau=0.5\)。</p>
+<p>这种设计同时利用了 token-level 表征和 line-level 输出：</p>
+<ul>
+<li>token 表征提供细粒度语义判断；</li>
+<li>行级决策避免只删除半个表达式、部分标识符或部分缩进；</li>
+<li>长文件可以分成多个 chunk 并行打分。</li>
+</ul>
+<h4 id="233-crf-based-structured-pruning">2.3.3 CRF-Based Structured Pruning<a hidden class="anchor" aria-hidden="true" href="#233-crf-based-structured-pruning">#</a></h4>
+<p>如果每一行独立进行二分类，剪枝结果可能在 retain 和 prune 之间频繁跳变。为了保持局部结构连续性，SWE-Pruner 将剪枝建模为序列标注问题，并使用 Conditional Random Field（CRF）。</p>
+<p>令输入序列为 \(\mathbf{x}\)，保留/删除标签为 \(\mathbf{y}\)，则 CRF 负对数似然为：</p>
+$$
+\mathcal{L}_{\mathrm{CRF\text{-}NLL}}(\mathbf{x},\mathbf{y})
+=\log Z(\mathbf{x})-\mathrm{score}(\mathbf{x},\mathbf{y}).
+$$<p>其中 score 同时包括：</p>
+<ul>
+<li>每个位置的 emission score；</li>
+<li>相邻 retain/prune 标签之间的 transition score；</li>
+<li>序列开头与结尾的状态分数。</li>
+</ul>
+<p>展开后，标签序列的 score 为：</p>
+$$
+\mathrm{score}(\mathbf{x},\mathbf{y})
+=\mathrm{start}_{y_1}
++\sum_{t=1}^{T}E_{t,y_t}
++\sum_{t=2}^{T}T_{y_t,y_{t-1}}
++\mathrm{end}_{y_T}.
+$$<p>其中 \(E_t=\mathrm{MLP}(\mathbf{h}_t)\in\mathbb{R}^{2}\) 是当前位置对 retain/prune 的 emission，\(T\in\mathbb{R}^{2\times2}\) 是相邻状态的 transition matrix。配分函数：</p>
+$$
+\log Z(\mathbf{x})
+=\log\sum_{\mathbf{y}'\in\mathcal{Y}}
+\exp(\mathrm{score}(\mathbf{x},\mathbf{y}'))
+$$<p>对所有可能的标签序列进行归一化。CRF 的作用不是显式解析 AST，而是让模型学到“连续保留一段相关代码”通常比在相邻行间反复切换更合理。</p>
+<p>训练时使用按长度归一化的压缩损失：</p>
+$$
+\mathcal{L}_{\mathrm{compress}}
+=\frac{1}{B}\sum_{i=1}^{B}
+\frac{
+\mathcal{L}_{\mathrm{CRF\text{-}NLL}}
+(\mathbf{x}_i,\mathbf{y}_i)
+}{L_i}.
+$$<p>长度归一化用于避免长代码样本主导梯度。推理阶段使用 Viterbi decoding 得到结构连贯的最优标签序列。</p>
+<h4 id="234-inference-algorithm">2.3.4 Inference Algorithm<a hidden class="anchor" aria-hidden="true" href="#234-inference-algorithm">#</a></h4>
+<p>完整推理过程可以写成以下步骤：</p>
+<ol>
+<li>将 Goal Hint 与候选代码共同送入 neural skimmer；</li>
+<li>一次前向得到每个 token 的相关性分数、CRF emission 以及文档级相关性；</li>
+<li>使用 Viterbi decoding 得到结构化 retain/prune 标签序列；</li>
+<li>按原始换行符建立 token 到代码行的映射；</li>
+<li>对每行 token 分数取平均，得到 \(\bar{s}_j\)；</li>
+<li>保留 \(\bar{s}_j>\tau\) 的代码行，并保持它们在原文件中的顺序；</li>
+<li>对多个检索 chunk 并行执行上述过程，最后将结果合并后返回 Agent。</li>
+</ol>
+<p>用伪代码表示为：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Input: raw context X, goal hint q, threshold tau
+</span></span><span style="display:flex;"><span>S, Y_crf, S_doc = NeuralSkimmer(q, X)
+</span></span><span style="display:flex;"><span>Y = ViterbiDecode(Y_crf)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>kept_lines = []
+</span></span><span style="display:flex;"><span>for line in split_lines(X):
+</span></span><span style="display:flex;"><span>    line_score = mean(S[token] for token in line)
+</span></span><span style="display:flex;"><span>    if line_score &gt; tau and CRF_allows_retain(line, Y):
+</span></span><span style="display:flex;"><span>        kept_lines.append(line)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>return join_in_original_order(kept_lines), S_doc
+</span></span></code></pre></div><p>阈值控制保留强度，CRF 控制局部连贯性，二者承担不同职责。论文默认使用验证集上确定的 \(\tau=0.5\)，而不是在每个任务上重新调整固定压缩率。</p>
+<h3 id="24-dual-head-architecture">2.4 Dual-Head Architecture<a hidden class="anchor" aria-hidden="true" href="#24-dual-head-architecture">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SWE-Pruner/neural-skimmer-architecture.png"></p>
+<p>neural skimmer 在 Qwen3-Reranker-0.6B 上增加了两个任务头：</p>
+<ol>
+<li><strong>CRF pruning head</strong>：输出 token/行级的 retain-prune mask；</li>
+<li><strong>Reranking head</strong>：输出整个代码文档与 query 的相关性分数。</li>
+</ol>
+<p>模型从 backbone 的第 7、14、28 层提取隐藏状态并拼接，然后依次经过：</p>
+<ul>
+<li>self-attention block；</li>
+<li>8-head multi-head attention；</li>
+<li>hidden size 为 256 的特征融合模块。</li>
+</ul>
+<p>最终的联合训练目标为：</p>
+$$
+\mathcal{L}_{\mathrm{total}}
+=(1-\lambda)\mathcal{L}_{\mathrm{compress}}
++\lambda\mathcal{L}_{\mathrm{rerank}},
+$$<p>其中 \(\lambda=0.05\)。Reranking head 使用 MSE 拟合教师模型给出的文档级相关性分数，使模型在学习局部剪枝的同时保留全局语义判断能力。</p>
+<p>这里保留 reranking head 有两个好处。第一，它避免为了新任务完全丢弃原始 Qwen3-Reranker 的文档级能力；第二，同一次前向既能先判断候选文档整体是否相关，也能在文档内部进行行级精炼。因此 SWE-Pruner 可以作为粗粒度检索之后的二级 pruner，而不必替换现有检索系统。</p>
+<h3 id="25-training-dataset">2.5 Training Dataset<a hidden class="anchor" aria-hidden="true" href="#25-training-dataset">#</a></h3>
+<p>真实 Agent 轨迹通常没有精确的行级保留标签，因此论文使用强模型合成训练数据。</p>
+<h4 id="code-source">Code Source<a hidden class="anchor" aria-hidden="true" href="#code-source">#</a></h4>
+<p>代码来自 GitHub Code 2025。作者从 5,945 个仓库、195,370 个文件中采样 200,000 个代码片段，并覆盖：</p>
+<ul>
+<li>short、medium、long 三种长度；</li>
+<li>low、medium、high 三种 query-context 相关度；</li>
+<li>多种编程语言和项目类型。</li>
+</ul>
+<p>GitHub Code 2025 本身包含超过 150 万个仓库，数据同时覆盖超过 2 stars 的成熟项目和 2025 年新建项目。预处理会移除 binary、build artifact、配置噪声和 minified code，以避免模型把不可读内容当成剪枝规律。</p>
+<h4 id="agentic-task-taxonomy">Agentic Task Taxonomy<a hidden class="anchor" aria-hidden="true" href="#agentic-task-taxonomy">#</a></h4>
+<p>训练数据覆盖九类 Coding Agent 信息需求：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Task Type</th>
+          <th>目标</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>code-summarize</td>
+          <td>概括代码功能</td>
+      </tr>
+      <tr>
+          <td>code-refactor</td>
+          <td>改善可读性、模块性或性能</td>
+      </tr>
+      <tr>
+          <td>find-relevant-part</td>
+          <td>找到实现某项功能的代码</td>
+      </tr>
+      <tr>
+          <td>code-locate</td>
+          <td>定位 bug、功能或关键逻辑</td>
+      </tr>
+      <tr>
+          <td>code-optimize</td>
+          <td>查找可优化的实现路径</td>
+      </tr>
+      <tr>
+          <td>code-explain</td>
+          <td>解释算法或设计选择</td>
+      </tr>
+      <tr>
+          <td>code-debug</td>
+          <td>调试异常和边界情况</td>
+      </tr>
+      <tr>
+          <td>feature-addition</td>
+          <td>判断新增功能需要关联的代码</td>
+      </tr>
+      <tr>
+          <td>code-completion</td>
+          <td>根据已有代码补全后续实现</td>
+      </tr>
+  </tbody>
+</table>
+<p>这九类任务并不是只改变 query 的措辞，而是改变“哪些行应该保留”的定义。例如，<code>code-summarize</code> 偏向接口、控制流和核心功能；<code>code-debug</code> 更关注错误分支、状态更新与异常处理；<code>feature-addition</code> 则需要保留调用点、数据结构和扩展接口。任务条件化使同一段代码能够对应不同的 retain mask。</p>
+<h4 id="data-generation-and-filtering">Data Generation and Filtering<a hidden class="anchor" aria-hidden="true" href="#data-generation-and-filtering">#</a></h4>
+<p>Qwen3-Coder-30B-A3B-Instruct 为每个代码片段生成四元组：</p>
+$$
+(q,C,M,S),
+$$<p>分别表示 query、代码上下文、行级保留 mask 和文档级相关性分数。</p>
+<p>随后使用 Qwen3-Next-80B-A3B-Thinking 作为 LLM-as-a-Judge，检查推理质量、标签一致性和任务相关性。约六分之一的候选样本通过筛选，最终训练集包含 <strong>61,184 条</strong>样本。</p>
+<p>数据生成使用 temperature 0.7、top-p 0.9，以增加 query 和任务场景的多样性。整体管线如下：</p>
+$$
+\text{Code Snippet}
+\rightarrow
+\text{Task Sampling}
+\rightarrow
+\text{Teacher Query + Mask + Score}
+\rightarrow
+\text{Judge Filtering}
+\rightarrow
+\text{Training Quadruplet}.
+$$<p>采样时同时平衡九类 task、三档代码长度和三档相关性。Judge 不仅检查 query 是否自然，还检查 mask 是否覆盖回答 query 所需的实现、行级标签是否自洽以及文档相关性分数是否合理。最终样本的 query 平均为 39.98 words、中位数为 24 words；平均字符数 291.69、中位数 169，既包含简短定位问题，也包含较完整的工程需求。</p>
+<h3 id="26-training-configuration">2.6 Training Configuration<a hidden class="anchor" aria-hidden="true" href="#26-training-configuration">#</a></h3>
+<p>主要训练配置如下：</p>
+<ul>
+<li>global batch size：128；</li>
+<li>8 张 GPU，每卡 batch size 为 16；</li>
+<li>AdamW optimizer；</li>
+<li>learning rate：\(3\times10^{-5}\)；</li>
+<li>weight decay：0.01；</li>
+<li>训练 3 epochs；</li>
+<li>dropout：0.4；</li>
+<li>只微调 backbone 最后两层、特征融合模块和 CRF；</li>
+<li>推理阈值：\(\tau=0.5\)。</li>
+</ul>
+<p>训练目标中的 reranking 权重设为 \(\lambda=0.05\)。Agent 推理使用 temperature 0，最大交互轮数为 250；适用时对三个随机种子取平均。只更新 backbone 最后两层能够控制训练和部署成本，同时让新增的 feature fusion 与 CRF 学到针对代码剪枝的结构信息。</p>
+<h3 id="27-integration-in-multi-turn-and-single-turn-workflows">2.7 Integration in Multi-Turn and Single-Turn Workflows<a hidden class="anchor" aria-hidden="true" href="#27-integration-in-multi-turn-and-single-turn-workflows">#</a></h3>
+<p>多轮任务中，Goal Hint 随 Agent 的推理状态变化。例如，前几轮可能询问“哪个模块实现 query cloning”，定位到文件后则变为“<code>Query.clone()</code> 如何复制 <code>combined_queries</code>”。同一个读取工具由此可以从宽泛探索切换为局部核查。</p>
+<p>单轮任务中没有动态轨迹，问题本身直接作为 Goal Hint：</p>
+<ul>
+<li>Long Code Completion：待补全的代码片段作为 query，保留对下一行生成有帮助的定义和调用；</li>
+<li>Long Code QA：自然语言问题作为 query，保留回答所需的实现、注释和相关接口。</li>
+</ul>
+<p>因此，SWE-Pruner 的核心接口始终是 \((q,C)\rightarrow C'\)，区别只在于 query 来自当前 Agent 状态还是 benchmark 原始问题。</p>
+<h2 id="3-experiments">3. Experiments<a hidden class="anchor" aria-hidden="true" href="#3-experiments">#</a></h2>
+<h3 id="31-experimental-setup">3.1 Experimental Setup<a hidden class="anchor" aria-hidden="true" href="#31-experimental-setup">#</a></h3>
+<p>论文同时评测多轮 Agent 任务和单轮长代码理解任务。</p>
+<h4 id="multi-turn-agent-tasks">Multi-Turn Agent Tasks<a hidden class="anchor" aria-hidden="true" href="#multi-turn-agent-tasks">#</a></h4>
+<ul>
+<li><strong>SWE-Bench Verified</strong>：500 个真实 GitHub issue，要求 Agent 生成能够通过测试的 patch；</li>
+<li><strong>SWE-QA</strong>：在 Streamlink、Reflex、Conan 三个仓库上进行 repository-level question answering；</li>
+<li>Agent framework：Mini-SWE-Agent 和 OpenHands；</li>
+<li>Backbone：Claude Sonnet 4.5、GLM-4.6。</li>
+</ul>
+<h4 id="single-turn-tasks">Single-Turn Tasks<a hidden class="anchor" aria-hidden="true" href="#single-turn-tasks">#</a></h4>
+<ul>
+<li><strong>Long Code Completion</strong>：500 个 Python 样本，输入长度超过 5K token；</li>
+<li><strong>Long Code QA</strong>：包含最长可达 1M token 的代码上下文；</li>
+<li>下游模型：Qwen2.5-Coder-7B-Instruct，并使用 Seed-Coder-8B-Instruct 进行额外验证。</li>
+</ul>
+<h4 id="baselines">Baselines<a hidden class="anchor" aria-hidden="true" href="#baselines">#</a></h4>
+<ul>
+<li>Full Context / No Context；</li>
+<li>Selective-Context；</li>
+<li>LLMLingua-2；</li>
+<li>UniXCoder RAG；</li>
+<li>LongCodeZip；</li>
+<li>LLM Summarize（多轮任务）。</li>
+</ul>
+<p>这些 baseline 分别代表不同粒度：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Category</th>
+          <th>Method</th>
+          <th>Selection Unit</th>
+          <th>Main Risk</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Token pruning</td>
+          <td>Selective-Context</td>
+          <td>subword token</td>
+          <td>按 self-information 删除 token，容易破坏语法</td>
+      </tr>
+      <tr>
+          <td>Token pruning</td>
+          <td>LLMLingua-2</td>
+          <td>subword token</td>
+          <td>XLM-R 分类器不包含代码结构约束</td>
+      </tr>
+      <tr>
+          <td>Retrieval</td>
+          <td>RAG</td>
+          <td>function chunk</td>
+          <td>粗粒度选择可能漏掉局部实现</td>
+      </tr>
+      <tr>
+          <td>Structural compression</td>
+          <td>LongCodeZip</td>
+          <td>AST chunk / high-entropy region</td>
+          <td>结构保留较好，但目标适应性有限</td>
+      </tr>
+      <tr>
+          <td>Generation</td>
+          <td>LLM Summarize</td>
+          <td>file summary</td>
+          <td>有生成延迟，且可能丢失精确标识符</td>
+      </tr>
+      <tr>
+          <td>Task-aware pruning</td>
+          <td>SWE-Pruner</td>
+          <td>source line</td>
+          <td>依赖 Goal Hint 与行级评分质量</td>
+      </tr>
+  </tbody>
+</table>
+<p>RAG 使用 UniXCoder embedding 和 cosine similarity 做 function-level top-k 检索；LongCodeZip 结合 AST chunking 与 entropy-guided compression。单轮实验将 baseline 配置为相同的 4× / 8× compression constraint，但由于不同方法的选择单位不同，最终的<strong>有效压缩率</strong>并不完全相同。</p>
+<h4 id="metrics-and-evaluation-protocol">Metrics and Evaluation Protocol<a hidden class="anchor" aria-hidden="true" href="#metrics-and-evaluation-protocol">#</a></h4>
+<p>论文同时报告任务质量和效率指标：</p>
+<ul>
+<li>Long Code Completion：Edit Similarity（ES）与 Exact Match（EM）；</li>
+<li>Long Code QA：Accuracy；</li>
+<li>SWE-Bench Verified：自动测试得到的 Resolve Rate；</li>
+<li>SWE-QA：LLM-as-a-Judge 平均分，覆盖 correctness、completeness、relevance、clarity 和 reasoning 五个维度；</li>
+<li>效率：token consumption、agent rounds、API cost 与 TTFT。</li>
+</ul>
+<p>压缩率定义为：</p>
+$$
+\mathrm{Compression\ Ratio}
+=\frac{|C_{\mathrm{original}}|}{|C_{\mathrm{compressed}}|}.
+$$<p>SWE-Bench Verified 包含 12 个 Python 仓库的 500 个真实 issue，patch 必须在 Docker 环境中通过目标测试且不引入 regression。SWE-QA 的三个仓库为 Streamlink、Reflex 和 Conan。Agent 侧分别接入 Mini-SWE-Agent 与 OpenHands，说明 middleware 接口不依赖某一种 agent loop。</p>
+<h3 id="32-swe-bench-verified">3.2 SWE-Bench Verified<a hidden class="anchor" aria-hidden="true" href="#32-swe-bench-verified">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Agent</th>
+          <th style="text-align: right">Rounds</th>
+          <th style="text-align: right">Solved</th>
+          <th style="text-align: right">Success</th>
+          <th style="text-align: right">Tokens</th>
+          <th style="text-align: right">API Cost</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Claude Sonnet 4.5</td>
+          <td style="text-align: right">51.0</td>
+          <td style="text-align: right">353/500</td>
+          <td style="text-align: right">70.6%</td>
+          <td style="text-align: right">0.911M</td>
+          <td style="text-align: right">0.504</td>
+      </tr>
+      <tr>
+          <td>+ SWE-Pruner</td>
+          <td style="text-align: right"><strong>41.7</strong></td>
+          <td style="text-align: right"><strong>360/500</strong></td>
+          <td style="text-align: right"><strong>72.0%</strong></td>
+          <td style="text-align: right"><strong>0.701M（-23.1%）</strong></td>
+          <td style="text-align: right"><strong>0.369（-26.8%）</strong></td>
+      </tr>
+      <tr>
+          <td>GLM-4.6</td>
+          <td style="text-align: right">49.3</td>
+          <td style="text-align: right">277/500</td>
+          <td style="text-align: right">55.4%</td>
+          <td style="text-align: right">0.791M</td>
+          <td style="text-align: right">0.055</td>
+      </tr>
+      <tr>
+          <td>+ SWE-Pruner</td>
+          <td style="text-align: right"><strong>36.6</strong></td>
+          <td style="text-align: right"><strong>283/500</strong></td>
+          <td style="text-align: right"><strong>56.6%</strong></td>
+          <td style="text-align: right"><strong>0.488M（-38.3%）</strong></td>
+          <td style="text-align: right"><strong>0.035（-36.4%）</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>SWE-Pruner 在两个 backbone 上都减少了交互轮数和 token 消耗，同时修复成功率分别提高 1.4 和 1.2 个百分点。这说明任务相关代码过滤不仅减少输入长度，也能降低重复读取和无效探索。</p>
+<p>进一步拆解可见，Claude 的平均 rounds 从 51.0 降至 41.7，减少 18.2%；GLM 从 49.3 降至 36.6，减少 25.7%。附录对 prompt / completion token 的轨迹级统计给出：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Backbone</th>
+          <th style="text-align: right">Prompt Token Reduction</th>
+          <th style="text-align: right">Completion Token Reduction</th>
+          <th style="text-align: right">Total Token Reduction</th>
+          <th style="text-align: right">Round Reduction</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Claude Sonnet 4.5</td>
+          <td style="text-align: right">38.7%</td>
+          <td style="text-align: right">40.8%</td>
+          <td style="text-align: right">39.2%</td>
+          <td style="text-align: right">18.3%</td>
+      </tr>
+      <tr>
+          <td>GLM-4.6</td>
+          <td style="text-align: right">44.2%</td>
+          <td style="text-align: right">44.0%</td>
+          <td style="text-align: right">43.6%</td>
+          <td style="text-align: right">34.6%</td>
+      </tr>
+  </tbody>
+</table>
+<p>这里的轨迹级百分比来自附录 Figure 7 的完整分布分析，与主表按 instance 汇总的 23.1% / 38.3% 不是同一种统计口径。prompt 和 completion 同时下降，说明更干净的观察还会使主模型的回复更集中；效果不只来自机械缩短输入。</p>
+<p>作者还在 50 个随机样本上比较不同上下文管理方法：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Method</th>
+          <th style="text-align: right">Rounds</th>
+          <th style="text-align: right">Success</th>
+          <th style="text-align: right">Tokens</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Mini-SWE-Agent</td>
+          <td style="text-align: right">52.3</td>
+          <td style="text-align: right">62%</td>
+          <td style="text-align: right">0.972M</td>
+      </tr>
+      <tr>
+          <td>+ LLMLingua-2</td>
+          <td style="text-align: right">42.1</td>
+          <td style="text-align: right">54%</td>
+          <td style="text-align: right">0.856M</td>
+      </tr>
+      <tr>
+          <td>+ RAG</td>
+          <td style="text-align: right">40.2</td>
+          <td style="text-align: right">50%</td>
+          <td style="text-align: right">0.771M</td>
+      </tr>
+      <tr>
+          <td>+ LLM Summarize</td>
+          <td style="text-align: right">41.3</td>
+          <td style="text-align: right">56%</td>
+          <td style="text-align: right">0.794M</td>
+      </tr>
+      <tr>
+          <td>+ LongCodeZip</td>
+          <td style="text-align: right">44.3</td>
+          <td style="text-align: right">54%</td>
+          <td style="text-align: right">0.889M</td>
+      </tr>
+      <tr>
+          <td>+ SWE-Pruner</td>
+          <td style="text-align: right"><strong>41.1</strong></td>
+          <td style="text-align: right"><strong>64%</strong></td>
+          <td style="text-align: right"><strong>0.670M</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>在相同实验设置下，SWE-Pruner 获得最高成功率和最低 token 消耗。Token-level 方法可能破坏代码结构，而 RAG 的粗粒度检索可能遗漏完成修复所需的局部实现。</p>
+<h3 id="33-swe-qa">3.3 SWE-QA<a hidden class="anchor" aria-hidden="true" href="#33-swe-qa">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th>Repo / Backbone</th>
+          <th style="text-align: right">Score</th>
+          <th style="text-align: right">Rounds</th>
+          <th style="text-align: right">Tokens</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Streamlink / Claude</td>
+          <td style="text-align: right">8.36 → <strong>8.59</strong></td>
+          <td style="text-align: right">23.4 → 23.9</td>
+          <td style="text-align: right">611.2K → <strong>557.1K（-8.9%）</strong></td>
+      </tr>
+      <tr>
+          <td>Streamlink / GLM</td>
+          <td style="text-align: right">8.56 → <strong>8.56</strong></td>
+          <td style="text-align: right">18.2 → 25.0</td>
+          <td style="text-align: right">318.2K → <strong>145.1K（-54.4%）</strong></td>
+      </tr>
+      <tr>
+          <td>Reflex / Claude</td>
+          <td style="text-align: right">8.68 → <strong>8.85</strong></td>
+          <td style="text-align: right">33.2 → 32.4</td>
+          <td style="text-align: right">1081.6K → <strong>866.8K（-19.9%）</strong></td>
+      </tr>
+      <tr>
+          <td>Reflex / GLM</td>
+          <td style="text-align: right">8.37 → 8.23</td>
+          <td style="text-align: right">26.1 → 36.7</td>
+          <td style="text-align: right">142.3K → <strong>101.2K（-28.9%）</strong></td>
+      </tr>
+      <tr>
+          <td>Conan / Claude</td>
+          <td style="text-align: right">8.70 → <strong>8.84</strong></td>
+          <td style="text-align: right">23.9 → 23.5</td>
+          <td style="text-align: right">654.7K → <strong>520.7K（-20.5%）</strong></td>
+      </tr>
+      <tr>
+          <td>Conan / GLM</td>
+          <td style="text-align: right">8.58 → 8.45</td>
+          <td style="text-align: right">21.4 → 27.7</td>
+          <td style="text-align: right">175.9K → <strong>116.6K（-33.7%）</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>Claude Sonnet 4.5 在三个仓库中的交互轮数基本保持不变，GLM-4.6 的交互轮数则增加 29%–41%。轨迹分析显示，GLM 在获得聚焦上下文后会继续探索更多文件，但由于每轮输入更短，总 token 仍显著下降。</p>
+<p>这组结果也说明 rounds 不能单独作为效率指标。GLM 在 Streamlink 上从 18.2 增加到 25.0 rounds，但 token 从 318.2K 降到 145.1K；只看轮数会得出相反结论。更合理的评估应同时观察每轮上下文大小、总 token、最终分数和成本。</p>
+<h3 id="34-long-code-completion-and-long-code-qa">3.4 Long Code Completion and Long Code QA<a hidden class="anchor" aria-hidden="true" href="#34-long-code-completion-and-long-code-qa">#</a></h3>
+<h4 id="qwen25-coder-7b-instruct">Qwen2.5-Coder-7B-Instruct<a hidden class="anchor" aria-hidden="true" href="#qwen25-coder-7b-instruct">#</a></h4>
+<p>完整结果如下。<code>CR</code> 表示实际 compression ratio，而不是目标 constraint：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Method</th>
+          <th style="text-align: right">LCC 4× CR</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">LCC 8× CR</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">QA 4× CR</th>
+          <th style="text-align: right">Acc</th>
+          <th style="text-align: right">QA 8× CR</th>
+          <th style="text-align: right">Acc</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Full Context</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">64.65</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">64.65</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">54.05</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">54.05</td>
+      </tr>
+      <tr>
+          <td>No Context</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">44.90</td>
+          <td style="text-align: right">13.5</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">44.90</td>
+          <td style="text-align: right">13.5</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">38.39</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">38.39</td>
+      </tr>
+      <tr>
+          <td>Selective-Context</td>
+          <td style="text-align: right">3.27</td>
+          <td style="text-align: right">52.48</td>
+          <td style="text-align: right">22.0</td>
+          <td style="text-align: right">7.49</td>
+          <td style="text-align: right">48.67</td>
+          <td style="text-align: right">17.0</td>
+          <td style="text-align: right">3.69</td>
+          <td style="text-align: right">55.36</td>
+          <td style="text-align: right">7.32</td>
+          <td style="text-align: right">51.79</td>
+      </tr>
+      <tr>
+          <td>LLMLingua-2</td>
+          <td style="text-align: right">3.32</td>
+          <td style="text-align: right">49.47</td>
+          <td style="text-align: right">15.5</td>
+          <td style="text-align: right">7.89</td>
+          <td style="text-align: right">44.74</td>
+          <td style="text-align: right">13.0</td>
+          <td style="text-align: right">3.57</td>
+          <td style="text-align: right">55.36</td>
+          <td style="text-align: right">7.68</td>
+          <td style="text-align: right">51.33</td>
+      </tr>
+      <tr>
+          <td>RAG</td>
+          <td style="text-align: right">3.29</td>
+          <td style="text-align: right">58.97</td>
+          <td style="text-align: right">30.5</td>
+          <td style="text-align: right">6.60</td>
+          <td style="text-align: right">55.82</td>
+          <td style="text-align: right">29.0</td>
+          <td style="text-align: right">3.06</td>
+          <td style="text-align: right">58.04</td>
+          <td style="text-align: right">5.87</td>
+          <td style="text-align: right">55.86</td>
+      </tr>
+      <tr>
+          <td>LongCodeZip</td>
+          <td style="text-align: right">2.77</td>
+          <td style="text-align: right">57.77</td>
+          <td style="text-align: right">28.0</td>
+          <td style="text-align: right">7.85</td>
+          <td style="text-align: right">56.08</td>
+          <td style="text-align: right">27.5</td>
+          <td style="text-align: right">3.98</td>
+          <td style="text-align: right">52.25</td>
+          <td style="text-align: right">7.39</td>
+          <td style="text-align: right">54.95</td>
+      </tr>
+      <tr>
+          <td>SWE-Pruner</td>
+          <td style="text-align: right"><strong>5.56</strong></td>
+          <td style="text-align: right"><strong>58.63</strong></td>
+          <td style="text-align: right"><strong>31.5</strong></td>
+          <td style="text-align: right"><strong>10.92</strong></td>
+          <td style="text-align: right"><strong>57.58</strong></td>
+          <td style="text-align: right"><strong>31.0</strong></td>
+          <td style="text-align: right"><strong>13.95</strong></td>
+          <td style="text-align: right"><strong>59.46</strong></td>
+          <td style="text-align: right"><strong>14.84</strong></td>
+          <td style="text-align: right"><strong>58.71</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>两个现象最关键。第一，token-level 方法在 8× constraint 下明显退化：LLMLingua-2 的 LCC ES / EM 降至 44.74 / 13.0，接近 No Context。第二，SWE-Pruner 实际压缩率可以超过名义 constraint，因为它按相关性阈值选择整行，而不是机械凑齐 token budget。在 Long Code QA 4× 设置中，实际已达到 13.95×，仍取得最高的 59.46 accuracy。</p>
+<h4 id="seed-coder-8b-instruct">Seed-Coder-8B-Instruct<a hidden class="anchor" aria-hidden="true" href="#seed-coder-8b-instruct">#</a></h4>
+<p>作者进一步更换下游代码模型，验证结果是否只对 Qwen2.5-Coder 有效：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Method</th>
+          <th style="text-align: right">LCC 4× CR</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">LCC 8× CR</th>
+          <th style="text-align: right">ES</th>
+          <th style="text-align: right">EM</th>
+          <th style="text-align: right">QA 4× CR</th>
+          <th style="text-align: right">Acc</th>
+          <th style="text-align: right">QA 8× CR</th>
+          <th style="text-align: right">Acc</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Full Context</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">65.03</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">65.03</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">49.11</td>
+          <td style="text-align: right">1.00</td>
+          <td style="text-align: right">49.11</td>
+      </tr>
+      <tr>
+          <td>No Context</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">43.85</td>
+          <td style="text-align: right">14.0</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">43.85</td>
+          <td style="text-align: right">14.0</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">37.50</td>
+          <td style="text-align: right">∞</td>
+          <td style="text-align: right">37.50</td>
+      </tr>
+      <tr>
+          <td>Selective-Context</td>
+          <td style="text-align: right">3.27</td>
+          <td style="text-align: right">53.68</td>
+          <td style="text-align: right">24.5</td>
+          <td style="text-align: right">7.49</td>
+          <td style="text-align: right">49.89</td>
+          <td style="text-align: right">17.5</td>
+          <td style="text-align: right">2.71</td>
+          <td style="text-align: right">51.33</td>
+          <td style="text-align: right">6.69</td>
+          <td style="text-align: right">46.43</td>
+      </tr>
+      <tr>
+          <td>LLMLingua-2</td>
+          <td style="text-align: right">3.95</td>
+          <td style="text-align: right">48.09</td>
+          <td style="text-align: right">15.0</td>
+          <td style="text-align: right">7.89</td>
+          <td style="text-align: right">45.53</td>
+          <td style="text-align: right">13.5</td>
+          <td style="text-align: right">3.70</td>
+          <td style="text-align: right">43.36</td>
+          <td style="text-align: right">5.46</td>
+          <td style="text-align: right">39.82</td>
+      </tr>
+      <tr>
+          <td>RAG</td>
+          <td style="text-align: right">3.32</td>
+          <td style="text-align: right">58.21</td>
+          <td style="text-align: right">31.0</td>
+          <td style="text-align: right">6.78</td>
+          <td style="text-align: right">56.97</td>
+          <td style="text-align: right">28.5</td>
+          <td style="text-align: right">3.44</td>
+          <td style="text-align: right">53.98</td>
+          <td style="text-align: right">6.65</td>
+          <td style="text-align: right">53.57</td>
+      </tr>
+      <tr>
+          <td>LongCodeZip</td>
+          <td style="text-align: right">3.96</td>
+          <td style="text-align: right">56.72</td>
+          <td style="text-align: right">25.5</td>
+          <td style="text-align: right">6.53</td>
+          <td style="text-align: right">54.91</td>
+          <td style="text-align: right">23.0</td>
+          <td style="text-align: right">3.29</td>
+          <td style="text-align: right">51.33</td>
+          <td style="text-align: right">7.49</td>
+          <td style="text-align: right">50.91</td>
+      </tr>
+      <tr>
+          <td>SWE-Pruner</td>
+          <td style="text-align: right"><strong>4.22</strong></td>
+          <td style="text-align: right"><strong>57.71</strong></td>
+          <td style="text-align: right"><strong>31.0</strong></td>
+          <td style="text-align: right"><strong>8.13</strong></td>
+          <td style="text-align: right"><strong>56.73</strong></td>
+          <td style="text-align: right"><strong>28.5</strong></td>
+          <td style="text-align: right"><strong>9.98</strong></td>
+          <td style="text-align: right"><strong>56.25</strong></td>
+          <td style="text-align: right"><strong>14.68</strong></td>
+          <td style="text-align: right"><strong>55.75</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>Seed-Coder 上，SWE-Pruner 在 QA 8× constraint 下达到 14.68× / 55.75，明显高于 RAG 的 6.65× / 53.57。LCC 的 ES 略低于 RAG，但 compression ratio 更高，EM 相同。这说明它的优势更准确地说是<strong>在更高压缩率下保持竞争力</strong>，而不是每个单项分数都绝对最高。</p>
+<h3 id="35-syntactic-structure-preservation">3.5 Syntactic Structure Preservation<a hidden class="anchor" aria-hidden="true" href="#35-syntactic-structure-preservation">#</a></h3>
+<p>作者使用 tree-sitter 检查剪枝后代码的 AST 正确率：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Method</th>
+          <th style="text-align: right">AST Correctness</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Full Context</td>
+          <td style="text-align: right">98.5%</td>
+      </tr>
+      <tr>
+          <td>LLMLingua-2</td>
+          <td style="text-align: right">0.29%</td>
+      </tr>
+      <tr>
+          <td>Selective-Context</td>
+          <td style="text-align: right">12.4%</td>
+      </tr>
+      <tr>
+          <td>Random Token Pruner</td>
+          <td style="text-align: right">49.6%</td>
+      </tr>
+      <tr>
+          <td>Function RAG</td>
+          <td style="text-align: right">92.3%</td>
+      </tr>
+      <tr>
+          <td>Function RAG + Random Line Pruner</td>
+          <td style="text-align: right">78.2%</td>
+      </tr>
+      <tr>
+          <td>Function RAG + SWE-Pruner</td>
+          <td style="text-align: right"><strong>87.3%</strong></td>
+      </tr>
+      <tr>
+          <td>LongCodeZip</td>
+          <td style="text-align: right">89.3%</td>
+      </tr>
+      <tr>
+          <td>LongCodeZip + SWE-Pruner</td>
+          <td style="text-align: right">76.8%</td>
+      </tr>
+  </tbody>
+</table>
+<p>LLMLingua-2 和 Selective-Context 的 AST 正确率分别只有 0.29% 和 12.4%，说明任意 token 删除会严重破坏代码结构。SWE-Pruner 作为 Function RAG 后的二级剪枝，将 AST 正确率从 92.3% 降到 87.3%，但仍明显高于 token-level compression。</p>
+<p>需要注意，line-level pruning 不等于 AST-preserving。删除完整一行仍可能移除函数头、分支条件或闭合结构，所以 Function RAG + SWE-Pruner 仍比未做二级剪枝的 92.3% 低 5 个百分点；在 LongCodeZip 之后继续剪枝时也从 89.3% 降到 76.8%。这张表证明的是“行级比 token 级更稳健”，不是“行级剪枝一定保持可解析”。</p>
+<h3 id="36-efficiency">3.6 Efficiency<a hidden class="anchor" aria-hidden="true" href="#36-efficiency">#</a></h3>
+<p><img loading="lazy" src="https://jjl357.github.io/blog/image/SWE-Pruner/skimmer-latency.png"></p>
+<table>
+  <thead>
+      <tr>
+          <th>Model</th>
+          <th style="text-align: right">64</th>
+          <th style="text-align: right">128</th>
+          <th style="text-align: right">512</th>
+          <th style="text-align: right">2,048</th>
+          <th style="text-align: right">8,192</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Qwen3-0.6B</td>
+          <td style="text-align: right">26.18</td>
+          <td style="text-align: right">26.31</td>
+          <td style="text-align: right">32.00</td>
+          <td style="text-align: right">29.64</td>
+          <td style="text-align: right">76.73</td>
+      </tr>
+      <tr>
+          <td>Qwen3-4B</td>
+          <td style="text-align: right">64.75</td>
+          <td style="text-align: right">97.24</td>
+          <td style="text-align: right">104.93</td>
+          <td style="text-align: right">99.10</td>
+          <td style="text-align: right">241.97</td>
+      </tr>
+      <tr>
+          <td>Qwen3-14B</td>
+          <td style="text-align: right">97.17</td>
+          <td style="text-align: right">78.11</td>
+          <td style="text-align: right">143.65</td>
+          <td style="text-align: right">129.97</td>
+          <td style="text-align: right">529.45</td>
+      </tr>
+      <tr>
+          <td>Qwen3-32B</td>
+          <td style="text-align: right">73.99</td>
+          <td style="text-align: right">55.46</td>
+          <td style="text-align: right">84.01</td>
+          <td style="text-align: right">274.22</td>
+          <td style="text-align: right">1188.67</td>
+      </tr>
+      <tr>
+          <td>SWE-Pruner</td>
+          <td style="text-align: right">44.70</td>
+          <td style="text-align: right">43.91</td>
+          <td style="text-align: right">42.05</td>
+          <td style="text-align: right">49.05</td>
+          <td style="text-align: right"><strong>102.00</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>SWE-Pruner 的延迟随输入长度增长较慢。8K 输入时，附录 Table 6 报告的 TTFT 为 102.00 ms，而 Qwen3-32B 为 1188.67 ms。由于剪枝减少了后续主模型的 prefill、decode 和 API token 成本，这部分前置开销可以在多轮交互中被摊薄。</p>
+<p>8K 输入下，SWE-Pruner 相比 Qwen3-14B 快约 5.2×，相比 Qwen3-32B 快约 11.7×。论文还指出真实闭源 API 一次往返通常远高于这几十毫秒的本地剪枝开销。更重要的是，多轮 Agent 中节省会累积：剪枝减少本轮 observation，较短 observation 又会进入后续每一轮 prompt，因此收益不是一次性的。</p>
+<h3 id="37-case-studies-on-swe-bench">3.7 Case Studies on SWE-Bench<a hidden class="anchor" aria-hidden="true" href="#37-case-studies-on-swe-bench">#</a></h3>
+<h4 id="case-1-from-resource-exhaustion-to-success">Case 1: From Resource Exhaustion to Success<a hidden class="anchor" aria-hidden="true" href="#case-1-from-resource-exhaustion-to-success">#</a></h4>
+<p>任务 <code>django__django-10554</code> 要求修复 <code>Query.clone()</code> 对 <code>combined_queries</code> 缺少 deep copy 的问题。</p>
+<table>
+  <thead>
+      <tr>
+          <th>Setting</th>
+          <th style="text-align: right">Steps</th>
+          <th style="text-align: right">Read</th>
+          <th style="text-align: right">Search</th>
+          <th style="text-align: right">Exec</th>
+          <th style="text-align: right">Edit</th>
+          <th style="text-align: right">Tokens</th>
+          <th>Outcome</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Baseline</td>
+          <td style="text-align: right">164</td>
+          <td style="text-align: right">59</td>
+          <td style="text-align: right">39</td>
+          <td style="text-align: right">1</td>
+          <td style="text-align: right">25</td>
+          <td style="text-align: right">7,001,934</td>
+          <td>Resource limit exhausted</td>
+      </tr>
+      <tr>
+          <td>SWE-Pruner</td>
+          <td style="text-align: right">56</td>
+          <td style="text-align: right">20</td>
+          <td style="text-align: right">10</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">11</td>
+          <td style="text-align: right"><strong>1,170,160</strong></td>
+          <td>Solved</td>
+      </tr>
+  </tbody>
+</table>
+<p>Baseline 的最大 prompt 达到 87,790 tokens，并采用 breadth-first 探索：先全仓搜索 <code>union</code>，再对多个文件反复执行分段 <code>sed -n</code>。这些旁支内容不断累积，最终在 164 steps 后耗尽资源。</p>
+<p>SWE-Pruner Agent 直接进入 <code>django/db/models/sql/query.py</code>，用带行号的读取定位 <code>if self.combinator:</code> 分支，在 56 steps 内完成修改。总 token 减少 83.3%，peak prompt 降到 38,226。这个案例展示的不是同一条成功轨迹变便宜，而是上下文控制将一次资源受限失败变成成功。</p>
+<h4 id="case-2-lower-peak-context-with-the-same-outcome">Case 2: Lower Peak Context with the Same Outcome<a hidden class="anchor" aria-hidden="true" href="#case-2-lower-peak-context-with-the-same-outcome">#</a></h4>
+<p>任务 <code>django__django-11740</code> 要求在 migration autodetector 的 <code>AlterField</code> 中加入 foreign-key dependency tracking。两种 Agent 都成功：</p>
+<table>
+  <thead>
+      <tr>
+          <th>Setting</th>
+          <th style="text-align: right">Steps</th>
+          <th style="text-align: right">Read</th>
+          <th style="text-align: right">Search</th>
+          <th style="text-align: right">Exec</th>
+          <th style="text-align: right">Edit</th>
+          <th style="text-align: right">Tokens</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td>Baseline</td>
+          <td style="text-align: right">42</td>
+          <td style="text-align: right">12</td>
+          <td style="text-align: right">8</td>
+          <td style="text-align: right">1</td>
+          <td style="text-align: right">18</td>
+          <td style="text-align: right">857,371</td>
+      </tr>
+      <tr>
+          <td>SWE-Pruner</td>
+          <td style="text-align: right">48</td>
+          <td style="text-align: right">14</td>
+          <td style="text-align: right">8</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">13</td>
+          <td style="text-align: right"><strong>806,220</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>SWE-Pruner 多用了 6 steps，但 token 减少 6.0%，最大 prompt 缩短 30.2%。Baseline 多次分段读取 <code>autodetector.py</code>，还创建临时 Python 脚本验证理解；SWE-Pruner 一次读取带行号的完整文件后直接修改 <code>_get_dependencies_for_foreign_key</code> 相关位置。</p>
+<p>两个案例对应两类收益：</p>
+<ol>
+<li><strong>Capacity benefit</strong>：避免 context overflow，使原本失败的任务完成；</li>
+<li><strong>Structural efficiency benefit</strong>：结果不变，但降低总 token 与 peak context。</li>
+</ol>
+<p>它们也再次说明 steps 与 token 不能等价：第二个案例 rounds 更多，却仍然使用更少上下文。</p>
+<h2 id="4-limitations">4. Limitations<a hidden class="anchor" aria-hidden="true" href="#4-limitations">#</a></h2>
+<p>论文列出了以下限制：</p>
+<ol>
+<li>当前实现和主要 Agent 实验集中在 Python 仓库，跨语言和复杂构建系统仍需要进一步验证；</li>
+<li>训练数据由教师模型合成，可能继承教师模型的标注偏差；</li>
+<li>Goal Hint 的质量会影响剪枝结果，过窄或错误的 Goal Hint 可能删除关键代码；</li>
+<li>行级剪枝能够提高结构完整性，但无法完全避免删除语法依赖或跨行上下文；</li>
+<li>neural skimmer 仍会引入额外延迟，未来可以通过蒸馏或 early exit 进一步优化；</li>
+<li>数据泄漏通过选择较新的仓库进行缓解，但仍需要持续在新发布项目上评测。</li>
+</ol>
+<h2 id="5-conclusion">5. Conclusion<a hidden class="anchor" aria-hidden="true" href="#5-conclusion">#</a></h2>
+<p>SWE-Pruner 是一个面向 Coding Agent 文件观察的轻量级上下文剪枝框架。它通过 Goal Hint 描述 Agent 当前的信息需求，再使用 0.6B neural skimmer 对代码进行 query-aware line-level pruning。</p>
+<p>完整流程可以概括为：</p>
+$$
+\text{Goal Hint}
+\rightarrow
+\text{Token Relevance Scoring}
+\rightarrow
+\text{Line-Level Aggregation}
+\rightarrow
+\text{CRF Structured Selection}
+\rightarrow
+\text{Pruned Context}.
+$$<p>实验结果表明，SWE-Pruner 能够在 SWE-Bench Verified 上减少 23.1%–38.3% 的 token 和 26.8%–36.4% 的 API 成本，同时维持或提升任务成功率。在单轮长代码理解任务中，line-level 和 query-aware 设计也获得了比 token-level compression、RAG 和结构化压缩更高的有效压缩率与任务性能。</p>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/agent/">Agent</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/coding-agent/">Coding Agent</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/context-pruning/">Context Pruning</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/swe-bench/">SWE-Bench</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>

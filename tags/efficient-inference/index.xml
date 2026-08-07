@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Efficient Inference on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/efficient-inference/</link>
+    <description>Recent content in Efficient Inference on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 06 Aug 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/efficient-inference/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Deep Think with Confidence - ICLR&#39;26</title>
+      <link>https://jjl357.github.io/blog/posts/deep-think-with-confidence---iclr26/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/deep-think-with-confidence---iclr26/</guid>
+      <description>&lt;h1 id=&#34;deep-think-with-confidence&#34;&gt;Deep Think with Confidence&lt;/h1&gt;
+&lt;p&gt;&lt;img loading=&#34;lazy&#34; src=&#34;https://jjl357.github.io/blog/image/DeepConf/title.png&#34;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Conference:&lt;/strong&gt; &lt;strong&gt;ICLR 2026 Poster&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://openreview.net/forum?id=8LqHs0KIM7&#34;&gt;OpenReview&lt;/a&gt; · &lt;a href=&#34;https://arxiv.org/abs/2508.15260&#34;&gt;arXiv&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Project:&lt;/strong&gt; &lt;a href=&#34;https://jiaweizzhao.github.io/deepconf/&#34;&gt;https://jiaweizzhao.github.io/deepconf/&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/facebookresearch/deepconf&#34;&gt;https://github.com/facebookresearch/deepconf&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Authors:&lt;/strong&gt; Yichao Fu, Xuewei Wang, Hao Zhang, Yuandong Tian, Jiawei Zhao&lt;/p&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;推理模型的 test-time scaling 通常沿两个方向展开：一是让单条 Chain-of-Thought 更长，二是并行采样更多推理轨迹，再通过 majority voting 或 verifier 聚合答案。第二种方法也称 &lt;strong&gt;parallel thinking&lt;/strong&gt; 或 self-consistency。它简单且有效，但成本随轨迹数量近似线性增加，而且普通多数投票默认每条轨迹同样可靠，低质量推理同样拥有一票。&lt;/p&gt;
+&lt;p&gt;Deep Think with Confidence（DeepConf）提出一个无需训练、无需外部奖励模型的改进：直接读取生成模型内部的 top-k token 概率，用局部低置信度片段判断整条推理是否可靠。它包含两个工作模式：&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;strong&gt;Offline DeepConf&lt;/strong&gt;：所有推理轨迹生成完成后，按置信度过滤低质量轨迹，再执行置信度加权投票，主要目标是提高准确率；&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Online DeepConf&lt;/strong&gt;：生成过程中维护滑动窗口置信度，当一条轨迹跌破由 warmup 样本确定的阈值时立即停止，并根据当前答案共识度决定是否继续采样，主要目标是节省推理 token。&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;论文在 AIME 2024/2025、BRUMO 2025、HMMT 2025 与 GPQA-Diamond 上评测 DeepSeek-8B、Qwen3-8B/32B、GPT-OSS-20B/120B。离线模式中，GPT-OSS-120B 在 AIME 2025 上由 pass@1 的 91.8% 和 cons@512 的 97.0% 提升到 &lt;strong&gt;99.9%&lt;/strong&gt;；在线模式在同一模型和数据集上将 token 数从 \(3.23\times10^8\) 降到 \(0.49\times10^8\)，节省 &lt;strong&gt;84.7%&lt;/strong&gt;，准确率为 97.9%。&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>📝 SWE-Pruner Pro: The Coder LLM Already Knows What to Prune</title>
+      <link>https://jjl357.github.io/blog/posts/swe-pruner-pro---the-coder-llm-already-knows-what-to-prune/</link>
+      <pubDate>Thu, 06 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/swe-pruner-pro---the-coder-llm-already-knows-what-to-prune/</guid>
+      <description>&lt;h1 id=&#34;swe-pruner-pro-the-coder-llm-already-knows-what-to-prune&#34;&gt;SWE-Pruner Pro: The Coder LLM Already Knows What to Prune&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Status:&lt;/strong&gt; &lt;strong&gt;arXiv v1, 2026-07-20&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2607.18213&#34;&gt;https://arxiv.org/abs/2607.18213&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Github:&lt;/strong&gt; &lt;a href=&#34;https://github.com/Ayanami1314/swe-pruner-pro&#34;&gt;https://github.com/Ayanami1314/swe-pruner-pro&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Authors:&lt;/strong&gt; Yuhang Wang, Yuling Shi, Shaoqiu Zhang, Jialiang Liang, Shilin He, Siyu Ye, Yuting Chen, Kai Cai, Xiaodong Gu&lt;/p&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;Coding Agent 在真实仓库中解决问题时，会不断调用 &lt;code&gt;cat&lt;/code&gt;、&lt;code&gt;grep&lt;/code&gt;、&lt;code&gt;ls&lt;/code&gt;、&lt;code&gt;python&lt;/code&gt; 等工具。工具输出不仅可能一次包含数百行内容，还会作为历史消息在后续轮次中被重复送入模型。真正决定修复方案的通常只是其中一小部分代码、错误信息或文件路径，其余内容却持续占用输入 token、显存和推理时间。&lt;/p&gt;
+&lt;p&gt;以往的上下文剪枝大致有两条路线：通用压缩方法根据困惑度、语法结构或检索相似度选择内容；SWE-Pruner 一类任务感知方法则额外部署一个评分模型，并要求 Agent 每轮写出描述当前信息需求的 &lt;strong&gt;Goal Hint&lt;/strong&gt;。它们有一个共同点：都在 Agent 外部重新构造“哪些内容重要”这一信号。&lt;/p&gt;
+&lt;p&gt;SWE-Pruner Pro 的核心观察是：&lt;strong&gt;Agent 在阅读工具输出并准备下一步行动时，其最后一层隐藏状态已经编码了每行内容与当前任务的相关性。&lt;/strong&gt; 因此，系统无需再调用独立模型，只需在冻结的 Agent backbone 上挂接一个小型分类头，将已有隐藏状态转换为逐 token 的保留概率，再通过行内多数投票得到 keep/prune 决策。一个由工具输出行数索引的长度感知嵌入，使短输出更保守、长输出更积极地压缩。&lt;/p&gt;
+&lt;p&gt;论文在 Qwen3-Coder-Next 与 MiMo-V2-Flash 两个开放权重 backbone、四个多轮 benchmark 上进行评测。SWE-Pruner Pro 在所有六个只读任务设置中都降低了总 token，最高节省 &lt;strong&gt;39.4%&lt;/strong&gt;；在 MiMo-V2-Flash 的 SWE-Bench Verified 上，Resolve Rate 提高 &lt;strong&gt;3.8 个百分点&lt;/strong&gt;。部署方面，把约 18M 参数的 head 放入 SGLang 推理引擎后，16 条轨迹回放中的聚合剪枝开销约为生成时间的 &lt;strong&gt;15.0%&lt;/strong&gt;。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
