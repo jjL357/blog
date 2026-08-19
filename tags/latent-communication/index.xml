@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Latent Communication on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/latent-communication/</link>
+    <description>Recent content in Latent Communication on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Tue, 18 Aug 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/latent-communication/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models</title>
+      <link>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</link>
+      <pubDate>Wed, 15 Oct 2025 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/</guid>
+      <description>&lt;h1 id=&#34;cache-to-cache-direct-semantic-communication-between-large-language-models&#34;&gt;Cache-to-Cache: Direct Semantic Communication Between Large Language Models&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Status:&lt;/strong&gt; &lt;strong&gt;ICLR 2026&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2510.03215&#34;&gt;https://arxiv.org/abs/2510.03215&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;OpenReview:&lt;/strong&gt; &lt;a href=&#34;https://openreview.net/forum?id=LeatkxrBCi&#34;&gt;https://openreview.net/forum?id=LeatkxrBCi&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/thu-nics/C2C&#34;&gt;https://github.com/thu-nics/C2C&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Authors:&lt;/strong&gt; Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;一句话总结：&lt;/strong&gt; Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;strong&gt;版本说明：&lt;/strong&gt; 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 &lt;strong&gt;6.4%–14.2%&lt;/strong&gt;，相对 Text-to-Text 提高 &lt;strong&gt;3.1%–5.4%&lt;/strong&gt;，平均延迟加速 &lt;strong&gt;2.5 倍&lt;/strong&gt;。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

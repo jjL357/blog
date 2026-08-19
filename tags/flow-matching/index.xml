@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Flow Matching on JJ&#39;s Blog</title>
+    <link>https://jjl357.github.io/blog/tags/flow-matching/</link>
+    <description>Recent content in Flow Matching on JJ&#39;s Blog</description>
+    <generator>Hugo -- 0.152.2</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Tue, 18 Aug 2026 00:00:00 +0000</lastBuildDate>
+    <atom:link href="https://jjl357.github.io/blog/tags/flow-matching/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving</title>
+      <link>https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/</link>
+      <pubDate>Tue, 18 Aug 2026 00:00:00 +0000</pubDate>
+      <guid>https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/</guid>
+      <description>&lt;h1 id=&#34;flashdrive-flash-vision-language-action-inference-for-autonomous-driving&#34;&gt;FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Status:&lt;/strong&gt; &lt;strong&gt;arXiv v1, 2026-08-13&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Paper:&lt;/strong&gt; &lt;a href=&#34;https://arxiv.org/abs/2608.12932&#34;&gt;https://arxiv.org/abs/2608.12932&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Project:&lt;/strong&gt; &lt;a href=&#34;https://z-lab.ai/projects/flashdrive/&#34;&gt;https://z-lab.ai/projects/flashdrive/&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;GitHub:&lt;/strong&gt; &lt;a href=&#34;https://github.com/z-lab/flashdrive&#34;&gt;https://github.com/z-lab/flashdrive&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Authors:&lt;/strong&gt; Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;一句话总结：&lt;/strong&gt; FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。&lt;/p&gt;
+&lt;hr&gt;
+&lt;h2 id=&#34;abstract&#34;&gt;Abstract&lt;/h2&gt;
+&lt;p&gt;推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 &lt;strong&gt;716.9 ms&lt;/strong&gt;，相当于每秒只能重规划约 &lt;strong&gt;1.4 次&lt;/strong&gt;。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;视觉编码器重复处理相邻时刻中相同的历史画面；&lt;/li&gt;
+&lt;li&gt;Prefill 重复为这些画面建立几乎相同的 KV Cache；&lt;/li&gt;
+&lt;li&gt;约 16 个结构化驾驶推理 token 仍被逐 token 串行生成；&lt;/li&gt;
+&lt;li&gt;8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;FlashDrive 的做法是为每种冗余设计不同捷径：&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>

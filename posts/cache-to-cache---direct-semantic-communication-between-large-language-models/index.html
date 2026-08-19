@@ -5,42 +5,17 @@
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <meta name="robots" content="index, follow">
-<title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26 | JJ&#39;s Blog</title>
-<meta name="keywords" content="KV Cache, Paper Note">
-<meta name="description" content="
+<title>📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models | JJ&#39;s Blog</title>
+<meta name="keywords" content="KV Cache, Multi-LLM, Latent Communication, Model Collaboration, Efficient Inference, Paper Note">
+<meta name="description" content="Cache-to-Cache: Direct Semantic Communication Between Large Language Models
+Status: ICLR 2026
+Paper: https://arxiv.org/abs/2510.03215
+OpenReview: https://openreview.net/forum?id=LeatkxrBCi
+GitHub: https://github.com/thu-nics/C2C
+Authors: Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang
+一句话总结： Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。
 
-
-github：https://github.com/thu-nics/C2C
-
-
-Conference:ICLR&#39;26
-
-
-
-💡 Motivation（动机 / 背景）
-
-
-现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。
-问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。
-提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）
-主要观察驱动：作者的 Oracle 实验显示
-(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
-(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
-这些观察支持用 KV-Cache 作为通信媒介的可行性。
-
-
-⚔ Challenges（挑战）
-
-
-跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。
-对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。
-避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。
-选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。
-效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。
-
-
-🔍 Observations / Analysis
-">
+版本说明： 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 6.4%–14.2%，相对 Text-to-Text 提高 3.1%–5.4%，平均延迟加速 2.5 倍。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。">
 <meta name="author" content="">
 <link rel="canonical" href="https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/">
 <link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
@@ -130,54 +105,36 @@ Conference:ICLR&#39;26
 </style>
 <meta property="og:url" content="https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/">
   <meta property="og:site_name" content="JJ&#39;s Blog">
-  <meta property="og:title" content="📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26">
-  <meta property="og:description" content="
-github：https://github.com/thu-nics/C2C
-Conference:ICLR&#39;26
-💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis ">
+  <meta property="og:title" content="📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models">
+  <meta property="og:description" content="Cache-to-Cache: Direct Semantic Communication Between Large Language Models Status: ICLR 2026
+Paper: https://arxiv.org/abs/2510.03215
+OpenReview: https://openreview.net/forum?id=LeatkxrBCi
+GitHub: https://github.com/thu-nics/C2C
+Authors: Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang
+一句话总结： Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。
+版本说明： 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 6.4%–14.2%，相对 Text-to-Text 提高 3.1%–5.4%，平均延迟加速 2.5 倍。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。">
   <meta property="og:locale" content="zh-cn">
   <meta property="og:type" content="article">
     <meta property="article:section" content="posts">
     <meta property="article:published_time" content="2025-10-15T00:00:00+00:00">
-    <meta property="article:modified_time" content="2025-10-15T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-08-18T00:00:00+00:00">
     <meta property="article:tag" content="KV Cache">
+    <meta property="article:tag" content="Multi-LLM">
+    <meta property="article:tag" content="Latent Communication">
+    <meta property="article:tag" content="Model Collaboration">
+    <meta property="article:tag" content="Efficient Inference">
     <meta property="article:tag" content="Paper Note">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26">
-<meta name="twitter:description" content="
+<meta name="twitter:title" content="📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models">
+<meta name="twitter:description" content="Cache-to-Cache: Direct Semantic Communication Between Large Language Models
+Status: ICLR 2026
+Paper: https://arxiv.org/abs/2510.03215
+OpenReview: https://openreview.net/forum?id=LeatkxrBCi
+GitHub: https://github.com/thu-nics/C2C
+Authors: Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang
+一句话总结： Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。
 
-
-github：https://github.com/thu-nics/C2C
-
-
-Conference:ICLR&#39;26
-
-
-
-💡 Motivation（动机 / 背景）
-
-
-现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。
-问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。
-提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）
-主要观察驱动：作者的 Oracle 实验显示
-(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
-(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
-这些观察支持用 KV-Cache 作为通信媒介的可行性。
-
-
-⚔ Challenges（挑战）
-
-
-跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。
-对齐问题（token-level &amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。
-避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。
-选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。
-效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。
-
-
-🔍 Observations / Analysis
-">
+版本说明： 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 6.4%–14.2%，相对 Text-to-Text 提高 3.1%–5.4%，平均延迟加速 2.5 倍。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。">
 
 
 <script type="application/ld+json">
@@ -194,7 +151,7 @@ Conference:ICLR&#39;26
     {
       "@type": "ListItem",
       "position":  2 ,
-      "name": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR'26",
+      "name": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
       "item": "https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/"
     }
   ]
@@ -204,17 +161,17 @@ Conference:ICLR&#39;26
 {
   "@context": "https://schema.org",
   "@type": "BlogPosting",
-  "headline": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR'26",
-  "name": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR\u002726",
-  "description": "\ngithub：https://github.com/thu-nics/C2C\nConference:ICLR'26\n💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level \u0026amp; layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis ",
+  "headline": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
+  "name": "📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models",
+  "description": "Cache-to-Cache: Direct Semantic Communication Between Large Language Models Status: ICLR 2026\nPaper: https://arxiv.org/abs/2510.03215\nOpenReview: https://openreview.net/forum?id=LeatkxrBCi\nGitHub: https://github.com/thu-nics/C2C\nAuthors: Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang\n一句话总结： Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。\n版本说明： 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 6.4%–14.2%，相对 Text-to-Text 提高 3.1%–5.4%，平均延迟加速 2.5 倍。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。\n",
   "keywords": [
-    "KV Cache", "Paper Note"
+    "KV Cache", "Multi-LLM", "Latent Communication", "Model Collaboration", "Efficient Inference", "Paper Note"
   ],
-  "articleBody": "\ngithub：https://github.com/thu-nics/C2C\nConference:ICLR'26\n💡 Motivation（动机 / 背景） 现状：多-LLM 系统通常通过 文本（Text-to-Text, T2T） 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 串行解码带来的延迟 等问题。 问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。 提出的问题（核心研究问）：LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？（文中以 “Can LLMs communicate beyond text?” 作核心驱动。） 主要观察驱动：作者的 Oracle 实验显示 (1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量； (2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。 这些观察支持用 KV-Cache 作为通信媒介的可行性。 ⚔ Challenges（挑战） 跨模型的 KV-Cache 表示差异：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。 对齐问题（token-level \u0026 layer-level）：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。 避免破坏接收者原有语义：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。 选择性注入（哪些层注入、注入多少）：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。 效率 / 延迟权衡：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。 🔍 Observations / Analysis Oracle（缓存富化）实验：把 few-shot 示例 $E$ 和问题 $X$ 一起 prefill，然后丢弃 $E$ 的 cache 片段，只保留对问题 $X$ 对齐的 slice（即 Oracle cache enrichment）：\n$$\rC^*(X) = C_{E \\oplus X}[|E| : |E| + |X|]\r$$在不增长 $|X|$ 的情况下能显著提升准确率，说明「上下文影响了如何把问题编码到 KV-Cache 中」，而这并非仅仅是因为额外 token 的注意力范围。详见 Table 1 与相关讨论。\n其中，$C(\\cdot)$ 表示 prefill 后得到的 per-token KV-Cache。\nCache 转换实验：使用 3-layer MLP 将大模型（Qwen3-4B）的 KV 映射到小模型（Qwen3-0.6B）表示空间，t-SNE 显示映射后的 cache 落入接收模型 KV 空间内部，但只覆盖其子集，说明可转换但不完全等价（信息子集化）。\n层级差异：不同层对 cache enrichment 的响应不同（Appendix A.2.1 展示单层替换结果，部分层有正收益，部分层负收益），这直接促成了设计中使用 per-layer gate 的动机。\n互补正确集：不同模型在同一 benchmark 上的正确答案集合有较少重叠（Venn 图 Figure 7），说明多模型间存在互补性，若能有效融合则能提高总体正确率。\n🧠 Methods 概览：提出 Cache-to-Cache (C2C) —— 用一个神经模块（Cache Fuser）把 Sharer（来源模型）的 KV-Cache 投影到 Receiver（目标模型）的表示空间并按层残差地融合到 Receiver 的原始 KV-Cache，从而在 decode 阶段让 Receiver 利用两者的语义表示，而不必通过文字中介。\n3.1 预备 输入 token 序列：\n$$\rX[0:n] = [x_0, x_1, \\dots, x_{n-1}]\r$$prefill 后 LLM 生成 per-token KV-Cache：\n$$\rC(X[0:n]) = [c_0, c_1, \\dots, c_{n-1}] \\in \\mathbb{R}^{n \\times d}\r$$其中 $d$ 为 KV 向量维度（将各层/各头的 K/V 展平）。\nDecode 时预测下一个 token：\n$$\ry_{i+1} = P\\big(y_i \\mid C(X) \\oplus C(Y[0:i])\\big)\r$$其中 $\\oplus$ 表示序列级拼接。\n3.2 C2C 总体框架 在 prefill 阶段，令 Fuser 模块 $F_n$ 将 Receiver 第 $n$ 层的 cache $C_n(X)$ 和 Sharer 对应层 $C^S_{G(n)}(X)$（层映射函数为 $G$）融合，得到 fused cache：\n$$\rC^F = {, F_n(C_n(X), C^S_{G(n)}(X)) ,}_{n=1}^N\r$$Decode 时使用 fused cache：\n$$\ry_{i+1} = P\\big(y_i \\mid C^F(X) \\oplus C(Y[0:i])\\big)\r$$（参见论文公式 (3) 和 (4)）\n3.3 C2C Fuser 结构（Figure 5） 总体三模块设计（Residual Integration）：\nProjection → Dynamic Weighting → Learnable Gate（Gumbel-sigmoid 训练 → 二值化推理）\n(1) Projection Module 将 Receiver 的 KV 与 Sharer 的 KV 做拼接（concatenate），经过一层或多层投影（例如线性层或小 MLP）以统一维度 / 映射表示；紧接着做 feature fusion（可能是再一层线性/FFN 或跨-head 重组）。（论文在 Appendix 也提到 C2C-C 更复杂的 variant，会先用三层 MLP 投影）。\n(2) Dynamic Weighting（输入感知的 head modulation） 按 attention-head 级别做输入相关的重权重（head-wise modulation），目的是根据当前输入动态调整 Sharer 提供信息的影响力（避免盲目覆盖）。论文称为 “input-aware head modulation”。\n(3) Learnable Gate（可训练门控） 每层有一个可学习 gate 值，用 Gumbel-Sigmoid（并在训练时做温度 annealing）从可微分软选择过渡到推理期的硬二值决定（是否把该层的 fused cache 注入）。 这解决了哪些层应该注入的问题并能学到层选择策略。\n3.4 Model Alignment Token 对齐：将 Receiver token 解码为字符串，然后使用 Sharer tokenizer 重新编码（re-encode）；若出现 one-to-many，用 “maximal-coverage selection” （选择字符串覆盖最长的 token）作为默认策略（论文观察两种策略差异不大但 maximal-coverage 更安全）。对 template（系统角色/格式化 tokens）部分用 padding 匹配长度。\nLayer 对齐（Layer mapping）：采用 terminal alignment（从输出侧开始对齐：最后一层对最后一层、倒数第二对倒数第二，以此类推），作者在 Appendix 比较了 depth-normalized alignment 并选择 terminal alignment，因为 empirical 效果更好。\n3.5 训练方案 冻结 Sharer 和 Receiver 模型参数，仅训练 C2C 模块（Fuser）。 监督目标是 Receiver 在使用 fused cache 下的 next-token 预测（SFT 风格），即最小化标准交叉熵：\n$$\r\\mathcal{L}_{\\text{C2C}} = -\\sum_i \\log P_\\theta\\left(y_i \\mid C^F(X), Y[0:i-1]\\right) $$训练步骤：\nForward：两模型产生 cache Fusion：C2C 生成 fused cache Supervision：Receiver 用 fused cache decode，loss 反传回 C2C 训练数据：主要使用 OpenHermes-2.5 的前 500k 样本训练；优化器与超参： $$\r\\text{lr}=1\\times10^{-4}, \\text{ weight decay}=0.01, \\text{warmup}=10%, T_{init}=1.0 \\rightarrow T_{final}=0.001\r$$ 固定随机种子 42。\n📊 Evaluation 数据集与设置 Benchmarks：OpenBookQA, MMLU-Redux, ARC-Challenge (ARC-C), C-Eval（中文）以及 LongBench（长上下文任务）。 设置：zero-shot，greedy 解码（temperature=0），多选题最大生成长度 = 64。 设备：NVIDIA A100，batch=1。 对比基线 Receiver 单独运行（baseline） Sharer 单独运行（对比） Query-level routing（将难题路由到强模型） Text-to-Text（T2T）：Sharer 生成 “分析/关键信息” 文本拼接到 Receiver 输入中。 核心结果总结 C2C 相较于 Receiver-only：平均提升 8.5–11%（不同表述范围 8.5–11.9%）。 C2C 相较于 T2T：平均提升 3–5%，且推理延迟平均约为 T2T 的 1/2。 长上下文任务（LongBench）：C2C 持续优于 T2T，尤其在 strong→weak 设定中显著恢复弱模型性能（PGR 指标大幅提高）。 Ablation 去掉 fuse（仅 projection）性能最差；加入 fuse 后大幅提升；再加入 gate（完整 C2C）进一步提升约 3%（见 Table 7）。 说明 Projection + Fuse + Gate 三者协同作用显著。\n",
-  "wordCount" : "511",
+  "articleBody": "Cache-to-Cache: Direct Semantic Communication Between Large Language Models Status: ICLR 2026\nPaper: https://arxiv.org/abs/2510.03215\nOpenReview: https://openreview.net/forum?id=LeatkxrBCi\nGitHub: https://github.com/thu-nics/C2C\nAuthors: Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang\n一句话总结： Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。\n版本说明： 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 6.4%–14.2%，相对 Text-to-Text 提高 3.1%–5.4%，平均延迟加速 2.5 倍。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。\nAbstract 多模型系统希望把不同 LLM 的能力组合起来：代码模型理解程序结构，数学模型提供推导能力，通用模型负责遵循指令和组织答案。常规做法是让前一个模型把自己的理解写成文本，再交给后一个模型。这个接口通用、可读，却有两个结构性问题：\n高维内部表示必须先压缩成一串离散 token，部分语义、位置关系和不确定性会丢失； 中间消息必须自回归地逐 token 生成，通信延迟会随消息长度增长。 C2C 把 Transformer 推理时已经产生的 KV Cache 当作通信载体。Sharer 和 Receiver 分别对同一输入进行 prefill，轻量的 Cache Fuser 对齐两边的 token 和层，将 Sharer Cache 投影到 Receiver 的表示空间，经过输入相关的 head 权重和逐层二值门控后，残差加入 Receiver Cache。两个 LLM 本体保持冻结，只训练 Fuser。\n论文先用两个 oracle 实验回答“Cache 是否值得传”和“跨模型 Cache 是否能转换”，再在不同模型家族、规模、专业领域和训练阶段上验证 C2C。结果说明：\n同样长度的 Cache 仅因编码语义更丰富，就能把准确率从 58.42% 提高到 62.34%； 不同模型的 Cache 分布差异很大，但一个小型 MLP 可以把源 Cache 映射进目标表示空间； C2C 在主要实验中同时优于 Receiver、Sharer、Query Routing 和 T2T； T2T 的主要额外成本来自 Sharer 串行生成通信文本，而 C2C 用并行 Cache 融合替代这段解码； C2C 不是无条件增益：弱 Sharer 的错误表示也可能污染强 Receiver，而且每个模型对都需要适配器，规模化训练仍是开放问题。 1. Background: LLM 之间为什么需要通信？ 1.1 单模型、路由与协作不是同一件事 设系统中有一个数学模型、一个代码模型和一个通用对话模型，面对“分析一段数值程序并解释算法复杂度”的请求时，有三种典型方案：\n单模型： 只调用一个模型，系统简单，但能力上限受该模型限制； 路由： 先判断请求更像数学还是代码，再选择其中一个模型；它减少成本，却没有把多个模型的知识合在同一次回答里； 协作： 让多个模型读取问题并交换理解，最终由某个模型输出答案。 C2C 研究的是第三种。它并不是“挑一个更合适的模型”，而是让 Receiver 在生成答案时实际使用 Sharer 对同一上下文形成的内部表示。\n1.2 Text-to-Text 通信如何工作？ 传统 T2T 流程可以写成：\n输入 X ├─→ Sharer 读取 X │ ↓ 自回归生成 │ 中间分析文本 M │ └─→ Receiver 读取 [X; M] ↓ 最终答案 Y 概率分解为：\n$$ p(M,Y\\mid X) {}={} p(M\\mid X)\\, p(Y\\mid X,M). $$这个接口的优势很明显：不要求两个模型结构相同，也便于人类审计中间消息。但中间文本 \\(M\\) 同时也是通信瓶颈：\nSharer 知道的内容不一定能用短句完整表达； 错误、歧义或格式偏差会被 Receiver 当成新上下文； 生成 \\(M\\) 必须执行多次串行 decode； Receiver 还要重新 prefill 更长的 \\([X;M]\\)。 1.3 Prefill、Decode 与 KV Cache 自回归 Transformer 推理分为两个阶段。\nPrefill 一次并行读取完整输入，计算各层注意力中的 Key 和 Value。设输入为\n$$ X_{0:n}=[x_0,x_1,\\ldots,x_{n-1}], $$论文将每个 token 在所有层上的 K/V 表示展平记为 \\(c_i\\)，于是：\n$$ \\mathcal C(X_{0:n}) {}={} [c_0,c_1,\\ldots,c_{n-1}] \\in\\mathbb R^{n\\times d}. $$实际实现中 Cache 仍按“层、K/V、head、序列位置、head dimension”保存；上式只是为了简化记号。\nDecode 每次只生成一个新 token，并把这个 token 的 K/V 追加到缓存。论文写成：\n$$ y_{i+1} {}={} \\mathcal P\\!\\left( y_i\\mid \\mathcal C(X)\\oplus\\mathcal C(Y_{0:i}) \\right), $$其中 \\(\\oplus\\) 表示沿序列维拼接。KV Cache 避免了每一步重新计算旧 token 的 K/V，却不能消除新 token 之间的因果依赖。\n1.4 为什么 Cache 可能比文本更适合通信？ 可以把文本看成模型最终决定“说出来”的离散摘要，而 Cache 保留了模型处理每个输入位置时形成的连续表示。它可能包含：\ntoken 的上下文含义； 代码括号、标签或引用对应的精确位置； 不同注意力 head 关注的关系； 尚未被压缩成一句结论的多种证据。 但 Cache 也不是一种天然通用的“模型语言”。不同模型的 tokenizer、层数、head 数量、head dimension 和表示分布都可能不同。因此，“把 A 的 Cache 直接塞给 B”通常不会工作，C2C 的核心任务正是学习这层翻译。\n2. Motivation: 文本丢掉了什么？ 论文用一个 Coder–Writer 例子解释信息瓶颈。用户给出一段 HTML，并要求把自我介绍插入正确位置。Coder 的内部表示同时知道：\np 是段落开始标签； 内容应插在 p 开始标签后、结束标签前； 该位置处于 section 内。 如果 Coder 只生成一句 “Write content inside the section wrapper”，Writer 可能只理解“写在 section 中”，却不知道 p 标签的结构语义和精确插入点。T2T 中丢失的不是某个关键词，而是词义与输入位置之间的绑定关系。\nC2C 希望直接传递 Coder 对原始 HTML 每个位置形成的 Cache 表示。Writer 不必猜测自然语言中的 “inside” 到底指哪个位置，而能从被映射的表示中恢复更细粒度的结构理解。\n论文将 T2T 的问题归纳为三点：\n低带宽： 高维连续表示被压成线性 token 序列； 歧义： 自然语言无法保证对位置、结构和隐含关系的唯一表达； 高延迟： 每一条中间消息都要逐 token 解码。 不过，这仍只是动机。Cache 是否真的携带“额外有用语义”，以及不同模型的 Cache 能否相互转换，需要由实验验证。\n3. Two Oracles: 先验证“值得传”和“能够传” 3.1 Cache Enrichment Oracle：固定长度，只改变表示质量 few-shot prompting 同时改变了两件事：\n模型看到额外示例； KV Cache 变长。 如果准确率提高，无法判断是示例让问题 token 的表示更好，还是 decode 时直接注意到了更多示例 token。作者设计三种设置隔离这两个因素。令 \\(E\\) 为 few-shot 示例，\\(X\\) 为待回答问题：\nSetting Prefill 输入 Decode 使用的 Cache Cache 长度 Accuracy Direct \\(X\\) \\(\\mathcal C(X)\\) ( X Few-shot \\(E\\oplus X\\) \\(\\mathcal C(E\\oplus X)\\) ( E Oracle \\(E\\oplus X\\) 只保留对应 \\(X\\) 的切片 ( X Oracle Cache 定义为：\n$$ \\mathcal C^{*}(X) {}={} \\mathcal C_{[|E|:|E|+|X|]}(E\\oplus X). $$关键操作发生在 prefill 之后：模型先让示例 \\(E\\) 影响问题 \\(X\\) 的隐藏表示，再删除示例自身对应的 Cache，只保留与问题等长的部分。\nDirect 与 Oracle 的 Cache 长度完全相同，但准确率从 58.42% 提高到 62.34%。因此，增益不能只解释为“多看了几个 token”；示例已经改变了模型如何编码问题本身。\n3.2 不是每一层都适合被增强 论文在 Qwen3-0.6B 的 28 层中逐层替换 Cache。未增强基线是 58.42%，只有第 4 层和第 16 层略有提升，分别达到 58.52% 和 58.45%；其他单层替换大多下降。\n进一步把单层实验中表现最好的层按顺序累积：\n选择 Top-K 层时，增加若干优质层会继续改善； 选择 Last-K，即从最差的层开始增强，准确率明显下降； 全部层都替换并不优于精选层。 这直接导出 C2C 的逐层 gate：通信不能理解为“注入越多越好”，模型必须决定哪些层值得接收外部表示。\n3.3 Cache Transformation Oracle：跨模型表示是否可转换？ 作者用一个三层 MLP，将 Qwen3-4B 最后一层 Cache 映射到 Qwen3-0.6B 最后一层 Cache。训练目标不是回答损失，而是映射后 Cache 与目标 Cache 的均方误差：\n$$ \\mathcal L_{\\text{MSE}} {}={} \\left\\| f_K(K^{S})-K^{R} \\right\\|_2^2 {}+{} \\left\\| f_V(V^{S})-V^{R} \\right\\|_2^2. $$实验在 MMLU-Redux 上训练，随机选择 300 个样本做 t-SNE，可视化使用 perplexity 50、最多 1000 次迭代。\n原始 Source KV 与 Target KV 相距很远；映射后的 Cache 落进 Target 分布内部，说明跨模型转换具有可行性。但它只覆盖 Target 空间的一个子集。这一点很重要：\n大模型的 Cache 不是小模型 Cache 的超集； 参数量更大不代表表示方式完全包含另一个模型； 不同模型即使总体准确率相近，正确题集合也可能只有有限重叠。 所以合理目标不是用 Sharer 覆盖 Receiver，而是保留 Receiver 自身表示，再选择性地注入互补信息。\n4. Method: Cache-to-Cache 如何工作？ 4.1 Sharer、Receiver 与整体流程 Sharer： 提供对输入的上下文理解或知识； Receiver： 使用融合后的表示并生成最终回答； Fuser： 在两者之间完成 Cache 映射、融合和选择。 一次推理可以分成五步：\n同一输入 X ├─→ Sharer prefill → Sharer KV Cache └─→ Receiver prefill → Receiver KV Cache │ token alignment + layer alignment │ Cache Fuser │ Receiver fused KV Cache │ Receiver 自回归生成最终回答 注意：C2C 消除的是 Sharer 生成中间文本 的过程，不是 Receiver 的最终答案 decode。Sharer 仍需对输入执行一次 prefill，Receiver 也仍需生成最终答案。\n4.2 残差式 Cache 融合 设 Receiver 有 \\(N\\) 个参与融合的层，\\(\\mathcal G(n)\\) 表示 Receiver 第 \\(n\\) 层对应的 Sharer 层。录用版将融合 Cache 明确写成残差形式：\n$$ \\mathcal C^{F} {}={} \\left\\{ \\mathcal C_n(X) {}+{} \\mathcal F_n\\!\\left( \\mathcal C_n(X), \\mathcal C^{S}_{\\mathcal G(n)}(X) \\right) \\right\\}_{n=1}^{N}. $$Receiver 自己的 \\(\\mathcal C_n(X)\\) 是主干，Fuser 只预测应当加入的增量。之后 Receiver 用融合后的输入 Cache 与已经生成的回答 Cache 继续解码：\n$$ y_{i+1} {}={} \\mathcal P\\!\\left( y_i\\mid \\mathcal C^{F}(X)\\oplus \\mathcal C(Y_{0:i}) \\right). $$残差连接解决了一个关键风险：如果直接用投影后的 Sharer Cache 覆盖 Receiver Cache，映射误差会破坏 Receiver 原有能力。实验中这种纯 Project 方案的平均准确率只有 20.70%，远低于保留 Receiver Cache 的 +Fuse 方案 44.88%。\n4.3 Fuser 的三个组件 4.3.1 Projection 每层先拼接 Sharer 与 Receiver 的 Cache 特征，再通过投影层和 feature-fusion 层，学习跨表示空间的转换。\n这里不能把 Projection 简化理解为“让维度相同”。即使两个模型的 head dimension 一样，坐标系和语义分布仍然不同；投影必须同时学习维度兼容和语义转换。\n4.3.2 Dynamic Weighting 映射后的特征经过输入相关的 attention-head modulation。它针对当前 query 调节不同 head 的注入强度。\n可以把它理解为连续控制：\n某个输入可能需要 Sharer 的代码结构 head； 另一个输入可能几乎不需要该 head； 即使某层 gate 打开，也不代表注入强度固定。 论文没有给出一个可独立复现全部实现细节的简化标量公式，因此这里不额外虚构形式；核心是 per-query、head-wise 的连续重加权。\n4.3.3 Learnable Gate 每一层有一个可训练 gate，决定是否将该层的融合增量加入 Receiver。训练时用 Gumbel-Sigmoid 保持可微，并将温度从 1.0 线性退火到 0.001；推理时 gate 变为二值选择。\nDynamic Weighting 与 Gate 的分工不同：\nGate 回答“这一层是否接收外部信息”； Dynamic Weighting 回答“打开以后，各 head 接收多少”。 4.4 Token Alignment：不同 tokenizer 怎么对齐？ 同一句话在两个 tokenizer 下可能得到不同 token。例如 “Cache-to-Cache” 可能被一个模型分成 3 个 token，另一个模型分成 5 个。若位置没有对齐，Receiver 第 \\(i\\) 个 token 可能错误融合 Sharer 第 \\(i\\) 个完全不同的片段。\n论文先把 chat input 分成两类区域。\nTemplate sections 是角色分隔符、格式控制符等结构 token。它们不承载主要语义，但不同 tokenizer 的模板长度可能不同。作者用 pad token 补齐较短一侧，使两边位置长度一致。\nMessage sections 是用户或助手的真实文本。对每个 Receiver token：\n解码为字符串； 用 Sharer tokenizer 重新编码； 若得到一个 token，直接一一映射； 若得到多个候选 token，选择解码后字符串覆盖最长的一个。 附录还比较了“选择第一个候选”的策略。两种方法在超过 80% 的序列上产生相同对齐；作者选择 maximal coverage，以降低 one-to-many 情况下丢失表面信息的风险。\n这仍是启发式对齐，不是严格语义等价。一个 Receiver token 对应多个 Sharer token 时只保留一个，细粒度信息仍可能损失。\n4.5 Layer Alignment：不同层数怎么对应？ 作者比较了两种方案。\nTerminal alignment 从输出侧向前配对：\nReceiver 最后一层 ↔ Sharer 最后一层 Receiver 倒数第二层 ↔ Sharer 倒数第二层 ... 直到较浅模型的第一层 Depth-normalized alignment 将层编号归一化到 \\([0,1]\\)。若较浅模型有 \\(L_{\\min}\\) 层，较深模型有 \\(L_{\\max}\\) 层，则 anchor 层 \\(i\\) 对应：\n$$ j^{*} {}={} \\arg\\min_j \\left| \\frac{i}{L_{\\min}-1} {}-{} \\frac{j}{L_{\\max}-1} \\right|. $$C2C 最终采用 terminal alignment，因为它更简单，而且实验中略好。直觉上，越靠近输出的深层越接近最终语义决策，优先对齐这些层比均匀覆盖深度更重要。\n4.6 Training Objective Sharer 和 Receiver 的参数全部冻结，只训练 Fuser。给定目标回答 \\(Y=(y_1,\\ldots,y_T)\\)，训练损失是标准 next-token cross entropy：\n$$ \\mathcal L_{\\text{C2C}} {}={} {}-{} \\sum_{t=1}^{T} \\log p_\\theta \\left( y_t \\mid \\mathcal C^{F}(X), y_{1:t-1} \\right), $$其中 \\(\\theta\\) 只属于 C2C 模块。训练过程为：\n两个冻结模型分别 prefill 输入并产生 Cache； Fuser 对齐并融合 Cache； Receiver 在 fused Cache 条件下 prefill 目标回答； 梯度穿过 Receiver 的计算图回传到 Fuser，但不更新 Receiver 权重。 4.7 训练数据与超参数 不同实验使用不同数据，不应混在一起：\nExperiment Training data Max length Samples Macro batch Steps 主性能实验 OpenHermes-2.5 2,048 500,000 256 1,929 长序列缩放 LongBench-E 12,000 1,896 16 118 模型规模/异构组合 MMLU auxiliary_train 1,024 15,000 128 116 统一设置包括：\none epoch； learning rate \\(1\\times10^{-4}\\)，linear scheduler； warmup 10%，weight decay 0.01； gradient norm 上限 1； Gumbel temperature 从 1.0 退火到 0.001； random seed 42； 数据按 99%/1% 切为训练与监控用验证集。 5. Evaluation Setup 5.1 Models 论文覆盖 Qwen2.5、Qwen3、Llama 3.2 和 Gemma 3，组合差异包括：\n不同代际：Qwen2.5 与 Qwen3； 不同家族：Qwen、Llama、Gemma； 不同规模：0.6B 到 14B； 不同专长：通用、数学、代码； 不同训练阶段：base 与 instruction-tuned。 主结果固定 Receiver 为 Qwen3-0.6B，分别搭配 Qwen2.5-0.5B-Instruct、Llama3.2-1B-Instruct 和 Qwen3-4B-Base。\n5.2 Benchmarks MMLU-Redux： 广泛领域知识，去除了原 MMLU 中一批有问题的样本； OpenBookQA： 基于科学事实的问答与推理； ARC-Challenge： 较难的科学和逻辑推理； C-Eval： 中文多领域知识； LongBench-E： 13 个长上下文子数据集。 多选题使用 zero-shot、greedy decoding、temperature 0，Receiver 最大生成 64 token。T2T 的中间通信最多 256 token。LongBench 最大输出 2,048 token。时间在单张 NVIDIA A100、batch size 1 上测量。\n5.3 Baselines Receiver-only / Sharer-only： 单模型下界； Query-level Routing： 估计问题难度，上半难题交给强模型、下半交给弱模型； Text-to-Text： Sharer 先生成一句解题所需的关键背景，Receiver 再读取原问题与该消息； C2C： 不生成中间文本，直接融合 Cache。 Routing 的目标偏向性能–成本折中，它一次仍只使用一个模型，因此无法获得“两个模型共同理解同一问题”的协作增益。\n6. Main Results 6.1 Accuracy 在三种 Sharer 设置上，C2C 相对固定 Receiver 的四任务平均准确率分别提高：\nQwen2.5-0.5B Sharer：11.00 个百分点； Llama3.2-1B Sharer：9.64 个百分点； Qwen3-4B-Base Sharer：11.88 个百分点。 相对 T2T，平均分别再提高 5.36、4.15、3.06 个百分点。\n以 Qwen2.5-0.5B → Qwen3-0.6B 为例：\nBenchmark Receiver Sharer Routing T2T C2C MMLU-Redux 35.53 38.42 35.58 41.03 42.92 OpenBook 39.20 45.60 40.80 44.00 52.60 ARC-C 41.04 42.09 40.70 49.48 54.52 C-Eval 32.04 40.21 34.61 35.88 41.77 这里最值得注意的不是 C2C 简单追上更强模型，而是它经常超过两个单模型。例如 OpenBook 上 Receiver 为 39.20、Sharer 为 45.60，融合后达到 52.60，说明结果不是纯粹选择或复制一方答案。\nQwen3-4B-Base 的 standalone 准确率异常低，因为 base model 不稳定遵循多选题输出格式；T2T 也会被冗长、跑题的中间文本拖慢。C2C 不要求 base model 输出可读指令，却能利用其 prefill 表示。这展示了 latent communication 的独特用法：Sharer 可以“不会好好说”，但仍然“知道一些东西”。\n6.2 Latency: 加速到底来自哪里？ Qwen2.5-0.5B → Qwen3-0.6B 在 MMLU-Redux 上：\nMethod Sharer output tokens Sharer decode Fusion Total T2T 80 1,312 ms — 1,596 ms C2C 0 0 ms 90 ms 445 ms T2T 的 Receiver 因为要读取原问题和中间消息，input token 从 Receiver-only 的 170 增加到 332；C2C 两边都只处理原始 170 token。C2C 的主要收益是用约 90 ms 的并行 Cache fusion 替代 1,312 ms 的 Sharer 串行解码。\n三种主设置相对 T2T 的加速分别为 3.46×、1.51×、14.41×。极端差异与模型输出行为有关：\nLlama3.2 经常只输出一个选项字母，T2T 本来就很快，因此 C2C 相对加速较小； Qwen3-4B-Base 容易忽略格式并输出长文本，T2T 极慢，C2C 加速非常大。 所以“平均 2.5×”不是固定硬件常数。真实收益依赖 Sharer 的解码长度、模型实现、Fuser 成本和最终任务输出长度。\n6.3 Long Context Qwen2.5-0.5B Sharer 与 Qwen3-0.6B Receiver 在 LongBenchV1 上：\nInput length Receiver Sharer T2T C2C 0–4k 30.52 24.94 33.46 37.31 4–8k 26.03 23.18 29.70 34.01 8k+ 25.99 16.44 25.64 30.72 C2C 在三个长度区间都优于 T2T。它没有让长上下文计算消失：两个模型仍需 prefill 长输入，Fuser 也要处理相应 Cache；结果只说明在这些区间内，直接表示融合的质量优势仍存在。\n6.4 Model Size Scaling 随着 Sharer 从 Qwen2.5-0.5B 增大到 14B，C2C 给不同 Qwen3 Receiver 带来的准确率增益总体增长得比 T2T 快。较小 Receiver 获益最大；Receiver 本身越强，和 Sharer 的知识重叠越多，相对增益越小。\n这符合互补性的解释：通信的上限不仅取决于 Sharer 有多强，还取决于 Sharer 拥有多少 Receiver 尚未掌握、且 Fuser 能转换的表示。\n6.5 Heterogeneous and Swap Settings 论文测试 Gemma、Math、Coder 作为 Sharer，并交换 Qwen2.5-0.5B 与 Qwen3-0.6B 的角色。五个组合上，C2C 在 MMLU-Redux 平均比 T2T 高 8.59 个百分点。\n一个反直觉结果是：Qwen2.5-Coder-0.5B standalone 只有 25.09，但作为 Sharer 后 C2C 达到 46.89。这再次说明：\nSharer standalone 低分可能来自输出格式、指令跟随或任务不匹配； prefill Cache 仍可能提供 Receiver 可用的局部表示； 协作价值不能只由 Sharer 的最终答案准确率判断。 角色互换后，C2C 仍带来 5.05 个百分点提升，而 T2T 反而下降 6.30 个百分点，表明 C2C 对“谁说、谁听”的角色选择更稳健。但这并不代表任何模型对都能直接互换；每个方向使用的 Receiver 空间和 Fuser 参数不同。\n7. Ablations and Behavior Analysis 7.1 增益不是只来自多了参数 论文比较三种训练：\nSingle： 直接 fine-tune Receiver，不使用 Sharer； Identical： 同一个 Qwen3-0.6B 同时作为 Sharer 和 Receiver； C2C： Qwen2.5-0.5B 与 Qwen3-0.6B 异构通信。 可训练参数分别为 596M、529M、478M。C2C 参数更少，却在四个任务上最好。Identical 又优于 Single，说明让同一模型重复编码并进行 Cache 级“自通信”也有帮助；但异构 C2C 最好，支持互补表示是主要增益来源之一。\n7.2 Fuser Component Ablation Method MMLU ARC-C OpenBook C-Eval Average Project 20.01 19.57 21.80 21.41 20.70 +Fuse 43.36 51.65 47.60 36.91 44.88 +Gate = C2C 42.92 54.52 52.60 41.77 47.95 结论很明确：\n只投影 Sharer 并覆盖 Receiver 会严重破坏原表示； 残差保留 Receiver Cache，使平均准确率提高 24.18 个百分点； 再加入逐层 gate，平均提高 3.07 个百分点。 MMLU 上 +Gate 略低于 +Fuse，说明 gate 不是每项都单调提升；它改善的是跨任务平均稳健性。\n7.3 更复杂的 C2C-C 默认 C2C 直接拼接两边 Cache。C2C-C 先用三层 MLP 将 Sharer Cache 映射到 Receiver 维度，再执行 feature fusion 和 dynamic weighting。\n定义 Receiver 准确率为 \\(A_R\\)，强 Sharer 为 \\(A_S\\)，方法结果为 \\(A_M\\)，Performance Gap Recovered 为：\n$$ \\operatorname{PGR} {}={} \\frac{A_M-A_R}{A_S-A_R} \\times100\\%. $$Qwen3-4B → Qwen3-0.6B 时，默认 C2C 在四个任务恢复 29%–41% 的性能差距；C2C-C 恢复 76%–86%，明显更强。作者仍把默认简单 Fuser 作为主方法，意图先证明 C2C 范式，而不是穷尽最佳适配器结构。\n这也说明主结果不是 C2C 的架构上限：Cache communication 的效果高度依赖 projector/fuser 的容量和训练方式。\n7.4 Strong-to-Weak Communication 在 Qwen3-4B → Qwen3-0.6B 的 LongBench 强到弱设置中：\nLength Receiver Sharer T2T C2C 0–4k 30.52 50.48 38.52 41.46 4–8k 26.03 48.28 35.79 37.57 8k+ 25.99 44.36 33.79 34.23 Average 27.63 47.90 36.18 37.97 平均 PGR 为：\n$$ \\frac{37.97-27.63}{47.90-27.63} \\approx 51.01\\%. $$C2C 恢复了约一半的强弱模型差距，但没有取代强模型。8k+ 区间只比 T2T 高 0.44，说明输入越长并不保证融合优势越大。\n7.5 Effective Rank 论文用有效秩衡量表示的有效维度。若矩阵 \\(W\\) 的奇异值为 \\(\\sigma_i\\)，先归一化：\n$$ p_i {}={} \\frac{\\sigma_i}{\\|\\boldsymbol\\sigma\\|_1}, $$再计算：\n$$ \\operatorname{erank}(W) {}={} \\exp\\!\\left( {}-{} \\sum_i p_i\\log p_i \\right). $$Receiver 的 K/V Cache 平均有效秩分别为 388/532，C2C 后变为 395/560，介于 Receiver 与 Sharer 的 539/689 之间。作者据此认为表示空间变得更丰富。\n有效秩提高只是相关性证据，不等于“语义质量”被直接测量。更高秩也可能包含噪声；它需要与准确率、消融和失败案例共同解释。\n7.6 Gate 在通用训练与任务训练中的行为 OpenHermes 通用训练下，K/V gate 平均激活率超过 98.21%，几乎全开；实际控制主要来自 dynamic weights，部分层平均 key weight 低于 0.1。 MMLU 任务训练下，gate 激活率降到 52.67%；被选中层的权重更大，多数超过 0.4。 因此 gate 学到的不是固定“最佳层集合”：\n通用数据覆盖任务多，模型保留广泛层通路，再由 query-dependent weight 微调； 单一任务规律稳定，可以只选择少量持续有效的层。 7.7 Progressive Replacement 作者逐渐提高输入 Cache 中被 C2C 融合结果替换的 token 比例。准确率先下降、后上升；比例超过 50% 后继续增加会改善。替换靠近回答末端的 latter tokens 影响通常更大，因为这些位置与即将生成的答案更接近。\n前期下降可能来自训练–测试不一致：训练时使用完整融合 Cache，测试时却只融合局部。这个结果提醒我们，C2C 不是可以任意截断的独立前缀模块，token 范围也是训练分布的一部分。\n7.8 Training Cost 三个主模型对使用 8 张 GPU。完整 1,929 steps 需要约 44.72–54.24 GPU hours，但前 300 steps、少于 9 GPU hours 时就达到与最终 checkpoint 相近甚至更高的 MMLU-Redux 准确率。\n例如 Qwen2.5-0.5B → Qwen3-0.6B：\nstep 0：35.53； step 150：42.06； step 300：44.30； step 1,929：42.92。 这说明 Fuser 很快学会基本映射，也说明最终 checkpoint 并不总是该 benchmark 的最佳 checkpoint。训练集是通用 OpenHermes，MMLU-Redux 只用于评价，因此后期对通用目标的优化不必然单调提高单一 benchmark。\n8. Examples: C2C 什么时候成功，什么时候失败？ 8.1 两个单模型都错，融合后答对 论文给出一个环境伦理问题：“Hill 不再问破坏环境这一行为为何不道德，而想问什么？”\nReceiver 把问题理解成换一种说法，选 A； Sharer 也选 A，并给出冗长但偏离题型的解释； T2T 的中间背景改变了问题焦点，Receiver 最终选 C； C2C 识别到问题从“行为是否不道德”转向“实施行为的人是否是坏人”，选出正确的 B。 这个例子支持作者的核心主张：融合不是答案投票。即使双方最终答案都错，二者 Cache 中仍可能存在可组合的局部线索。\n不过，单个案例不能证明普遍因果机制。它只说明 learned fuser 有可能从未显式说出的表示中恢复互补信息。\n8.2 弱 Sharer 也会把 Receiver 带错 附录还给出反例。一个会计题中 Receiver 原本选择正确的 A；Qwen2.5-0.5B Sharer 错误计算并选择 B。T2T 和 C2C 都受到错误信息影响，最终都选 B。\n这揭示了 latent communication 的另一面：文本消息至少可以被人或额外 verifier 检查，Cache 表示更难解释。若 Sharer 系统性偏弱或领域不可靠，Fuser 未必能分辨有用信息与错误信息。\n因此实际系统需要：\n按任务选择 Sharer，而不是一律融合； 训练更强的 query-level gate 或拒绝机制； 对最终答案保留验证与回退路径； 在关键领域单独评估负迁移。 9. Multi-Model and Agentic Extensions 9.1 One Receiver, Multiple Sharers Qwen3-0.6B Receiver 同时接收 Qwen3-4B-Base 与 Qwen2.5-Math-1.5B：\nSetting MMLU Accuracy Receiver 35.53 4B-Base → Receiver 60.71 Math-1.5B → Receiver 46.13 两个 Sharer → Receiver 64.60 两个 pairwise Fuser 分别训练，推理时无需额外联合训练就能同时融合。结果表明多 Sharer 具有可行性，但两个 Fuser 的增量如何冲突、门控如何联合校准，论文没有系统解决。\n9.2 Multiple Receivers, Multiple Sharers 朴素做法为每个有向模型对训练一个 Fuser，需要 \\(O(N^2)\\) 个适配器。论文探索共享 latent space：\n$$ \\mathcal C_{s_i} \\xrightarrow{\\mathcal P_{s_i}} U_{s_i}, \\qquad i=0,\\ldots,M-1, $$每个 Sharer 只训练一个 projector 进入公共空间；每个 Receiver 再用自己的 Fuser 读取所有 \\(U_{s_i}\\)：\n$$ \\left(U_{s_i},\\mathcal C_{r_j}\\right) \\xrightarrow{\\mathcal F_{r_j}} \\mathcal C'_{r_j}, \\qquad j=0,\\ldots,N-1. $$这样适配器数量从 pairwise 的二次增长降为 \\(M+N\\)，即模型数同阶。初步结果表明不同 Receiver 能从 Coder 与 4B-Base Sharer 获益，但这仍是 appendix prototype，还没有验证大规模模型群、持续对话或动态成员加入。\n9.3 Agentic Flow 论文将数学 agent workflow 分成 problem interpreter 与 problem solver。在 GSM8K 上：\nMethod Accuracy Single Qwen3-0.6B 41.17 T2T multi-agent flow 61.18 C2C 62.55 T-C2C 78.01 T-C2C 同时保留解释文本，并在问题与解释上进行 Cache 融合。它远高于纯 T2T 或纯 C2C，说明文本与 latent representation 并非只能二选一：\n文本提供显式、可检查的中间结构； Cache 传递难以完整说出的内部表示； 混合通信可能比完全隐藏或完全显式都更强。 这只是单一 GSM8K workflow 的初步结果，不能直接推广到开放式软件 agent 或长时间多轮协作。\n10. Limitations and Practical Boundaries 10.1 每个模型对仍需要训练 默认 C2C 针对特定的 Sharer → Receiver 方向训练 Fuser。更换模型、方向、tokenizer 或层结构通常要重新训练。论文的共享 latent projector 将成本从 \\(O(N^2)\\) 向 \\(O(N)\\) 推进，但只是初步实验。\n10.2 不是 API 级黑盒协作 C2C 需要访问两个模型的逐层 KV Cache，并修改 Receiver 的推理路径。闭源模型 API 通常只返回文本或 logits，无法直接部署这套方法。它更适合可控制权重和推理框架的本地/服务端模型。\n10.3 计算没有被免费消除 相对 T2T，C2C 省掉了 Sharer decode 和 Receiver 对中间消息的额外 prefill，但仍需要：\n两个模型都对原输入 prefill； 保存两份 Cache； 执行逐层 Fuser； Receiver 生成最终输出。 如果原本只运行 Receiver，C2C 可能增加总 FLOPs 和显存。论文主要证明它比“两个模型通过长文本协作”更快，而不是比单模型绝对更省资源。\n10.4 Cache 不是天然隐私保护 论文把不输出原始文本视为 privacy-aware collaboration 的潜在方向，但没有证明 KV Cache 不可逆或不泄漏输入。已有表示反演研究说明中间激活可能包含大量原始信息。C2C 减少了显式内容暴露，不等于得到密码学隐私保证。\n10.5 评价仍以多选题为主 四个主 benchmark 都是多选题，输出短、答案提取明确。LongBench 和 GSM8K 扩展了任务范围，但论文尚未充分覆盖：\n长篇开放式生成质量； 真实代码仓库协作； 多轮对话中的 Cache 累积误差； 工具调用与外部状态； 大规模并发服务下的吞吐、显存和网络传输成本。 10.6 对齐启发式仍有损失 maximal-coverage token alignment 在 one-to-many 时只选择一个 source token；terminal layer alignment 也假设深层语义可直接倒序配对。这些设计简单有效，但不是严格的跨模型语义对应。\n11. Takeaways 论文真正的新意是通信介质，而不只是一个新 projector。 它把多 LLM 协作从离散文本接口推进到连续内部状态接口。 两个 oracle 很关键。 固定 Cache 长度仍能因表示变丰富而提升，且跨模型 Cache 可学习转换，为 C2C 的设计提供了直接证据。 残差保留 Receiver 是成败分界。 只投影并覆盖会崩溃；Fuse 带来 24.18 个百分点平均提升，Gate 再带来 3.07 个百分点。 加速来自消除 Sharer 的中间 decode。 典型实验把 1,312 ms 的通信文本解码换成约 90 ms Cache fusion，但两个模型的 prefill 仍然存在。 互补性比 Sharer 单独分数更重要。 一个不擅长按格式回答的 base/coder 模型，其 Cache 仍可能显著帮助 Receiver。 C2C 不是无损知识注入。 强到弱 LongBench 只恢复约 51% 的差距，弱 Sharer 也可能造成负迁移。 最有前景的方向可能是混合通信。 GSM8K 的 T-C2C 同时保留显式解释与 Cache 融合，表现明显高于单独使用任一通信方式。 C2C 证明了一件比具体数字更重要的事：LLM 协作不必永远被限制在“一个模型说一句话、另一个模型再读一句话”的接口上。KV Cache 可以成为更高带宽、低解码延迟的模型间通信层；而如何让它可扩展、可验证、可拒绝错误信息，才是从论文原型走向可靠系统的下一步。\n",
+  "wordCount" : "2029",
   "inLanguage": "zh-cn",
   "datePublished": "2025-10-15T00:00:00Z",
-  "dateModified": "2025-10-15T00:00:00Z",
+  "dateModified": "2026-08-18T00:00:00Z",
   "mainEntityOfPage": {
     "@type": "WebPage",
     "@id": "https://jjl357.github.io/blog/posts/cache-to-cache---direct-semantic-communication-between-large-language-models/"
@@ -273,161 +230,847 @@ Conference:ICLR&#39;26
   <header class="post-header">
     
     <h1 class="post-title entry-hint-parent">
-      📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models - ICLR&#39;26
+      📝 Cache-to-Cache: Direct Semantic Communication Between Large Language Models
     </h1>
     <div class="post-meta"><span title='2025-10-15 00:00:00 +0000 UTC'>October 15, 2025</span>
 
 </div>
   </header> 
-  <div class="post-content"><p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/title.png"></p>
-<ul>
-<li>
-<p>github：<a href="https://github.com/thu-nics/C2C">https://github.com/thu-nics/C2C</a></p>
-</li>
-<li>
-<p>Conference:ICLR'26</p>
-</li>
-</ul>
-<hr>
-<h2 id="-motivation动机--背景">💡 Motivation（动机 / 背景）<a hidden class="anchor" aria-hidden="true" href="#-motivation动机--背景">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure1.png"></p>
-<ul>
-<li>现状：多-LLM 系统通常通过 <strong>文本（Text-to-Text, T2T）</strong> 相互通信 —— 一个模型生成文本，另一个模型再读入文本并处理。这种方式存在的信息瓶颈（高维内部表示被压成文本）、歧义性（自然语言本身的模糊性）以及 <strong>串行解码带来的延迟</strong> 等问题。</li>
-<li>问题：文本通信无法完整保留模型内部的高维语义信息（例如 KV-Cache 中的 rich semantics），同时文本通信需要逐 token 解码，增加通信与推理延迟。</li>
-<li>提出的问题（核心研究问）：<strong>LLM之间能否“超越文本”直接通信？能否通过共享/转换/融合 KV-Cache（key/value cache）来实现更丰富、更低延迟的语义通信？</strong>（文中以 “Can LLMs communicate beyond text?” 作核心驱动。）</li>
-<li>主要观察驱动：作者的 Oracle 实验显示
-(1) 在不扩大序列长度的前提下，丰富 KV-Cache 可以提升回答质量；
-(2) 不同模型的 KV-Cache 在表示空间上是可转换/可对齐的（经过训练的简单 MLP 可将一个模型的 KV 映射到另一个模型空间）。
-这些观察支持用 KV-Cache 作为通信媒介的可行性。</li>
-</ul>
-<hr>
-<h2 id="-challenges挑战">⚔ Challenges（挑战）<a hidden class="anchor" aria-hidden="true" href="#-challenges挑战">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure2.png"></p>
-<ol>
-<li><strong>跨模型的 KV-Cache 表示差异</strong>：不同模型（不同族、不同规模、不同 tokenizer）在同一输入上产生的 KV-Cache 分布差异显著（t-SNE 可视化）。如何可靠地将一个模型的 cache “投影”到另一个模型的语义空间并被有效利用是挑战。</li>
-<li><strong>对齐问题（token-level &amp; layer-level）</strong>：不同 tokenizer 产生不同 token 划分，且模型层数不同，必须处理 token 对齐和层对齐问题（避免信息丢失或错位注入）。文中提出了 token 解码再 re-encode 的对齐策略和 “terminal alignment” 层对齐策略。</li>
-<li><strong>避免破坏接收者原有语义</strong>：直接用别人 cache 覆盖会破坏接收模型已有语义/结构，需设计残差式、可控的融合机制（即 Fuser 的设计）。</li>
-<li><strong>选择性注入（哪些层注入、注入多少）</strong>：并非所有层注入都有利，单层/多层注入效果差异明显（Appendix 的单层实验显示有层增益也有层下降），因此需要 learnable gate 来选择注入位置与比例。</li>
-<li><strong>效率 / 延迟权衡</strong>：虽然 C2C 目标是降低延迟，但在实现上要保证投影/融合本身不会引入比文本通信更高的开销（设计轻量 Fuser 并冻结主模型参数以降低训练/推理成本）。</li>
-</ol>
-<hr>
-<h2 id="-observations--analysis">🔍 Observations / Analysis<a hidden class="anchor" aria-hidden="true" href="#-observations--analysis">#</a></h2>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/f34t12.png"></p>
-<ul>
-<li>
-<p><strong>Oracle（缓存富化）实验</strong>：把 few-shot 示例 $E$ 和问题 $X$ 一起 prefill，然后丢弃 $E$ 的 cache 片段，只保留对问题 $X$ 对齐的 slice（即 Oracle cache enrichment）：</p>
-$$
-  C^*(X) = C_{E \oplus X}[|E| : |E| + |X|]
-  $$<p>在不增长 $|X|$ 的情况下能显著提升准确率，说明「上下文影响了如何把问题编码到 KV-Cache 中」，而这并非仅仅是因为额外 token 的注意力范围。详见 Table 1 与相关讨论。</p>
-<p>其中，$C(\cdot)$ 表示 prefill 后得到的 per-token KV-Cache。</p>
-</li>
-<li>
-<p><strong>Cache 转换实验</strong>：使用 3-layer MLP 将大模型（Qwen3-4B）的 KV 映射到小模型（Qwen3-0.6B）表示空间，t-SNE 显示映射后的 cache 落入接收模型 KV 空间内部，但只覆盖其子集，说明可转换但不完全等价（信息子集化）。</p>
-</li>
-<li>
-<p><strong>层级差异</strong>：不同层对 cache enrichment 的响应不同（Appendix A.2.1 展示单层替换结果，部分层有正收益，部分层负收益），这直接促成了设计中使用 per-layer gate 的动机。</p>
-</li>
-<li>
-<p><strong>互补正确集</strong>：不同模型在同一 benchmark 上的正确答案集合有较少重叠（Venn 图 Figure 7），说明多模型间存在互补性，若能有效融合则能提高总体正确率。</p>
-</li>
-</ul>
-<hr>
-<h2 id="-methods">🧠 Methods<a hidden class="anchor" aria-hidden="true" href="#-methods">#</a></h2>
+  <div class="post-content"><h1 id="cache-to-cache-direct-semantic-communication-between-large-language-models">Cache-to-Cache: Direct Semantic Communication Between Large Language Models<a hidden class="anchor" aria-hidden="true" href="#cache-to-cache-direct-semantic-communication-between-large-language-models">#</a></h1>
+<p><strong>Status:</strong> <strong>ICLR 2026</strong></p>
+<p><strong>Paper:</strong> <a href="https://arxiv.org/abs/2510.03215">https://arxiv.org/abs/2510.03215</a></p>
+<p><strong>OpenReview:</strong> <a href="https://openreview.net/forum?id=LeatkxrBCi">https://openreview.net/forum?id=LeatkxrBCi</a></p>
+<p><strong>GitHub:</strong> <a href="https://github.com/thu-nics/C2C">https://github.com/thu-nics/C2C</a></p>
+<p><strong>Authors:</strong> Tianyu Fu, Zihan Min, Hanling Zhang, Jichao Yan, Guohao Dai, Wanli Ouyang, Yu Wang</p>
+<p><strong>一句话总结：</strong> Cache-to-Cache（C2C）把多 LLM 协作中的“先让一个模型生成解释文本，再让另一个模型读文本”改成“直接将 Sharer 的 KV Cache 映射并残差融合到 Receiver 的 KV Cache”，从而同时减少中间文本造成的信息压缩和逐 token 解码延迟。</p>
 <blockquote>
-<p>概览：提出 <strong>Cache-to-Cache (C2C)</strong> —— 用一个神经模块（Cache Fuser）把 Sharer（来源模型）的 KV-Cache 投影到 Receiver（目标模型）的表示空间并按层残差地融合到 Receiver 的原始 KV-Cache，从而在 decode 阶段让 Receiver 利用两者的语义表示，而不必通过文字中介。</p>
+<p><strong>版本说明：</strong> 本地最初保存的是 2025 年 10 月的预印本。本文按 2026 年 3 月 2 日的 arXiv v2 / ICLR 2026 录用版重新核对。录用版摘要中的总体结果为：相对单模型平均准确率提高 <strong>6.4%–14.2%</strong>，相对 Text-to-Text 提高 <strong>3.1%–5.4%</strong>，平均延迟加速 <strong>2.5 倍</strong>。旧版摘要中的 8.5%–10.5%、3.0%–5.0% 和 2.0 倍不再作为本文的最终总括数字。</p>
 </blockquote>
 <hr>
-<h3 id="31-预备">3.1 预备<a hidden class="anchor" aria-hidden="true" href="#31-预备">#</a></h3>
-<p>输入 token 序列：</p>
-$$
-X[0:n] = [x_0, x_1, \dots, x_{n-1}]
-$$<p>prefill 后 LLM 生成 per-token KV-Cache：</p>
-$$
-C(X[0:n]) = [c_0, c_1, \dots, c_{n-1}] \in \mathbb{R}^{n \times d}
-$$<p>其中 $d$ 为 KV 向量维度（将各层/各头的 K/V 展平）。</p>
-<p>Decode 时预测下一个 token：</p>
-$$
-y_{i+1} = P\big(y_i \mid C(X) \oplus C(Y[0:i])\big)
-$$<p>其中 $\oplus$ 表示序列级拼接。</p>
-<hr>
-<h3 id="32-c2c-总体框架">3.2 C2C 总体框架<a hidden class="anchor" aria-hidden="true" href="#32-c2c-总体框架">#</a></h3>
-<p>在 prefill 阶段，令 Fuser 模块 $F_n$ 将 Receiver 第 $n$ 层的 cache $C_n(X)$ 和 Sharer 对应层 $C^S_{G(n)}(X)$（层映射函数为 $G$）融合，得到 fused cache：</p>
-$$
-C^F = {, F_n(C_n(X), C^S_{G(n)}(X)) ,}_{n=1}^N
-$$<p>Decode 时使用 fused cache：</p>
-$$
-y_{i+1} = P\big(y_i \mid C^F(X) \oplus C(Y[0:i])\big)
-$$<p>（参见论文公式 (3) 和 (4)）</p>
-<hr>
-<h3 id="33-c2c-fuser-结构figure-5">3.3 C2C Fuser 结构（Figure 5）<a hidden class="anchor" aria-hidden="true" href="#33-c2c-fuser-结构figure-5">#</a></h3>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure5.png">
-总体三模块设计（Residual Integration）：</p>
-<p><strong>Projection → Dynamic Weighting → Learnable Gate</strong>（Gumbel-sigmoid 训练 → 二值化推理）</p>
-<h4 id="1-projection-module">(1) Projection Module<a hidden class="anchor" aria-hidden="true" href="#1-projection-module">#</a></h4>
-<p>将 Receiver 的 KV 与 Sharer 的 KV 做拼接（concatenate），经过一层或多层投影（例如线性层或小 MLP）以统一维度 / 映射表示；紧接着做 feature fusion（可能是再一层线性/FFN 或跨-head 重组）。（论文在 Appendix 也提到 C2C-C 更复杂的 variant，会先用三层 MLP 投影）。</p>
-<h4 id="2-dynamic-weighting输入感知的-head-modulation">(2) Dynamic Weighting（输入感知的 head modulation）<a hidden class="anchor" aria-hidden="true" href="#2-dynamic-weighting输入感知的-head-modulation">#</a></h4>
-<p>按 attention-head 级别做输入相关的重权重（head-wise modulation），目的是根据当前输入动态调整 Sharer 提供信息的影响力（避免盲目覆盖）。论文称为 “input-aware head modulation”。</p>
-<h4 id="3-learnable-gate可训练门控">(3) Learnable Gate（可训练门控）<a hidden class="anchor" aria-hidden="true" href="#3-learnable-gate可训练门控">#</a></h4>
-<p>每层有一个可学习 gate 值，用 Gumbel-Sigmoid（并在训练时做温度 annealing）从可微分软选择过渡到推理期的硬二值决定（是否把该层的 fused cache 注入）。
-这解决了哪些层应该注入的问题并能学到层选择策略。</p>
-<hr>
-<h3 id="34-model-alignment">3.4 Model Alignment<a hidden class="anchor" aria-hidden="true" href="#34-model-alignment">#</a></h3>
-<ul>
-<li>
-<p><strong>Token 对齐</strong>：将 Receiver token 解码为字符串，然后使用 Sharer tokenizer 重新编码（re-encode）；若出现 one-to-many，用 “maximal-coverage selection” （选择字符串覆盖最长的 token）作为默认策略（论文观察两种策略差异不大但 maximal-coverage 更安全）。对 template（系统角色/格式化 tokens）部分用 padding 匹配长度。</p>
-</li>
-<li>
-<p><strong>Layer 对齐（Layer mapping）</strong>：采用 <strong>terminal alignment</strong>（从输出侧开始对齐：最后一层对最后一层、倒数第二对倒数第二，以此类推），作者在 Appendix 比较了 depth-normalized alignment 并选择 terminal alignment，因为 empirical 效果更好。</p>
-</li>
-</ul>
-<hr>
-<h3 id="35-训练方案">3.5 训练方案<a hidden class="anchor" aria-hidden="true" href="#35-训练方案">#</a></h3>
-<p>冻结 Sharer 和 Receiver 模型参数，仅训练 C2C 模块（Fuser）。
-监督目标是 Receiver 在使用 fused cache 下的 next-token 预测（SFT 风格），即最小化标准交叉熵：</p>
-$$
-\mathcal{L}_{\text{C2C}} = -\sum_i \log P_\theta\left(y_i \mid C^F(X), Y[0:i-1]\right)
-$$<p>训练步骤：</p>
+<h2 id="abstract">Abstract<a hidden class="anchor" aria-hidden="true" href="#abstract">#</a></h2>
+<p>多模型系统希望把不同 LLM 的能力组合起来：代码模型理解程序结构，数学模型提供推导能力，通用模型负责遵循指令和组织答案。常规做法是让前一个模型把自己的理解写成文本，再交给后一个模型。这个接口通用、可读，却有两个结构性问题：</p>
 <ol>
-<li>Forward：两模型产生 cache</li>
-<li>Fusion：C2C 生成 fused cache</li>
-<li>Supervision：Receiver 用 fused cache decode，loss 反传回 C2C</li>
+<li>高维内部表示必须先压缩成一串离散 token，部分语义、位置关系和不确定性会丢失；</li>
+<li>中间消息必须自回归地逐 token 生成，通信延迟会随消息长度增长。</li>
 </ol>
-<p>训练数据：主要使用 OpenHermes-2.5 的前 500k 样本训练；优化器与超参：
-</p>
+<p>C2C 把 Transformer 推理时已经产生的 KV Cache 当作通信载体。Sharer 和 Receiver 分别对同一输入进行 prefill，轻量的 Cache Fuser 对齐两边的 token 和层，将 Sharer Cache 投影到 Receiver 的表示空间，经过输入相关的 head 权重和逐层二值门控后，残差加入 Receiver Cache。两个 LLM 本体保持冻结，只训练 Fuser。</p>
+<p>论文先用两个 oracle 实验回答“Cache 是否值得传”和“跨模型 Cache 是否能转换”，再在不同模型家族、规模、专业领域和训练阶段上验证 C2C。结果说明：</p>
+<ul>
+<li>同样长度的 Cache 仅因编码语义更丰富，就能把准确率从 58.42% 提高到 62.34%；</li>
+<li>不同模型的 Cache 分布差异很大，但一个小型 MLP 可以把源 Cache 映射进目标表示空间；</li>
+<li>C2C 在主要实验中同时优于 Receiver、Sharer、Query Routing 和 T2T；</li>
+<li>T2T 的主要额外成本来自 Sharer 串行生成通信文本，而 C2C 用并行 Cache 融合替代这段解码；</li>
+<li>C2C 不是无条件增益：弱 Sharer 的错误表示也可能污染强 Receiver，而且每个模型对都需要适配器，规模化训练仍是开放问题。</li>
+</ul>
+<p><img alt="C2C 论文标题与作者" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/title.png"></p>
+<hr>
+<h2 id="1-background-llm-之间为什么需要通信">1. Background: LLM 之间为什么需要通信？<a hidden class="anchor" aria-hidden="true" href="#1-background-llm-之间为什么需要通信">#</a></h2>
+<h3 id="11-单模型路由与协作不是同一件事">1.1 单模型、路由与协作不是同一件事<a hidden class="anchor" aria-hidden="true" href="#11-单模型路由与协作不是同一件事">#</a></h3>
+<p>设系统中有一个数学模型、一个代码模型和一个通用对话模型，面对“分析一段数值程序并解释算法复杂度”的请求时，有三种典型方案：</p>
+<ul>
+<li><strong>单模型：</strong> 只调用一个模型，系统简单，但能力上限受该模型限制；</li>
+<li><strong>路由：</strong> 先判断请求更像数学还是代码，再选择其中一个模型；它减少成本，却没有把多个模型的知识合在同一次回答里；</li>
+<li><strong>协作：</strong> 让多个模型读取问题并交换理解，最终由某个模型输出答案。</li>
+</ul>
+<p>C2C 研究的是第三种。它并不是“挑一个更合适的模型”，而是让 Receiver 在生成答案时实际使用 Sharer 对同一上下文形成的内部表示。</p>
+<h3 id="12-text-to-text-通信如何工作">1.2 Text-to-Text 通信如何工作？<a hidden class="anchor" aria-hidden="true" href="#12-text-to-text-通信如何工作">#</a></h3>
+<p>传统 T2T 流程可以写成：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>输入 X
+</span></span><span style="display:flex;"><span> ├─→ Sharer 读取 X
+</span></span><span style="display:flex;"><span> │      ↓ 自回归生成
+</span></span><span style="display:flex;"><span> │   中间分析文本 M
+</span></span><span style="display:flex;"><span> │
+</span></span><span style="display:flex;"><span> └─→ Receiver 读取 [X; M]
+</span></span><span style="display:flex;"><span>        ↓
+</span></span><span style="display:flex;"><span>      最终答案 Y
+</span></span></code></pre></div><p>概率分解为：</p>
 $$
-\text{lr}=1\times10^{-4}, \text{ weight decay}=0.01, \text{warmup}=10%, T_{init}=1.0 \rightarrow T_{final}=0.001
-$$<p>
-固定随机种子 42。</p>
-<hr>
-<h2 id="-evaluation">📊 Evaluation<a hidden class="anchor" aria-hidden="true" href="#-evaluation">#</a></h2>
-<h3 id="数据集与设置">数据集与设置<a hidden class="anchor" aria-hidden="true" href="#数据集与设置">#</a></h3>
+p(M,Y\mid X)
+{}={}
+p(M\mid X)\,
+p(Y\mid X,M).
+$$<p>这个接口的优势很明显：不要求两个模型结构相同，也便于人类审计中间消息。但中间文本 \(M\) 同时也是通信瓶颈：</p>
 <ul>
-<li><strong>Benchmarks</strong>：OpenBookQA, MMLU-Redux, ARC-Challenge (ARC-C), C-Eval（中文）以及 LongBench（长上下文任务）。</li>
-<li><strong>设置</strong>：zero-shot，greedy 解码（temperature=0），多选题最大生成长度 = 64。</li>
-<li><strong>设备</strong>：NVIDIA A100，batch=1。</li>
+<li>Sharer 知道的内容不一定能用短句完整表达；</li>
+<li>错误、歧义或格式偏差会被 Receiver 当成新上下文；</li>
+<li>生成 \(M\) 必须执行多次串行 decode；</li>
+<li>Receiver 还要重新 prefill 更长的 \([X;M]\)。</li>
+</ul>
+<h3 id="13-prefilldecode-与-kv-cache">1.3 Prefill、Decode 与 KV Cache<a hidden class="anchor" aria-hidden="true" href="#13-prefilldecode-与-kv-cache">#</a></h3>
+<p>自回归 Transformer 推理分为两个阶段。</p>
+<p><strong>Prefill</strong> 一次并行读取完整输入，计算各层注意力中的 Key 和 Value。设输入为</p>
+$$
+X_{0:n}=[x_0,x_1,\ldots,x_{n-1}],
+$$<p>论文将每个 token 在所有层上的 K/V 表示展平记为 \(c_i\)，于是：</p>
+$$
+\mathcal C(X_{0:n})
+{}={}
+[c_0,c_1,\ldots,c_{n-1}]
+\in\mathbb R^{n\times d}.
+$$<p>实际实现中 Cache 仍按“层、K/V、head、序列位置、head dimension”保存；上式只是为了简化记号。</p>
+<p><strong>Decode</strong> 每次只生成一个新 token，并把这个 token 的 K/V 追加到缓存。论文写成：</p>
+$$
+y_{i+1}
+{}={}
+\mathcal P\!\left(
+y_i\mid
+\mathcal C(X)\oplus\mathcal C(Y_{0:i})
+\right),
+$$<p>其中 \(\oplus\) 表示沿序列维拼接。KV Cache 避免了每一步重新计算旧 token 的 K/V，却不能消除新 token 之间的因果依赖。</p>
+<h3 id="14-为什么-cache-可能比文本更适合通信">1.4 为什么 Cache 可能比文本更适合通信？<a hidden class="anchor" aria-hidden="true" href="#14-为什么-cache-可能比文本更适合通信">#</a></h3>
+<p>可以把文本看成模型最终决定“说出来”的离散摘要，而 Cache 保留了模型处理每个输入位置时形成的连续表示。它可能包含：</p>
+<ul>
+<li>token 的上下文含义；</li>
+<li>代码括号、标签或引用对应的精确位置；</li>
+<li>不同注意力 head 关注的关系；</li>
+<li>尚未被压缩成一句结论的多种证据。</li>
+</ul>
+<p>但 Cache 也不是一种天然通用的“模型语言”。不同模型的 tokenizer、层数、head 数量、head dimension 和表示分布都可能不同。因此，“把 A 的 Cache 直接塞给 B”通常不会工作，C2C 的核心任务正是学习这层翻译。</p>
+<hr>
+<h2 id="2-motivation-文本丢掉了什么">2. Motivation: 文本丢掉了什么？<a hidden class="anchor" aria-hidden="true" href="#2-motivation-文本丢掉了什么">#</a></h2>
+<p><img alt="T2T 与 C2C 的通信路径对比" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure1.png"></p>
+<p>论文用一个 Coder–Writer 例子解释信息瓶颈。用户给出一段 HTML，并要求把自我介绍插入正确位置。Coder 的内部表示同时知道：</p>
+<ul>
+<li>p 是段落开始标签；</li>
+<li>内容应插在 p 开始标签后、结束标签前；</li>
+<li>该位置处于 section 内。</li>
+</ul>
+<p>如果 Coder 只生成一句 “Write content inside the section wrapper”，Writer 可能只理解“写在 section 中”，却不知道 p 标签的结构语义和精确插入点。T2T 中丢失的不是某个关键词，而是<strong>词义与输入位置之间的绑定关系</strong>。</p>
+<p><img alt="Coder–Writer 示例：中间文本与直接 Cache 通信" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure2.png"></p>
+<p>C2C 希望直接传递 Coder 对原始 HTML 每个位置形成的 Cache 表示。Writer 不必猜测自然语言中的 “inside” 到底指哪个位置，而能从被映射的表示中恢复更细粒度的结构理解。</p>
+<p>论文将 T2T 的问题归纳为三点：</p>
+<ol>
+<li><strong>低带宽：</strong> 高维连续表示被压成线性 token 序列；</li>
+<li><strong>歧义：</strong> 自然语言无法保证对位置、结构和隐含关系的唯一表达；</li>
+<li><strong>高延迟：</strong> 每一条中间消息都要逐 token 解码。</li>
+</ol>
+<p>不过，这仍只是动机。Cache 是否真的携带“额外有用语义”，以及不同模型的 Cache 能否相互转换，需要由实验验证。</p>
+<hr>
+<h2 id="3-two-oracles-先验证值得传和能够传">3. Two Oracles: 先验证“值得传”和“能够传”<a hidden class="anchor" aria-hidden="true" href="#3-two-oracles-先验证值得传和能够传">#</a></h2>
+<h3 id="31-cache-enrichment-oracle固定长度只改变表示质量">3.1 Cache Enrichment Oracle：固定长度，只改变表示质量<a hidden class="anchor" aria-hidden="true" href="#31-cache-enrichment-oracle固定长度只改变表示质量">#</a></h3>
+<p>few-shot prompting 同时改变了两件事：</p>
+<ul>
+<li>模型看到额外示例；</li>
+<li>KV Cache 变长。</li>
+</ul>
+<p>如果准确率提高，无法判断是示例让问题 token 的表示更好，还是 decode 时直接注意到了更多示例 token。作者设计三种设置隔离这两个因素。令 \(E\) 为 few-shot 示例，\(X\) 为待回答问题：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Setting</th>
+          <th style="text-align: left">Prefill 输入</th>
+          <th style="text-align: left">Decode 使用的 Cache</th>
+          <th style="text-align: right">Cache 长度</th>
+          <th style="text-align: right">Accuracy</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Direct</td>
+          <td style="text-align: left">\(X\)</td>
+          <td style="text-align: left">\(\mathcal C(X)\)</td>
+          <td style="text-align: right">(</td>
+          <td style="text-align: right">X</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Few-shot</td>
+          <td style="text-align: left">\(E\oplus X\)</td>
+          <td style="text-align: left">\(\mathcal C(E\oplus X)\)</td>
+          <td style="text-align: right">(</td>
+          <td style="text-align: right">E</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Oracle</td>
+          <td style="text-align: left">\(E\oplus X\)</td>
+          <td style="text-align: left">只保留对应 \(X\) 的切片</td>
+          <td style="text-align: right">(</td>
+          <td style="text-align: right">X</td>
+      </tr>
+  </tbody>
+</table>
+<p>Oracle Cache 定义为：</p>
+$$
+\mathcal C^{*}(X)
+{}={}
+\mathcal C_{[|E|:|E|+|X|]}(E\oplus X).
+$$<p>关键操作发生在 prefill 之后：模型先让示例 \(E\) 影响问题 \(X\) 的隐藏表示，再删除示例自身对应的 Cache，只保留与问题等长的部分。</p>
+<p>Direct 与 Oracle 的 Cache 长度完全相同，但准确率从 58.42% 提高到 62.34%。因此，增益不能只解释为“多看了几个 token”；示例已经改变了模型<strong>如何编码问题本身</strong>。</p>
+<h3 id="32-不是每一层都适合被增强">3.2 不是每一层都适合被增强<a hidden class="anchor" aria-hidden="true" href="#32-不是每一层都适合被增强">#</a></h3>
+<p>论文在 Qwen3-0.6B 的 28 层中逐层替换 Cache。未增强基线是 58.42%，只有第 4 层和第 16 层略有提升，分别达到 58.52% 和 58.45%；其他单层替换大多下降。</p>
+<p>进一步把单层实验中表现最好的层按顺序累积：</p>
+<ul>
+<li>选择 Top-K 层时，增加若干优质层会继续改善；</li>
+<li>选择 Last-K，即从最差的层开始增强，准确率明显下降；</li>
+<li>全部层都替换并不优于精选层。</li>
+</ul>
+<p>这直接导出 C2C 的逐层 gate：通信不能理解为“注入越多越好”，模型必须决定哪些层值得接收外部表示。</p>
+<h3 id="33-cache-transformation-oracle跨模型表示是否可转换">3.3 Cache Transformation Oracle：跨模型表示是否可转换？<a hidden class="anchor" aria-hidden="true" href="#33-cache-transformation-oracle跨模型表示是否可转换">#</a></h3>
+<p>作者用一个三层 MLP，将 Qwen3-4B 最后一层 Cache 映射到 Qwen3-0.6B 最后一层 Cache。训练目标不是回答损失，而是映射后 Cache 与目标 Cache 的均方误差：</p>
+$$
+\mathcal L_{\text{MSE}}
+{}={}
+\left\|
+f_K(K^{S})-K^{R}
+\right\|_2^2
+{}+{}
+\left\|
+f_V(V^{S})-V^{R}
+\right\|_2^2.
+$$<p>实验在 MMLU-Redux 上训练，随机选择 300 个样本做 t-SNE，可视化使用 perplexity 50、最多 1000 次迭代。</p>
+<p><img alt="Cache 转换、分层增强与有效秩分析" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/f34t12.png"></p>
+<p>原始 Source KV 与 Target KV 相距很远；映射后的 Cache 落进 Target 分布内部，说明跨模型转换具有可行性。但它只覆盖 Target 空间的一个子集。这一点很重要：</p>
+<ul>
+<li>大模型的 Cache 不是小模型 Cache 的超集；</li>
+<li>参数量更大不代表表示方式完全包含另一个模型；</li>
+<li>不同模型即使总体准确率相近，正确题集合也可能只有有限重叠。</li>
+</ul>
+<p>所以合理目标不是用 Sharer 覆盖 Receiver，而是保留 Receiver 自身表示，再选择性地注入互补信息。</p>
+<hr>
+<h2 id="4-method-cache-to-cache-如何工作">4. Method: Cache-to-Cache 如何工作？<a hidden class="anchor" aria-hidden="true" href="#4-method-cache-to-cache-如何工作">#</a></h2>
+<h3 id="41-sharerreceiver-与整体流程">4.1 Sharer、Receiver 与整体流程<a hidden class="anchor" aria-hidden="true" href="#41-sharerreceiver-与整体流程">#</a></h3>
+<ul>
+<li><strong>Sharer：</strong> 提供对输入的上下文理解或知识；</li>
+<li><strong>Receiver：</strong> 使用融合后的表示并生成最终回答；</li>
+<li><strong>Fuser：</strong> 在两者之间完成 Cache 映射、融合和选择。</li>
+</ul>
+<p>一次推理可以分成五步：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>同一输入 X
+</span></span><span style="display:flex;"><span> ├─→ Sharer prefill  → Sharer KV Cache
+</span></span><span style="display:flex;"><span> └─→ Receiver prefill → Receiver KV Cache
+</span></span><span style="display:flex;"><span>                 │
+</span></span><span style="display:flex;"><span>       token alignment + layer alignment
+</span></span><span style="display:flex;"><span>                 │
+</span></span><span style="display:flex;"><span>             Cache Fuser
+</span></span><span style="display:flex;"><span>                 │
+</span></span><span style="display:flex;"><span>         Receiver fused KV Cache
+</span></span><span style="display:flex;"><span>                 │
+</span></span><span style="display:flex;"><span>       Receiver 自回归生成最终回答
+</span></span></code></pre></div><p>注意：C2C 消除的是 <strong>Sharer 生成中间文本</strong> 的过程，不是 Receiver 的最终答案 decode。Sharer 仍需对输入执行一次 prefill，Receiver 也仍需生成最终答案。</p>
+<h3 id="42-残差式-cache-融合">4.2 残差式 Cache 融合<a hidden class="anchor" aria-hidden="true" href="#42-残差式-cache-融合">#</a></h3>
+<p>设 Receiver 有 \(N\) 个参与融合的层，\(\mathcal G(n)\) 表示 Receiver 第 \(n\) 层对应的 Sharer 层。录用版将融合 Cache 明确写成残差形式：</p>
+$$
+\mathcal C^{F}
+{}={}
+\left\{
+\mathcal C_n(X)
+{}+{}
+\mathcal F_n\!\left(
+\mathcal C_n(X),
+\mathcal C^{S}_{\mathcal G(n)}(X)
+\right)
+\right\}_{n=1}^{N}.
+$$<p>Receiver 自己的 \(\mathcal C_n(X)\) 是主干，Fuser 只预测应当加入的增量。之后 Receiver 用融合后的输入 Cache 与已经生成的回答 Cache 继续解码：</p>
+$$
+y_{i+1}
+{}={}
+\mathcal P\!\left(
+y_i\mid
+\mathcal C^{F}(X)\oplus
+\mathcal C(Y_{0:i})
+\right).
+$$<p>残差连接解决了一个关键风险：如果直接用投影后的 Sharer Cache 覆盖 Receiver Cache，映射误差会破坏 Receiver 原有能力。实验中这种纯 Project 方案的平均准确率只有 20.70%，远低于保留 Receiver Cache 的 +Fuse 方案 44.88%。</p>
+<h3 id="43-fuser-的三个组件">4.3 Fuser 的三个组件<a hidden class="anchor" aria-hidden="true" href="#43-fuser-的三个组件">#</a></h3>
+<p><img alt="C2C Cache Fuser 结构" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/figure5.png"></p>
+<h4 id="431-projection">4.3.1 Projection<a hidden class="anchor" aria-hidden="true" href="#431-projection">#</a></h4>
+<p>每层先拼接 Sharer 与 Receiver 的 Cache 特征，再通过投影层和 feature-fusion 层，学习跨表示空间的转换。</p>
+<p>这里不能把 Projection 简化理解为“让维度相同”。即使两个模型的 head dimension 一样，坐标系和语义分布仍然不同；投影必须同时学习<strong>维度兼容</strong>和<strong>语义转换</strong>。</p>
+<h4 id="432-dynamic-weighting">4.3.2 Dynamic Weighting<a hidden class="anchor" aria-hidden="true" href="#432-dynamic-weighting">#</a></h4>
+<p>映射后的特征经过输入相关的 attention-head modulation。它针对当前 query 调节不同 head 的注入强度。</p>
+<p>可以把它理解为连续控制：</p>
+<ul>
+<li>某个输入可能需要 Sharer 的代码结构 head；</li>
+<li>另一个输入可能几乎不需要该 head；</li>
+<li>即使某层 gate 打开，也不代表注入强度固定。</li>
+</ul>
+<p>论文没有给出一个可独立复现全部实现细节的简化标量公式，因此这里不额外虚构形式；核心是 <strong>per-query、head-wise 的连续重加权</strong>。</p>
+<h4 id="433-learnable-gate">4.3.3 Learnable Gate<a hidden class="anchor" aria-hidden="true" href="#433-learnable-gate">#</a></h4>
+<p>每一层有一个可训练 gate，决定是否将该层的融合增量加入 Receiver。训练时用 Gumbel-Sigmoid 保持可微，并将温度从 1.0 线性退火到 0.001；推理时 gate 变为二值选择。</p>
+<p>Dynamic Weighting 与 Gate 的分工不同：</p>
+<ul>
+<li>Gate 回答“这一层是否接收外部信息”；</li>
+<li>Dynamic Weighting 回答“打开以后，各 head 接收多少”。</li>
+</ul>
+<h3 id="44-token-alignment不同-tokenizer-怎么对齐">4.4 Token Alignment：不同 tokenizer 怎么对齐？<a hidden class="anchor" aria-hidden="true" href="#44-token-alignment不同-tokenizer-怎么对齐">#</a></h3>
+<p>同一句话在两个 tokenizer 下可能得到不同 token。例如 “Cache-to-Cache” 可能被一个模型分成 3 个 token，另一个模型分成 5 个。若位置没有对齐，Receiver 第 \(i\) 个 token 可能错误融合 Sharer 第 \(i\) 个完全不同的片段。</p>
+<p>论文先把 chat input 分成两类区域。</p>
+<p><strong>Template sections</strong> 是角色分隔符、格式控制符等结构 token。它们不承载主要语义，但不同 tokenizer 的模板长度可能不同。作者用 pad token 补齐较短一侧，使两边位置长度一致。</p>
+<p><strong>Message sections</strong> 是用户或助手的真实文本。对每个 Receiver token：</p>
+<ol>
+<li>解码为字符串；</li>
+<li>用 Sharer tokenizer 重新编码；</li>
+<li>若得到一个 token，直接一一映射；</li>
+<li>若得到多个候选 token，选择解码后字符串覆盖最长的一个。</li>
+</ol>
+<p>附录还比较了“选择第一个候选”的策略。两种方法在超过 80% 的序列上产生相同对齐；作者选择 maximal coverage，以降低 one-to-many 情况下丢失表面信息的风险。</p>
+<p>这仍是启发式对齐，不是严格语义等价。一个 Receiver token 对应多个 Sharer token 时只保留一个，细粒度信息仍可能损失。</p>
+<h3 id="45-layer-alignment不同层数怎么对应">4.5 Layer Alignment：不同层数怎么对应？<a hidden class="anchor" aria-hidden="true" href="#45-layer-alignment不同层数怎么对应">#</a></h3>
+<p>作者比较了两种方案。</p>
+<p><strong>Terminal alignment</strong> 从输出侧向前配对：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>Receiver 最后一层 ↔ Sharer 最后一层
+</span></span><span style="display:flex;"><span>Receiver 倒数第二层 ↔ Sharer 倒数第二层
+</span></span><span style="display:flex;"><span>...
+</span></span><span style="display:flex;"><span>直到较浅模型的第一层
+</span></span></code></pre></div><p><strong>Depth-normalized alignment</strong> 将层编号归一化到 \([0,1]\)。若较浅模型有 \(L_{\min}\) 层，较深模型有 \(L_{\max}\) 层，则 anchor 层 \(i\) 对应：</p>
+$$
+j^{*}
+{}={}
+\arg\min_j
+\left|
+\frac{i}{L_{\min}-1}
+{}-{}
+\frac{j}{L_{\max}-1}
+\right|.
+$$<p>C2C 最终采用 terminal alignment，因为它更简单，而且实验中略好。直觉上，越靠近输出的深层越接近最终语义决策，优先对齐这些层比均匀覆盖深度更重要。</p>
+<h3 id="46-training-objective">4.6 Training Objective<a hidden class="anchor" aria-hidden="true" href="#46-training-objective">#</a></h3>
+<p>Sharer 和 Receiver 的参数全部冻结，只训练 Fuser。给定目标回答 \(Y=(y_1,\ldots,y_T)\)，训练损失是标准 next-token cross entropy：</p>
+$$
+\mathcal L_{\text{C2C}}
+{}={}
+{}-{}
+\sum_{t=1}^{T}
+\log
+p_\theta
+\left(
+y_t
+\mid
+\mathcal C^{F}(X),
+y_{1:t-1}
+\right),
+$$<p>其中 \(\theta\) 只属于 C2C 模块。训练过程为：</p>
+<ol>
+<li>两个冻结模型分别 prefill 输入并产生 Cache；</li>
+<li>Fuser 对齐并融合 Cache；</li>
+<li>Receiver 在 fused Cache 条件下 prefill 目标回答；</li>
+<li>梯度穿过 Receiver 的计算图回传到 Fuser，但不更新 Receiver 权重。</li>
+</ol>
+<h3 id="47-训练数据与超参数">4.7 训练数据与超参数<a hidden class="anchor" aria-hidden="true" href="#47-训练数据与超参数">#</a></h3>
+<p>不同实验使用不同数据，不应混在一起：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Experiment</th>
+          <th style="text-align: left">Training data</th>
+          <th style="text-align: right">Max length</th>
+          <th style="text-align: right">Samples</th>
+          <th style="text-align: right">Macro batch</th>
+          <th style="text-align: right">Steps</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">主性能实验</td>
+          <td style="text-align: left">OpenHermes-2.5</td>
+          <td style="text-align: right">2,048</td>
+          <td style="text-align: right">500,000</td>
+          <td style="text-align: right">256</td>
+          <td style="text-align: right">1,929</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">长序列缩放</td>
+          <td style="text-align: left">LongBench-E</td>
+          <td style="text-align: right">12,000</td>
+          <td style="text-align: right">1,896</td>
+          <td style="text-align: right">16</td>
+          <td style="text-align: right">118</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">模型规模/异构组合</td>
+          <td style="text-align: left">MMLU auxiliary_train</td>
+          <td style="text-align: right">1,024</td>
+          <td style="text-align: right">15,000</td>
+          <td style="text-align: right">128</td>
+          <td style="text-align: right">116</td>
+      </tr>
+  </tbody>
+</table>
+<p>统一设置包括：</p>
+<ul>
+<li>one epoch；</li>
+<li>learning rate \(1\times10^{-4}\)，linear scheduler；</li>
+<li>warmup 10%，weight decay 0.01；</li>
+<li>gradient norm 上限 1；</li>
+<li>Gumbel temperature 从 1.0 退火到 0.001；</li>
+<li>random seed 42；</li>
+<li>数据按 99%/1% 切为训练与监控用验证集。</li>
 </ul>
 <hr>
-<h3 id="对比基线">对比基线<a hidden class="anchor" aria-hidden="true" href="#对比基线">#</a></h3>
+<h2 id="5-evaluation-setup">5. Evaluation Setup<a hidden class="anchor" aria-hidden="true" href="#5-evaluation-setup">#</a></h2>
+<h3 id="51-models">5.1 Models<a hidden class="anchor" aria-hidden="true" href="#51-models">#</a></h3>
+<p>论文覆盖 Qwen2.5、Qwen3、Llama 3.2 和 Gemma 3，组合差异包括：</p>
 <ul>
-<li>Receiver 单独运行（baseline）</li>
-<li>Sharer 单独运行（对比）</li>
-<li>Query-level routing（将难题路由到强模型）</li>
-<li>Text-to-Text（T2T）：Sharer 生成 “分析/关键信息” 文本拼接到 Receiver 输入中。</li>
+<li>不同代际：Qwen2.5 与 Qwen3；</li>
+<li>不同家族：Qwen、Llama、Gemma；</li>
+<li>不同规模：0.6B 到 14B；</li>
+<li>不同专长：通用、数学、代码；</li>
+<li>不同训练阶段：base 与 instruction-tuned。</li>
+</ul>
+<p>主结果固定 Receiver 为 Qwen3-0.6B，分别搭配 Qwen2.5-0.5B-Instruct、Llama3.2-1B-Instruct 和 Qwen3-4B-Base。</p>
+<h3 id="52-benchmarks">5.2 Benchmarks<a hidden class="anchor" aria-hidden="true" href="#52-benchmarks">#</a></h3>
+<ul>
+<li><strong>MMLU-Redux：</strong> 广泛领域知识，去除了原 MMLU 中一批有问题的样本；</li>
+<li><strong>OpenBookQA：</strong> 基于科学事实的问答与推理；</li>
+<li><strong>ARC-Challenge：</strong> 较难的科学和逻辑推理；</li>
+<li><strong>C-Eval：</strong> 中文多领域知识；</li>
+<li><strong>LongBench-E：</strong> 13 个长上下文子数据集。</li>
+</ul>
+<p>多选题使用 zero-shot、greedy decoding、temperature 0，Receiver 最大生成 64 token。T2T 的中间通信最多 256 token。LongBench 最大输出 2,048 token。时间在单张 NVIDIA A100、batch size 1 上测量。</p>
+<h3 id="53-baselines">5.3 Baselines<a hidden class="anchor" aria-hidden="true" href="#53-baselines">#</a></h3>
+<ul>
+<li><strong>Receiver-only / Sharer-only：</strong> 单模型下界；</li>
+<li><strong>Query-level Routing：</strong> 估计问题难度，上半难题交给强模型、下半交给弱模型；</li>
+<li><strong>Text-to-Text：</strong> Sharer 先生成一句解题所需的关键背景，Receiver 再读取原问题与该消息；</li>
+<li><strong>C2C：</strong> 不生成中间文本，直接融合 Cache。</li>
+</ul>
+<p>Routing 的目标偏向性能–成本折中，它一次仍只使用一个模型，因此无法获得“两个模型共同理解同一问题”的协作增益。</p>
+<hr>
+<h2 id="6-main-results">6. Main Results<a hidden class="anchor" aria-hidden="true" href="#6-main-results">#</a></h2>
+<h3 id="61-accuracy">6.1 Accuracy<a hidden class="anchor" aria-hidden="true" href="#61-accuracy">#</a></h3>
+<p><img alt="四个 benchmark 上不同通信方式的准确率与时间" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/table3.png"></p>
+<p>在三种 Sharer 设置上，C2C 相对固定 Receiver 的四任务平均准确率分别提高：</p>
+<ul>
+<li>Qwen2.5-0.5B Sharer：<strong>11.00 个百分点</strong>；</li>
+<li>Llama3.2-1B Sharer：<strong>9.64 个百分点</strong>；</li>
+<li>Qwen3-4B-Base Sharer：<strong>11.88 个百分点</strong>。</li>
+</ul>
+<p>相对 T2T，平均分别再提高 <strong>5.36、4.15、3.06 个百分点</strong>。</p>
+<p>以 Qwen2.5-0.5B → Qwen3-0.6B 为例：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Benchmark</th>
+          <th style="text-align: right">Receiver</th>
+          <th style="text-align: right">Sharer</th>
+          <th style="text-align: right">Routing</th>
+          <th style="text-align: right">T2T</th>
+          <th style="text-align: right">C2C</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">MMLU-Redux</td>
+          <td style="text-align: right">35.53</td>
+          <td style="text-align: right">38.42</td>
+          <td style="text-align: right">35.58</td>
+          <td style="text-align: right">41.03</td>
+          <td style="text-align: right"><strong>42.92</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">OpenBook</td>
+          <td style="text-align: right">39.20</td>
+          <td style="text-align: right">45.60</td>
+          <td style="text-align: right">40.80</td>
+          <td style="text-align: right">44.00</td>
+          <td style="text-align: right"><strong>52.60</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">ARC-C</td>
+          <td style="text-align: right">41.04</td>
+          <td style="text-align: right">42.09</td>
+          <td style="text-align: right">40.70</td>
+          <td style="text-align: right">49.48</td>
+          <td style="text-align: right"><strong>54.52</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">C-Eval</td>
+          <td style="text-align: right">32.04</td>
+          <td style="text-align: right">40.21</td>
+          <td style="text-align: right">34.61</td>
+          <td style="text-align: right">35.88</td>
+          <td style="text-align: right"><strong>41.77</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>这里最值得注意的不是 C2C 简单追上更强模型，而是它经常超过两个单模型。例如 OpenBook 上 Receiver 为 39.20、Sharer 为 45.60，融合后达到 52.60，说明结果不是纯粹选择或复制一方答案。</p>
+<p>Qwen3-4B-Base 的 standalone 准确率异常低，因为 base model 不稳定遵循多选题输出格式；T2T 也会被冗长、跑题的中间文本拖慢。C2C 不要求 base model 输出可读指令，却能利用其 prefill 表示。这展示了 latent communication 的独特用法：<strong>Sharer 可以“不会好好说”，但仍然“知道一些东西”。</strong></p>
+<h3 id="62-latency-加速到底来自哪里">6.2 Latency: 加速到底来自哪里？<a hidden class="anchor" aria-hidden="true" href="#62-latency-加速到底来自哪里">#</a></h3>
+<p><img alt="MMLU-Redux 上 token 数量和延迟分解" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/latency-breakdown.png"></p>
+<p>Qwen2.5-0.5B → Qwen3-0.6B 在 MMLU-Redux 上：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Method</th>
+          <th style="text-align: right">Sharer output tokens</th>
+          <th style="text-align: right">Sharer decode</th>
+          <th style="text-align: right">Fusion</th>
+          <th style="text-align: right">Total</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">T2T</td>
+          <td style="text-align: right">80</td>
+          <td style="text-align: right">1,312 ms</td>
+          <td style="text-align: right">—</td>
+          <td style="text-align: right">1,596 ms</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">C2C</td>
+          <td style="text-align: right">0</td>
+          <td style="text-align: right">0 ms</td>
+          <td style="text-align: right">90 ms</td>
+          <td style="text-align: right">445 ms</td>
+      </tr>
+  </tbody>
+</table>
+<p>T2T 的 Receiver 因为要读取原问题和中间消息，input token 从 Receiver-only 的 170 增加到 332；C2C 两边都只处理原始 170 token。C2C 的主要收益是用约 90 ms 的并行 Cache fusion 替代 1,312 ms 的 Sharer 串行解码。</p>
+<p>三种主设置相对 T2T 的加速分别为 <strong>3.46×、1.51×、14.41×</strong>。极端差异与模型输出行为有关：</p>
+<ul>
+<li>Llama3.2 经常只输出一个选项字母，T2T 本来就很快，因此 C2C 相对加速较小；</li>
+<li>Qwen3-4B-Base 容易忽略格式并输出长文本，T2T 极慢，C2C 加速非常大。</li>
+</ul>
+<p>所以“平均 2.5×”不是固定硬件常数。真实收益依赖 Sharer 的解码长度、模型实现、Fuser 成本和最终任务输出长度。</p>
+<h3 id="63-long-context">6.3 Long Context<a hidden class="anchor" aria-hidden="true" href="#63-long-context">#</a></h3>
+<p><img alt="长序列缩放与增益来源消融" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/scaling-ablation.png"></p>
+<p>Qwen2.5-0.5B Sharer 与 Qwen3-0.6B Receiver 在 LongBenchV1 上：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Input length</th>
+          <th style="text-align: right">Receiver</th>
+          <th style="text-align: right">Sharer</th>
+          <th style="text-align: right">T2T</th>
+          <th style="text-align: right">C2C</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">0–4k</td>
+          <td style="text-align: right">30.52</td>
+          <td style="text-align: right">24.94</td>
+          <td style="text-align: right">33.46</td>
+          <td style="text-align: right"><strong>37.31</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">4–8k</td>
+          <td style="text-align: right">26.03</td>
+          <td style="text-align: right">23.18</td>
+          <td style="text-align: right">29.70</td>
+          <td style="text-align: right"><strong>34.01</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">8k+</td>
+          <td style="text-align: right">25.99</td>
+          <td style="text-align: right">16.44</td>
+          <td style="text-align: right">25.64</td>
+          <td style="text-align: right"><strong>30.72</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>C2C 在三个长度区间都优于 T2T。它没有让长上下文计算消失：两个模型仍需 prefill 长输入，Fuser 也要处理相应 Cache；结果只说明在这些区间内，直接表示融合的质量优势仍存在。</p>
+<h3 id="64-model-size-scaling">6.4 Model Size Scaling<a hidden class="anchor" aria-hidden="true" href="#64-model-size-scaling">#</a></h3>
+<p>随着 Sharer 从 Qwen2.5-0.5B 增大到 14B，C2C 给不同 Qwen3 Receiver 带来的准确率增益总体增长得比 T2T 快。较小 Receiver 获益最大；Receiver 本身越强，和 Sharer 的知识重叠越多，相对增益越小。</p>
+<p>这符合互补性的解释：通信的上限不仅取决于 Sharer 有多强，还取决于 Sharer 拥有多少 Receiver 尚未掌握、且 Fuser 能转换的表示。</p>
+<h3 id="65-heterogeneous-and-swap-settings">6.5 Heterogeneous and Swap Settings<a hidden class="anchor" aria-hidden="true" href="#65-heterogeneous-and-swap-settings">#</a></h3>
+<p><img alt="异构模型与 Sharer/Receiver 互换实验" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/heterogeneous.png"></p>
+<p>论文测试 Gemma、Math、Coder 作为 Sharer，并交换 Qwen2.5-0.5B 与 Qwen3-0.6B 的角色。五个组合上，C2C 在 MMLU-Redux 平均比 T2T 高 <strong>8.59 个百分点</strong>。</p>
+<p>一个反直觉结果是：Qwen2.5-Coder-0.5B standalone 只有 25.09，但作为 Sharer 后 C2C 达到 46.89。这再次说明：</p>
+<ul>
+<li>Sharer standalone 低分可能来自输出格式、指令跟随或任务不匹配；</li>
+<li>prefill Cache 仍可能提供 Receiver 可用的局部表示；</li>
+<li>协作价值不能只由 Sharer 的最终答案准确率判断。</li>
+</ul>
+<p>角色互换后，C2C 仍带来 5.05 个百分点提升，而 T2T 反而下降 6.30 个百分点，表明 C2C 对“谁说、谁听”的角色选择更稳健。但这并不代表任何模型对都能直接互换；每个方向使用的 Receiver 空间和 Fuser 参数不同。</p>
+<hr>
+<h2 id="7-ablations-and-behavior-analysis">7. Ablations and Behavior Analysis<a hidden class="anchor" aria-hidden="true" href="#7-ablations-and-behavior-analysis">#</a></h2>
+<h3 id="71-增益不是只来自多了参数">7.1 增益不是只来自多了参数<a hidden class="anchor" aria-hidden="true" href="#71-增益不是只来自多了参数">#</a></h3>
+<p>论文比较三种训练：</p>
+<ul>
+<li><strong>Single：</strong> 直接 fine-tune Receiver，不使用 Sharer；</li>
+<li><strong>Identical：</strong> 同一个 Qwen3-0.6B 同时作为 Sharer 和 Receiver；</li>
+<li><strong>C2C：</strong> Qwen2.5-0.5B 与 Qwen3-0.6B 异构通信。</li>
+</ul>
+<p>可训练参数分别为 596M、529M、478M。C2C 参数更少，却在四个任务上最好。Identical 又优于 Single，说明让同一模型重复编码并进行 Cache 级“自通信”也有帮助；但异构 C2C 最好，支持互补表示是主要增益来源之一。</p>
+<h3 id="72-fuser-component-ablation">7.2 Fuser Component Ablation<a hidden class="anchor" aria-hidden="true" href="#72-fuser-component-ablation">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Method</th>
+          <th style="text-align: right">MMLU</th>
+          <th style="text-align: right">ARC-C</th>
+          <th style="text-align: right">OpenBook</th>
+          <th style="text-align: right">C-Eval</th>
+          <th style="text-align: right">Average</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Project</td>
+          <td style="text-align: right">20.01</td>
+          <td style="text-align: right">19.57</td>
+          <td style="text-align: right">21.80</td>
+          <td style="text-align: right">21.41</td>
+          <td style="text-align: right">20.70</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+Fuse</td>
+          <td style="text-align: right"><strong>43.36</strong></td>
+          <td style="text-align: right">51.65</td>
+          <td style="text-align: right">47.60</td>
+          <td style="text-align: right">36.91</td>
+          <td style="text-align: right">44.88</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+Gate = C2C</td>
+          <td style="text-align: right">42.92</td>
+          <td style="text-align: right"><strong>54.52</strong></td>
+          <td style="text-align: right"><strong>52.60</strong></td>
+          <td style="text-align: right"><strong>41.77</strong></td>
+          <td style="text-align: right"><strong>47.95</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>结论很明确：</p>
+<ol>
+<li>只投影 Sharer 并覆盖 Receiver 会严重破坏原表示；</li>
+<li>残差保留 Receiver Cache，使平均准确率提高 24.18 个百分点；</li>
+<li>再加入逐层 gate，平均提高 3.07 个百分点。</li>
+</ol>
+<p>MMLU 上 +Gate 略低于 +Fuse，说明 gate 不是每项都单调提升；它改善的是跨任务平均稳健性。</p>
+<h3 id="73-更复杂的-c2c-c">7.3 更复杂的 C2C-C<a hidden class="anchor" aria-hidden="true" href="#73-更复杂的-c2c-c">#</a></h3>
+<p>默认 C2C 直接拼接两边 Cache。C2C-C 先用三层 MLP 将 Sharer Cache 映射到 Receiver 维度，再执行 feature fusion 和 dynamic weighting。</p>
+<p><img alt="默认 C2C 与复杂 C2C-C 的强弱模型实验" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/c2c-complex.png"></p>
+<p>定义 Receiver 准确率为 \(A_R\)，强 Sharer 为 \(A_S\)，方法结果为 \(A_M\)，Performance Gap Recovered 为：</p>
+$$
+\operatorname{PGR}
+{}={}
+\frac{A_M-A_R}{A_S-A_R}
+\times100\%.
+$$<p>Qwen3-4B → Qwen3-0.6B 时，默认 C2C 在四个任务恢复 29%–41% 的性能差距；C2C-C 恢复 76%–86%，明显更强。作者仍把默认简单 Fuser 作为主方法，意图先证明 C2C 范式，而不是穷尽最佳适配器结构。</p>
+<p>这也说明主结果不是 C2C 的架构上限：Cache communication 的效果高度依赖 projector/fuser 的容量和训练方式。</p>
+<h3 id="74-strong-to-weak-communication">7.4 Strong-to-Weak Communication<a hidden class="anchor" aria-hidden="true" href="#74-strong-to-weak-communication">#</a></h3>
+<p><img alt="强 Sharer 到弱 Receiver 的 LongBench 与正确题集合" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/strong-weak.png"></p>
+<p>在 Qwen3-4B → Qwen3-0.6B 的 LongBench 强到弱设置中：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Length</th>
+          <th style="text-align: right">Receiver</th>
+          <th style="text-align: right">Sharer</th>
+          <th style="text-align: right">T2T</th>
+          <th style="text-align: right">C2C</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">0–4k</td>
+          <td style="text-align: right">30.52</td>
+          <td style="text-align: right">50.48</td>
+          <td style="text-align: right">38.52</td>
+          <td style="text-align: right"><strong>41.46</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">4–8k</td>
+          <td style="text-align: right">26.03</td>
+          <td style="text-align: right">48.28</td>
+          <td style="text-align: right">35.79</td>
+          <td style="text-align: right"><strong>37.57</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">8k+</td>
+          <td style="text-align: right">25.99</td>
+          <td style="text-align: right">44.36</td>
+          <td style="text-align: right">33.79</td>
+          <td style="text-align: right"><strong>34.23</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Average</td>
+          <td style="text-align: right">27.63</td>
+          <td style="text-align: right">47.90</td>
+          <td style="text-align: right">36.18</td>
+          <td style="text-align: right"><strong>37.97</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>平均 PGR 为：</p>
+$$
+\frac{37.97-27.63}{47.90-27.63}
+\approx 51.01\%.
+$$<p>C2C 恢复了约一半的强弱模型差距，但没有取代强模型。8k+ 区间只比 T2T 高 0.44，说明输入越长并不保证融合优势越大。</p>
+<h3 id="75-effective-rank">7.5 Effective Rank<a hidden class="anchor" aria-hidden="true" href="#75-effective-rank">#</a></h3>
+<p>论文用有效秩衡量表示的有效维度。若矩阵 \(W\) 的奇异值为 \(\sigma_i\)，先归一化：</p>
+$$
+p_i
+{}={}
+\frac{\sigma_i}{\|\boldsymbol\sigma\|_1},
+$$<p>再计算：</p>
+$$
+\operatorname{erank}(W)
+{}={}
+\exp\!\left(
+{}-{}
+\sum_i p_i\log p_i
+\right).
+$$<p>Receiver 的 K/V Cache 平均有效秩分别为 388/532，C2C 后变为 395/560，介于 Receiver 与 Sharer 的 539/689 之间。作者据此认为表示空间变得更丰富。</p>
+<p>有效秩提高只是相关性证据，不等于“语义质量”被直接测量。更高秩也可能包含噪声；它需要与准确率、消融和失败案例共同解释。</p>
+<h3 id="76-gate-在通用训练与任务训练中的行为">7.6 Gate 在通用训练与任务训练中的行为<a hidden class="anchor" aria-hidden="true" href="#76-gate-在通用训练与任务训练中的行为">#</a></h3>
+<ul>
+<li>OpenHermes 通用训练下，K/V gate 平均激活率超过 <strong>98.21%</strong>，几乎全开；实际控制主要来自 dynamic weights，部分层平均 key weight 低于 0.1。</li>
+<li>MMLU 任务训练下，gate 激活率降到 <strong>52.67%</strong>；被选中层的权重更大，多数超过 0.4。</li>
+</ul>
+<p>因此 gate 学到的不是固定“最佳层集合”：</p>
+<ul>
+<li>通用数据覆盖任务多，模型保留广泛层通路，再由 query-dependent weight 微调；</li>
+<li>单一任务规律稳定，可以只选择少量持续有效的层。</li>
+</ul>
+<h3 id="77-progressive-replacement">7.7 Progressive Replacement<a hidden class="anchor" aria-hidden="true" href="#77-progressive-replacement">#</a></h3>
+<p>作者逐渐提高输入 Cache 中被 C2C 融合结果替换的 token 比例。准确率先下降、后上升；比例超过 50% 后继续增加会改善。替换靠近回答末端的 latter tokens 影响通常更大，因为这些位置与即将生成的答案更接近。</p>
+<p>前期下降可能来自训练–测试不一致：训练时使用完整融合 Cache，测试时却只融合局部。这个结果提醒我们，C2C 不是可以任意截断的独立前缀模块，token 范围也是训练分布的一部分。</p>
+<h3 id="78-training-cost">7.8 Training Cost<a hidden class="anchor" aria-hidden="true" href="#78-training-cost">#</a></h3>
+<p><img alt="不同模型对的训练成本与准确率" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/training-cost.png"></p>
+<p>三个主模型对使用 8 张 GPU。完整 1,929 steps 需要约 44.72–54.24 GPU hours，但前 300 steps、少于 9 GPU hours 时就达到与最终 checkpoint 相近甚至更高的 MMLU-Redux 准确率。</p>
+<p>例如 Qwen2.5-0.5B → Qwen3-0.6B：</p>
+<ul>
+<li>step 0：35.53；</li>
+<li>step 150：42.06；</li>
+<li>step 300：44.30；</li>
+<li>step 1,929：42.92。</li>
+</ul>
+<p>这说明 Fuser 很快学会基本映射，也说明最终 checkpoint 并不总是该 benchmark 的最佳 checkpoint。训练集是通用 OpenHermes，MMLU-Redux 只用于评价，因此后期对通用目标的优化不必然单调提高单一 benchmark。</p>
+<hr>
+<h2 id="8-examples-c2c-什么时候成功什么时候失败">8. Examples: C2C 什么时候成功，什么时候失败？<a hidden class="anchor" aria-hidden="true" href="#8-examples-c2c-什么时候成功什么时候失败">#</a></h2>
+<h3 id="81-两个单模型都错融合后答对">8.1 两个单模型都错，融合后答对<a hidden class="anchor" aria-hidden="true" href="#81-两个单模型都错融合后答对">#</a></h3>
+<p>论文给出一个环境伦理问题：“Hill 不再问破坏环境这一行为为何不道德，而想问什么？”</p>
+<ul>
+<li>Receiver 把问题理解成换一种说法，选 A；</li>
+<li>Sharer 也选 A，并给出冗长但偏离题型的解释；</li>
+<li>T2T 的中间背景改变了问题焦点，Receiver 最终选 C；</li>
+<li>C2C 识别到问题从“行为是否不道德”转向“实施行为的人是否是坏人”，选出正确的 B。</li>
+</ul>
+<p>这个例子支持作者的核心主张：融合不是答案投票。即使双方最终答案都错，二者 Cache 中仍可能存在可组合的局部线索。</p>
+<p>不过，单个案例不能证明普遍因果机制。它只说明 learned fuser <strong>有可能</strong>从未显式说出的表示中恢复互补信息。</p>
+<h3 id="82-弱-sharer-也会把-receiver-带错">8.2 弱 Sharer 也会把 Receiver 带错<a hidden class="anchor" aria-hidden="true" href="#82-弱-sharer-也会把-receiver-带错">#</a></h3>
+<p>附录还给出反例。一个会计题中 Receiver 原本选择正确的 A；Qwen2.5-0.5B Sharer 错误计算并选择 B。T2T 和 C2C 都受到错误信息影响，最终都选 B。</p>
+<p>这揭示了 latent communication 的另一面：文本消息至少可以被人或额外 verifier 检查，Cache 表示更难解释。若 Sharer 系统性偏弱或领域不可靠，Fuser 未必能分辨有用信息与错误信息。</p>
+<p>因此实际系统需要：</p>
+<ul>
+<li>按任务选择 Sharer，而不是一律融合；</li>
+<li>训练更强的 query-level gate 或拒绝机制；</li>
+<li>对最终答案保留验证与回退路径；</li>
+<li>在关键领域单独评估负迁移。</li>
 </ul>
 <hr>
-<p><img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/table3.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/f6t45.png">
-<img loading="lazy" src="https://jjl357.github.io/blog/image/C2C/t67.png"></p>
-<h3 id="核心结果总结">核心结果总结<a hidden class="anchor" aria-hidden="true" href="#核心结果总结">#</a></h3>
+<h2 id="9-multi-model-and-agentic-extensions">9. Multi-Model and Agentic Extensions<a hidden class="anchor" aria-hidden="true" href="#9-multi-model-and-agentic-extensions">#</a></h2>
+<h3 id="91-one-receiver-multiple-sharers">9.1 One Receiver, Multiple Sharers<a hidden class="anchor" aria-hidden="true" href="#91-one-receiver-multiple-sharers">#</a></h3>
+<p><img alt="一个 Receiver 同时融合多个 Sharer" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/multi-sharer.png"></p>
+<p>Qwen3-0.6B Receiver 同时接收 Qwen3-4B-Base 与 Qwen2.5-Math-1.5B：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Setting</th>
+          <th style="text-align: right">MMLU Accuracy</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Receiver</td>
+          <td style="text-align: right">35.53</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">4B-Base → Receiver</td>
+          <td style="text-align: right">60.71</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Math-1.5B → Receiver</td>
+          <td style="text-align: right">46.13</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">两个 Sharer → Receiver</td>
+          <td style="text-align: right"><strong>64.60</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>两个 pairwise Fuser 分别训练，推理时无需额外联合训练就能同时融合。结果表明多 Sharer 具有可行性，但两个 Fuser 的增量如何冲突、门控如何联合校准，论文没有系统解决。</p>
+<h3 id="92-multiple-receivers-multiple-sharers">9.2 Multiple Receivers, Multiple Sharers<a hidden class="anchor" aria-hidden="true" href="#92-multiple-receivers-multiple-sharers">#</a></h3>
+<p>朴素做法为每个有向模型对训练一个 Fuser，需要 \(O(N^2)\) 个适配器。论文探索共享 latent space：</p>
+$$
+\mathcal C_{s_i}
+\xrightarrow{\mathcal P_{s_i}}
+U_{s_i},
+\qquad i=0,\ldots,M-1,
+$$<p>每个 Sharer 只训练一个 projector 进入公共空间；每个 Receiver 再用自己的 Fuser 读取所有 \(U_{s_i}\)：</p>
+$$
+\left(U_{s_i},\mathcal C_{r_j}\right)
+\xrightarrow{\mathcal F_{r_j}}
+\mathcal C'_{r_j},
+\qquad j=0,\ldots,N-1.
+$$<p>这样适配器数量从 pairwise 的二次增长降为 \(M+N\)，即模型数同阶。初步结果表明不同 Receiver 能从 Coder 与 4B-Base Sharer 获益，但这仍是 appendix prototype，还没有验证大规模模型群、持续对话或动态成员加入。</p>
+<p><img alt="共享 latent projector 的多 Sharer、多 Receiver 结果" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/multi-receiver.png"></p>
+<h3 id="93-agentic-flow">9.3 Agentic Flow<a hidden class="anchor" aria-hidden="true" href="#93-agentic-flow">#</a></h3>
+<p>论文将数学 agent workflow 分成 problem interpreter 与 problem solver。在 GSM8K 上：</p>
+<p><img alt="C2C 与 agentic flow 结合的 GSM8K 结果" loading="lazy" src="https://jjl357.github.io/blog/image/C2C/agentic.png"></p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Method</th>
+          <th style="text-align: right">Accuracy</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Single Qwen3-0.6B</td>
+          <td style="text-align: right">41.17</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">T2T multi-agent flow</td>
+          <td style="text-align: right">61.18</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">C2C</td>
+          <td style="text-align: right">62.55</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">T-C2C</td>
+          <td style="text-align: right"><strong>78.01</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>T-C2C 同时保留解释文本，并在问题与解释上进行 Cache 融合。它远高于纯 T2T 或纯 C2C，说明文本与 latent representation 并非只能二选一：</p>
 <ul>
-<li><strong>C2C 相较于 Receiver-only</strong>：平均提升 <strong>8.5–11%</strong>（不同表述范围 8.5–11.9%）。</li>
-<li><strong>C2C 相较于 T2T</strong>：平均提升 <strong>3–5%</strong>，且推理延迟平均约为 <strong>T2T 的 1/2</strong>。</li>
-<li><strong>长上下文任务（LongBench）</strong>：C2C 持续优于 T2T，尤其在 strong→weak 设定中显著恢复弱模型性能（PGR 指标大幅提高）。</li>
+<li>文本提供显式、可检查的中间结构；</li>
+<li>Cache 传递难以完整说出的内部表示；</li>
+<li>混合通信可能比完全隐藏或完全显式都更强。</li>
 </ul>
+<p>这只是单一 GSM8K workflow 的初步结果，不能直接推广到开放式软件 agent 或长时间多轮协作。</p>
 <hr>
-<h3 id="ablation">Ablation<a hidden class="anchor" aria-hidden="true" href="#ablation">#</a></h3>
-<p>去掉 fuse（仅 projection）性能最差；加入 fuse 后大幅提升；再加入 gate（完整 C2C）进一步提升约 <strong>3%</strong>（见 Table 7）。
-说明 Projection + Fuse + Gate 三者协同作用显著。</p>
+<h2 id="10-limitations-and-practical-boundaries">10. Limitations and Practical Boundaries<a hidden class="anchor" aria-hidden="true" href="#10-limitations-and-practical-boundaries">#</a></h2>
+<h3 id="101-每个模型对仍需要训练">10.1 每个模型对仍需要训练<a hidden class="anchor" aria-hidden="true" href="#101-每个模型对仍需要训练">#</a></h3>
+<p>默认 C2C 针对特定的 Sharer → Receiver 方向训练 Fuser。更换模型、方向、tokenizer 或层结构通常要重新训练。论文的共享 latent projector 将成本从 \(O(N^2)\) 向 \(O(N)\) 推进，但只是初步实验。</p>
+<h3 id="102-不是-api-级黑盒协作">10.2 不是 API 级黑盒协作<a hidden class="anchor" aria-hidden="true" href="#102-不是-api-级黑盒协作">#</a></h3>
+<p>C2C 需要访问两个模型的逐层 KV Cache，并修改 Receiver 的推理路径。闭源模型 API 通常只返回文本或 logits，无法直接部署这套方法。它更适合可控制权重和推理框架的本地/服务端模型。</p>
+<h3 id="103-计算没有被免费消除">10.3 计算没有被免费消除<a hidden class="anchor" aria-hidden="true" href="#103-计算没有被免费消除">#</a></h3>
+<p>相对 T2T，C2C 省掉了 Sharer decode 和 Receiver 对中间消息的额外 prefill，但仍需要：</p>
+<ul>
+<li>两个模型都对原输入 prefill；</li>
+<li>保存两份 Cache；</li>
+<li>执行逐层 Fuser；</li>
+<li>Receiver 生成最终输出。</li>
+</ul>
+<p>如果原本只运行 Receiver，C2C 可能增加总 FLOPs 和显存。论文主要证明它比“两个模型通过长文本协作”更快，而不是比单模型绝对更省资源。</p>
+<h3 id="104-cache-不是天然隐私保护">10.4 Cache 不是天然隐私保护<a hidden class="anchor" aria-hidden="true" href="#104-cache-不是天然隐私保护">#</a></h3>
+<p>论文把不输出原始文本视为 privacy-aware collaboration 的潜在方向，但没有证明 KV Cache 不可逆或不泄漏输入。已有表示反演研究说明中间激活可能包含大量原始信息。C2C 减少了显式内容暴露，不等于得到密码学隐私保证。</p>
+<h3 id="105-评价仍以多选题为主">10.5 评价仍以多选题为主<a hidden class="anchor" aria-hidden="true" href="#105-评价仍以多选题为主">#</a></h3>
+<p>四个主 benchmark 都是多选题，输出短、答案提取明确。LongBench 和 GSM8K 扩展了任务范围，但论文尚未充分覆盖：</p>
+<ul>
+<li>长篇开放式生成质量；</li>
+<li>真实代码仓库协作；</li>
+<li>多轮对话中的 Cache 累积误差；</li>
+<li>工具调用与外部状态；</li>
+<li>大规模并发服务下的吞吐、显存和网络传输成本。</li>
+</ul>
+<h3 id="106-对齐启发式仍有损失">10.6 对齐启发式仍有损失<a hidden class="anchor" aria-hidden="true" href="#106-对齐启发式仍有损失">#</a></h3>
+<p>maximal-coverage token alignment 在 one-to-many 时只选择一个 source token；terminal layer alignment 也假设深层语义可直接倒序配对。这些设计简单有效，但不是严格的跨模型语义对应。</p>
+<hr>
+<h2 id="11-takeaways">11. Takeaways<a hidden class="anchor" aria-hidden="true" href="#11-takeaways">#</a></h2>
+<ol>
+<li><strong>论文真正的新意是通信介质，而不只是一个新 projector。</strong> 它把多 LLM 协作从离散文本接口推进到连续内部状态接口。</li>
+<li><strong>两个 oracle 很关键。</strong> 固定 Cache 长度仍能因表示变丰富而提升，且跨模型 Cache 可学习转换，为 C2C 的设计提供了直接证据。</li>
+<li><strong>残差保留 Receiver 是成败分界。</strong> 只投影并覆盖会崩溃；Fuse 带来 24.18 个百分点平均提升，Gate 再带来 3.07 个百分点。</li>
+<li><strong>加速来自消除 Sharer 的中间 decode。</strong> 典型实验把 1,312 ms 的通信文本解码换成约 90 ms Cache fusion，但两个模型的 prefill 仍然存在。</li>
+<li><strong>互补性比 Sharer 单独分数更重要。</strong> 一个不擅长按格式回答的 base/coder 模型，其 Cache 仍可能显著帮助 Receiver。</li>
+<li><strong>C2C 不是无损知识注入。</strong> 强到弱 LongBench 只恢复约 51% 的差距，弱 Sharer 也可能造成负迁移。</li>
+<li><strong>最有前景的方向可能是混合通信。</strong> GSM8K 的 T-C2C 同时保留显式解释与 Cache 融合，表现明显高于单独使用任一通信方式。</li>
+</ol>
+<p>C2C 证明了一件比具体数字更重要的事：LLM 协作不必永远被限制在“一个模型说一句话、另一个模型再读一句话”的接口上。KV Cache 可以成为更高带宽、低解码延迟的模型间通信层；而如何让它可扩展、可验证、可拒绝错误信息，才是从论文原型走向可靠系统的下一步。</p>
 
 
   </div>
@@ -435,6 +1078,10 @@ $$<p>
   <footer class="post-footer">
     <ul class="post-tags">
       <li><a href="https://jjl357.github.io/blog/tags/kv-cache/">KV Cache</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/multi-llm/">Multi-LLM</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/latent-communication/">Latent Communication</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/model-collaboration/">Model Collaboration</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/efficient-inference/">Efficient Inference</a></li>
       <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
     </ul>
   </footer>

@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="zh-cn" dir="auto" data-theme="auto">
+
+<head><meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="robots" content="index, follow">
+<title>📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving | JJ&#39;s Blog</title>
+<meta name="keywords" content="VLA, Autonomous Driving, Efficient Inference, Streaming Inference, Speculative Decoding, Flow Matching, Quantization, Paper Note">
+<meta name="description" content="FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving
+Status: arXiv v1, 2026-08-13
+Paper: https://arxiv.org/abs/2608.12932
+Project: https://z-lab.ai/projects/flashdrive/
+GitHub: https://github.com/z-lab/flashdrive
+Authors: Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu
+一句话总结： FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。
+
+Abstract
+推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 716.9 ms，相当于每秒只能重规划约 1.4 次。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：
+
+视觉编码器重复处理相邻时刻中相同的历史画面；
+Prefill 重复为这些画面建立几乎相同的 KV Cache；
+约 16 个结构化驾驶推理 token 仍被逐 token 串行生成；
+8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。
+
+FlashDrive 的做法是为每种冗余设计不同捷径：">
+<meta name="author" content="">
+<link rel="canonical" href="https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/">
+<link crossorigin="anonymous" href="https://jjl357.github.io/blog/assets/css/stylesheet.343cc480b9ffc8f04ccbe5e968ad674880cab773ec19905e93033065c1e7a804.css" integrity="sha256-NDzEgLn/yPBMy&#43;XpaK1nSIDKt3PsGZBekwMwZcHnqAQ=" rel="preload stylesheet" as="style">
+<link rel="icon" href="https://jjl357.github.io/blog/favicon.ico">
+<link rel="icon" type="image/png" sizes="16x16" href="https://jjl357.github.io/blog/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://jjl357.github.io/blog/favicon-32x32.png">
+<link rel="apple-touch-icon" href="https://jjl357.github.io/blog/apple-touch-icon.png">
+<link rel="mask-icon" href="https://jjl357.github.io/blog/safari-pinned-tab.svg">
+<meta name="theme-color" content="#2e2e33">
+<meta name="msapplication-TileColor" content="#2e2e33">
+<link rel="alternate" hreflang="zh-cn" href="https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/">
+<noscript>
+    <style>
+        #theme-toggle,
+        .top-link {
+            display: none;
+        }
+
+    </style>
+    <style>
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --theme: rgb(29, 30, 32);
+                --entry: rgb(46, 46, 51);
+                --primary: rgb(218, 218, 219);
+                --secondary: rgb(155, 156, 157);
+                --tertiary: rgb(65, 66, 68);
+                --content: rgb(196, 196, 197);
+                --code-block-bg: rgb(46, 46, 51);
+                --code-bg: rgb(55, 56, 62);
+                --border: rgb(51, 51, 51);
+                color-scheme: dark;
+            }
+
+            .list {
+                background: var(--theme);
+            }
+
+            .toc {
+                background: var(--entry);
+            }
+        }
+
+        @media (prefers-color-scheme: light) {
+            .list::-webkit-scrollbar-thumb {
+                border-color: var(--code-bg);
+            }
+        }
+
+    </style>
+</noscript>
+<script>
+    if (localStorage.getItem("pref-theme") === "dark") {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else if (localStorage.getItem("pref-theme") === "light") {
+       document.querySelector("html").dataset.theme = 'light';
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.querySelector("html").dataset.theme = 'dark';
+    } else {
+        document.querySelector("html").dataset.theme = 'light';
+    }
+
+</script><script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$'], ['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']],
+      processEscapes: true,
+      processEnvironments: true,
+      tags: 'ams'
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    }
+  };
+</script>
+<script id="MathJax-script" defer
+        src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+
+<style>
+  mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    padding: 0.25rem 0;
+  }
+</style>
+<meta property="og:url" content="https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/">
+  <meta property="og:site_name" content="JJ&#39;s Blog">
+  <meta property="og:title" content="📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving">
+  <meta property="og:description" content="FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving Status: arXiv v1, 2026-08-13
+Paper: https://arxiv.org/abs/2608.12932
+Project: https://z-lab.ai/projects/flashdrive/
+GitHub: https://github.com/z-lab/flashdrive
+Authors: Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu
+一句话总结： FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。
+Abstract 推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 716.9 ms，相当于每秒只能重规划约 1.4 次。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：
+视觉编码器重复处理相邻时刻中相同的历史画面； Prefill 重复为这些画面建立几乎相同的 KV Cache； 约 16 个结构化驾驶推理 token 仍被逐 token 串行生成； 8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。 FlashDrive 的做法是为每种冗余设计不同捷径：">
+  <meta property="og:locale" content="zh-cn">
+  <meta property="og:type" content="article">
+    <meta property="article:section" content="posts">
+    <meta property="article:published_time" content="2026-08-18T00:00:00+00:00">
+    <meta property="article:modified_time" content="2026-08-18T00:00:00+00:00">
+    <meta property="article:tag" content="VLA">
+    <meta property="article:tag" content="Autonomous Driving">
+    <meta property="article:tag" content="Efficient Inference">
+    <meta property="article:tag" content="Streaming Inference">
+    <meta property="article:tag" content="Speculative Decoding">
+    <meta property="article:tag" content="Flow Matching">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving">
+<meta name="twitter:description" content="FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving
+Status: arXiv v1, 2026-08-13
+Paper: https://arxiv.org/abs/2608.12932
+Project: https://z-lab.ai/projects/flashdrive/
+GitHub: https://github.com/z-lab/flashdrive
+Authors: Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu
+一句话总结： FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。
+
+Abstract
+推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 716.9 ms，相当于每秒只能重规划约 1.4 次。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：
+
+视觉编码器重复处理相邻时刻中相同的历史画面；
+Prefill 重复为这些画面建立几乎相同的 KV Cache；
+约 16 个结构化驾驶推理 token 仍被逐 token 串行生成；
+8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。
+
+FlashDrive 的做法是为每种冗余设计不同捷径：">
+
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position":  1 ,
+      "name": "Posts",
+      "item": "https://jjl357.github.io/blog/posts/"
+    }, 
+    {
+      "@type": "ListItem",
+      "position":  2 ,
+      "name": "📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving",
+      "item": "https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/"
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving",
+  "name": "📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving",
+  "description": "FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving Status: arXiv v1, 2026-08-13\nPaper: https://arxiv.org/abs/2608.12932\nProject: https://z-lab.ai/projects/flashdrive/\nGitHub: https://github.com/z-lab/flashdrive\nAuthors: Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu\n一句话总结： FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。\nAbstract 推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 716.9 ms，相当于每秒只能重规划约 1.4 次。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：\n视觉编码器重复处理相邻时刻中相同的历史画面； Prefill 重复为这些画面建立几乎相同的 KV Cache； 约 16 个结构化驾驶推理 token 仍被逐 token 串行生成； 8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。 FlashDrive 的做法是为每种冗余设计不同捷径：\n",
+  "keywords": [
+    "VLA", "Autonomous Driving", "Efficient Inference", "Streaming Inference", "Speculative Decoding", "Flow Matching", "Quantization", "Paper Note"
+  ],
+  "articleBody": "FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving Status: arXiv v1, 2026-08-13\nPaper: https://arxiv.org/abs/2608.12932\nProject: https://z-lab.ai/projects/flashdrive/\nGitHub: https://github.com/z-lab/flashdrive\nAuthors: Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu\n一句话总结： FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。\nAbstract 推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 716.9 ms，相当于每秒只能重规划约 1.4 次。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：\n视觉编码器重复处理相邻时刻中相同的历史画面； Prefill 重复为这些画面建立几乎相同的 KV Cache； 约 16 个结构化驾驶推理 token 仍被逐 token 串行生成； 8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。 FlashDrive 的做法是为每种冗余设计不同捷径：\nStreaming Inference： 只编码四个相机各自最新的一帧，复用前三帧的 KV Cache； DFlash Speculative Reasoning： 用两层扩散式草稿模型并行提出 8-token 候选块，再由原 VLA 一次验证； Adaptive-Step Flow Matching： 保留去噪轨迹首尾的重要网络计算，在中间四步复用已经得到的速度； W4A8 Quantization： 语言骨干使用 4-bit 权重和 8-bit 激活，同时加速 memory-bound Decode 与 compute-bound Prefill； System Optimizations： 用 CUDA Graph、静态 KV Cache 与算子融合减少 CPU 调度和显存读写开销。 最终，Alpamayo 1.5-10B 的单轨迹端到端延迟从 716.9 ms 降到 151.4 ms，加速 4.7 倍，规划频率从 1.4 Hz 提升到 6.6 Hz。单样本轨迹误差 minADE\\(_1\\) 从 1.705 m 改善到 1.573 m；六样本 oracle 指标 minADE\\(_6\\) 从 0.767 m 变为 0.844 m，退化约 0.08 m。\n这里不能把结果简单概括成“加速而且精度完全不变”。更准确的说法是：FlashDrive 用很小的开放环候选覆盖损失换取了 4.7 倍端到端加速，而单轨迹误差反而下降；小规模闭环仿真中的碰撞、驶出道路和规划抖动指标改善，但 Wrong Lane 指标变差。 它把大型推理 VLA 推进到亚 200 ms 区间，却仍不是实车安全验证，也不等于车辆转向与制动只以 6.6 Hz 执行。\n1. VLA Background: 从“看懂道路”到“输出可执行轨迹” 这一节先不讨论加速，先回答一个更基础的问题：自动驾驶 VLA 到底在做什么？\n1.1 传统模块化自动驾驶与端到端 VLA 传统自动驾驶通常把系统拆成多个显式模块：\n相机 / 激光雷达 ↓ 感知：车道线、车辆、行人、交通灯 ↓ 预测：其他交通参与者未来如何运动 ↓ 规划：自车应该走哪条轨迹 ↓ 控制：把轨迹转换成转向、油门和制动 这种方式的优点是接口清楚、容易单独测试；缺点是上游错误会传给下游，而且很难为所有长尾场景写完规则。例如，施工人员站在路中间挥手、临时路障迫使车辆借道、没有信号灯的复杂路口，都可能同时依赖视觉常识、交通语义与交互推理。\nVision-Language-Action Model 希望用一个统一模型把三类能力结合起来：\nVision： 理解多相机、多帧道路画面； Language： 用语言 token 表达场景因果和驾驶意图； Action： 输出未来连续轨迹或控制动作。 可以把自动驾驶 VLA 抽象为：\n$$ \\pi_\\theta: (\\text{multi-view video},\\text{route},\\text{ego history}) \\longrightarrow (\\text{reasoning},\\text{future trajectory}). $$这里的 Action 通常不是一个单词，也不一定直接是方向盘角度。FlashDrive 所研究的 Alpamayo 会预测未来若干秒的 trajectory waypoints，即一串带时间顺序的车辆位置与姿态。下游控制器再以更高频率跟踪这条轨迹。\n因此，论文中的 6.6 Hz 更接近“大模型轨迹重规划频率”，不能理解成方向盘、制动器也只以 6.6 Hz 更新。车辆底层控制环仍可在两次 VLA 推理之间高频跟踪最近一条轨迹。\n1.2 VLM 与 VLA 有什么区别？ 假设输入是一张前方道路图片：\nVLM 可以回答：“前方有停止标志，右侧有一辆车驶向路口。” VLA 除了形成类似理解，还必须给出行动：“先减速，在停止线停车，让右侧车辆通过，然后继续直行”，并把它落成一条连续可跟踪的轨迹。 也就是说，VLA 比 VLM 多了一个关键约束：输出不仅要语义合理，还要在物理空间中可执行。\n语言模型很容易说“停车让行”，但 Action Head 还要回答：\n从当前速度开始应该以多大减速度接近停止线？ 未来每个时刻车辆中心位于哪里？ 轨迹是否留在车道内？ 转弯曲率和车辆动力学是否合理？ 1.3 Alpamayo 1.5 的一次推理经过哪些阶段？ FlashDrive 没有重新发明一个 VLA，而是在 Alpamayo 1.5-10B 的现有推理管线之上优化。一次典型输入包含 4 个相机视角 × 4 个时间帧，也就是 16 幅图像。完整路径可以简化为：\n四路相机、每路四帧 │ ▼ 1. Vision Encode 图像 → 视觉特征 / 视觉 token │ ▼ 2. VLM Prefill 读取系统提示、路线、自车历史和全部视觉 token 建立 Transformer 的 KV Cache │ ▼ 3. Language Decode 逐 token 生成 Chain-of-Causation 推理 │ ▼ 4. Action Generation Flow Matching Action Expert 将隐藏表示变成连续轨迹 用一个停车场景来理解：\nEncode 把“停止标志、停止线、右侧来车、车道几何”转换为视觉 token； Prefill 让 VLM 在一次大规模并行前向中读完这些 token，并将注意力中的 Key/Value 存进缓存； Decode 逐个生成类似 “slow down for the stop sign and yield to cross traffic” 的推理 token； Action 从随机噪声出发，经过多步速度场更新，得到减速、停车和再次起步的连续路径。 1.4 Token、Prefill、Decode 与 KV Cache 图像不会以像素数组直接进入语言模型。视觉编码器先把图像切分和压缩成一串向量，每个向量可视为一个 视觉 token。路线文字、相机标签和驾驶推理则是 文本 token。Transformer 最终处理的是一个由不同模态 token 组成的长序列。\nPrefill 是模型一次并行读取完整输入序列的阶段。对长度为 \\(N\\) 的序列，注意力需要建立 token 间的关系，并把每层的 Key 和 Value 保存为 KV Cache。\nDecode 是之后逐 token 生成推理的阶段。已经存在的 \\(N\\) 个 token 不必全部重新前向计算，但每个新 token 仍要查询已有 KV Cache。假设推理共有 \\(L\\) 个 token，标准自回归过程是：\n$$ p(y_{1:L}\\mid x) {}={} \\prod_{\\ell=1}^{L} p(y_\\ell\\mid x,y_{1:\\ell-1}). $$第 \\(\\ell\\) 个 token 必须等前 \\(\\ell-1\\) 个 token 生成后才能确定，这就是 Decode 难以并行的根源。\n1.5 Action Head 与 Flow Matching 语言 token 是离散符号，轨迹坐标是连续值。Alpamayo 使用 Flow Matching Action Expert 把 VLM 的上下文表示 \\(c\\) 转成连续轨迹。\n直观上，它先采样一个无结构的噪声轨迹：\n$$ \\mathbf x_0\\sim\\mathcal N(\\mathbf 0,\\mathbf I), $$再学习一个随时间变化的速度场：\n$$ \\frac{\\mathrm d\\mathbf x_t}{\\mathrm dt} {}={} \\mathbf v_\\theta(\\mathbf x_t,t;c), $$使噪声沿着常微分方程逐渐移动到合理轨迹分布。数值求解器将区间 \\([0,1]\\) 离散成多个步骤。8 步 Euler 更新可以写成：\n$$ \\mathbf x_{i+1} {}={} \\mathbf x_i+\\Delta t_i \\mathbf v_\\theta(\\mathbf x_i,t_i;c), \\qquad i=0,\\ldots,7. $$每计算一次 \\(\\mathbf v_\\theta\\)，都要运行一次 Action Expert。于是“只生成一条轨迹”并不意味着 Action 阶段只做一次网络前向。\n1.6 一条轨迹与六条轨迹 驾驶场景通常存在多种合理未来。例如到达一个无保护左转路口时，车辆既可能等待，也可能在间隙足够大时通过。生成六条轨迹样本，是为了覆盖这种多模态不确定性。\n但要注意：论文的 minADE\\(_6\\) 是在六条候选中，用真实未来轨迹做事后选择得到的 oracle 指标。它回答“六条候选中是否至少有一条接近真值”，而不回答在线系统是否一定能选中那一条。后文会给出正式定义。\n2. Motivation: 瓶颈不是一个，而是四个 Alpamayo 1.5 在 RTX PRO 6000 上生成一条轨迹时的原始延迟为：\nStage Latency 占总延迟 主要工作 Encode 87.0 ms 12.1% 编码 16 幅多视角、多帧图像 Prefill 165.3 ms 23.1% 读取长视觉序列并建立 KV Cache Decode 271.7 ms 37.9% 串行生成短 CoC 推理 Action 192.9 ms 26.9% 多步 Flow Matching 生成轨迹 Total 716.9 ms 100% 完整 VLA 推理 Decode 虽然最大，却只占 37.9%。即使假设 Decode 可以被免费消除，剩余阶段仍需要 445.2 ms，仅约 2.25 Hz。只量化语言模型也不能消除视觉重复和 Action Expert 的多步前向。\nFlashDrive 的核心判断是：\nVLA latency is a cascade of four bottlenecks, and each bottleneck hides a different kind of redundancy.\n四种冗余分别是：\nStage 冗余来自哪里 FlashDrive 的对应方法 Encode 相邻滑动窗口有 75% 画面重复 只编码最新帧 Prefill 重复视觉 token 再次建立 KV Streaming KV Cache Decode 短而低熵的结构化推理仍串行生成 DFlash Speculative Reasoning Action Flow Matching 中间速度几乎不变 Adaptive Velocity Caching 这也是文章最值得记住的方法论：先 profile 出每一段延迟，再针对该段真正存在的结构设计捷径。 一个适用于 Decode 的优化，未必适用于 Prefill；一个适用于语言 token 的缓存，也未必能直接用于连续轨迹去噪。\n延迟 \\(T_{\\mathrm{ms}}\\) 与规划频率的换算为：\n$$ f_{\\mathrm{Hz}} {}={} \\frac{1000}{T_{\\mathrm{ms}}}. $$因此：\n$$ \\frac{1000}{716.9}\\approx1.39\\ \\mathrm{Hz}, \\qquad \\frac{1000}{151.4}\\approx6.60\\ \\mathrm{Hz}. $$ 3. Encode \u0026 Prefill: Streaming Inference 3.1 滑动窗口为什么天然有 75% 重复？ 设单个相机在时刻 \\(t\\) 使用四帧窗口：\n$$ \\mathcal W_t {}={} \\{I_{t-3},I_{t-2},I_{t-1},I_t\\}. $$下一时刻窗口变成：\n$$ \\mathcal W_{t+1} {}={} \\{I_{t-2},I_{t-1},I_t,I_{t+1}\\}. $$四帧中有三帧完全相同，只有 \\(I_{t+1}\\) 是新画面。对四个相机也是一样：旧方法每次重新编码 16 幅图像，实际只有四幅最新图像从未见过。\nFlashDrive 因此执行三个操作：\n淘汰每个视角最旧的一帧； 将其余三帧的缓存位置向前移动； 只编码并 Prefill 四个相机各自的最新一帧。 这看起来和聊天模型的 Prefix Cache 相似，但多相机 VLA 有两个额外难点：token 排列不是简单追加顺序，位置编码也会随窗口滑动而变化。\n3.2 View-Major Ordering: 为什么不能把新帧直接放到末尾？ Alpamayo 1.5 按视角组织视觉 token。简化后的顺序是：\n[Camera 1: f0 f1 f2 f3] [Camera 2: f0 f1 f2 f3] [Camera 3: f0 f1 f2 f3] [Camera 4: f0 f1 f2 f3] [trajectory history and text] 如果把四幅新图直接追加到序列末尾，顺序就会变成：\n[Camera 1 old frames] ... [Camera 4 old frames] [Camera 1 new] [Camera 2 new] [Camera 3 new] [Camera 4 new] 这与模型训练时见过的布局不同。FlashDrive 必须把每个新帧 token 写入对应视角的“最后一帧槽位”，同时只让这些新 token 作为 Query 进行计算。\n标准注意力为：\n$$ \\operatorname{Attn}(\\mathbf Q,\\mathbf K,\\mathbf V) {}={} \\operatorname{softmax} \\left( \\frac{\\mathbf Q\\mathbf K^\\top}{\\sqrt d} +\\mathbf M \\right)\\mathbf V, $$其中 \\(\\mathbf M\\) 是 attention mask。FlashDrive 构造专用 mask，使：\n每个最新帧可以看见 system token； Camera \\(j\\) 的最新帧可以看见此前视角的可见 token； 它可以看见本视角的三个历史帧，并在当前帧内部保持因果关系； 最后的轨迹与文本 token 可以看见全部视角，并在自身区间保持因果关系； 只有最新帧与末尾轨迹/文本形成新 Query，历史帧只提供缓存的 Key/Value。 3.3 RoPE Position Shift: 缓存的 Key 为什么会“过期”？ Transformer 的 Rotary Position Embedding 将位置 \\(p\\) 旋转进 Query 与 Key。简化写成：\n$$ \\mathbf q_p^{\\mathrm{rope}} {}={} \\mathbf R(p)\\mathbf q_p, \\qquad \\mathbf k_p^{\\mathrm{rope}} {}={} \\mathbf R(p)\\mathbf k_p. $$假设旧窗口中的帧位于位置 \\(p\\)。窗口向前滑动后，它可能应该出现在 \\(p-\\Delta\\)。若缓存保存的是已经做过 RoPE 的 \\(\\mathbf R(p)\\mathbf k_p\\)，直接搬动缓存不会把旋转改成 \\(\\mathbf R(p-\\Delta)\\)，于是 token 内容虽然相同，位置语义却错了。\nFlashDrive 的解决方法是：\n缓存 pre-RoPE Key，即还未乘 \\(\\mathbf R(p)\\) 的 Key； 窗口滑动后，根据新位置即时重新应用 RoPE； Value 不包含这种旋转位置，因此可以直接平移复用。 这一步非常关键。普通文本生成时，历史 token 位置通常不变；滑动视频窗口则会不断淘汰旧帧并整体改写保留帧的位置。\n3.4 为什么复用 KV Cache 仍然只是近似？ 即使 token 内容和位置都处理正确，Streaming KV Cache 仍不等价于重新运行完整窗口。\n原因是历史帧的 Key/Value 最初是在旧上下文中计算的。完整重算时，同一历史帧可能通过注意力与当前窗口中的其他 token 重新交互，产生略有不同的隐藏状态；缓存复用保留的是旧隐藏状态。\n可以写成：\n$$ (\\mathbf K_i,\\mathbf V_i)_{\\mathrm{cached}} \\neq (\\mathbf K_i,\\mathbf V_i)_{\\mathrm{full\\ forward\\ at}\\ t+1}. $$论文发现，不做适配时：\nminADE\\(_1\\) 约恶化 0.3 m； minADE\\(_6\\) 约恶化 0.2 m。 这种分布偏移主要伤害 Action Expert，而不是语言推理头。原因是：\n语言 token 自回归生成，通常更依赖最近 token，对少量旧缓存误差较鲁棒； Action Expert 通过 cross-attention 汇聚整个 KV Cache 来输出连续坐标，小误差可能在多步 Flow Matching 中累积。 3.5 Streaming Fine-Tuning: 为什么只微调 Action Expert？ 一个看似自然的方案是微调整个 VLM，让它适应流式缓存。但附录结果显示，这反而把 minADE\\(_1\\) 推高到 4.69 m，显著差于完全不微调的 2.04 m。\n作者采用针对性的 teacher-forcing rollout：\n冻结整个 VLM backbone； 随机采样长度为 \\(L\\) 的滑动窗口序列； 前 \\(L-1\\) 步使用真实历史画面运行流式推理，只建立会逐步积累近似误差的 KV Cache，不保留梯度； 只在最后一步启用梯度； 用真实未来轨迹监督 Action Expert。 训练目标可概括为：\n$$ \\min_{\\phi} \\mathbb E \\left[ \\mathcal L_{\\mathrm{action}} \\left( A_{t+L-1}, \\hat A_{\\phi} \\bigl( \\widetilde{\\mathrm{KV}}_{t:t+L-1} \\bigr) \\right) \\right], $$其中 \\(\\phi\\) 只表示 Action Expert 参数，\\(\\widetilde{\\mathrm{KV}}\\) 表示经过多轮真实流式执行后得到的近似缓存。\n随机改变 \\(L\\) 的意义是让 Action Expert 同时见到“刚开始流式复用”和“误差已经积累多轮”的情况。最终它将 Streaming 的误差恢复到 1.73 minADE\\(_1\\) / 0.79 minADE\\(_6\\)，接近非流式基线的 1.72 / 0.77。\nStreaming 训练方式 minADE\\(_1\\) minADE\\(_6\\) 结论 Full baseline 1.72 0.77 不使用流式近似 Streaming, no fine-tuning 2.04 0.96 缓存分布偏移明显 Fine-tune VLM 4.69 2.98 破坏已有推理表示 Fine-tune Action Expert 1.73 0.79 几乎恢复基线 3.6 Streaming 带来了多少加速？ 在系统优化基线上，Streaming Inference 将：\nEncode：40.5 ms 降到 12.0 ms，约 3.4 倍； Prefill：188.3 ms 降到 59.6 ms，约 3.2 倍； 端到端：513.3 ms 降到 355.8 ms。 它没有直接加速 Decode 和 Action；这正是还需要后两种算法的原因。\n4. Decode: Speculative Reasoning with DFlash 4.1 为什么只有约 16 个 token，Decode 仍然最慢？ 原始 Decode 需要 271.7 ms，占完整推理的 37.9%，吞吐只有 56.4 token/s。虽然驾驶 CoC 通常只有约 16 个 token，但每个 token 都需要一次目标模型前向，且单 batch 下大量小 kernel 会放大调度开销。\n更重要的是，驾驶推理与开放式写作不同。输入画面已经强烈约束了合理答案：\n场景：前方停止标志，右侧车辆正穿过路口 可能推理： slow down → stop at the line → yield to cross traffic 候选不会突然变成一段诗歌或无关代码。论文认为它有两个适合 speculative decoding 的性质：\nLow per-token entropy： 每一步可接受的下一个 token 很少； Strong intra-block correlation： “stop sign” 一旦出现，后续 “yield / crossing vehicle / slow down” 高度相关。 4.2 推测式解码不是“让小模型替大模型做决定” 标准推测式解码包含一个快速 Drafter 和一个原始 Target Model：\nDrafter 先提出多个候选 token； Target 用一次并行前向计算这些位置的概率； 按严格接受/拒绝规则保留最长合法前缀； 第一个被拒绝的位置由 Target 分布纠正； 从新的前缀继续下一轮。 只要验证规则正确，最终输出仍服从 Target Model 的分布。Drafter 只是在猜 Target 接下来可能说什么，并没有越过 Target 验证。因此 speculative decoding 的质量保证与“直接用小模型替换大模型”完全不同。\n举例说，Drafter 一次提出 8 个 token：\nslow | down | for | the | stop | sign | ahead | . 如果 Target 只接受前 6 个，那么一次验证仍推进了 6 个 token；第 7 个位置按 Target 规则重新采样，而不是无条件采用错误草稿。平均每轮接受越长，减少的 Target 串行调用越多。\n4.3 为什么使用扩散式 Block Drafter？ 普通 Drafter 仍按自回归方式逐 token 猜 8 次。DFlash 使用 Diffusion Language Model，把一个 8-token mask block 视为整体，在一次草稿前向中并行提出整个候选块：\n$$ [\\texttt{MASK}]^8 \\xrightarrow{\\text{DFlash Draft}} [\\tilde y_1,\\tilde y_2,\\ldots,\\tilde y_8]. $$由于块内 token 彼此强相关，整体预测比八次独立贪心猜测更适合结构化驾驶推理。FlashDrive 的 Drafter 只有 2 层，block size 为 8，使用约 60K clips 训练。\nTarget Model 最近 token 的隐藏状态已经同时包含视觉场景、路线和当前推理进度。FlashDrive 不像通用 DFlash 那样融合大量 Target 中间表示，而只将最近 8 个 Target token 的 hidden states 融入 Drafter KV Cache，以降低草稿与验证成本。\n4.4 DFlash 的收益与 Block Size 消融 最终平均每轮接受 5.6 token：\nDecode latency：271.7 ms 降至 58.2 ms； 相对原始实现加速 4.7 倍； 相对系统优化后的 170.6 ms 加速 2.9 倍； 吞吐：56.4 token/s 提升到 254.4 token/s。 附录还比较了 block size \\(B=8\\) 与 \\(B=16\\)。更大的块平均可以接受约 8 个 token，但草稿与验证也更贵，因此总延迟没有稳定下降：\nGPU \\(B=8\\) latency \\(B=16\\) latency \\(B=8\\) throughput \\(B=16\\) throughput RTX 4090 208.6 ms 215.2 ms 246.2 tok/s 230.8 tok/s RTX PRO 6000 159.4 ms 154.4 ms 317.5 tok/s 305.0 tok/s 这说明 speculative decoding 不是“候选块越长越好”。Block 太短，Target 推进不够；Block 太长，大量候选最终被拒绝，草稿和验证计算被浪费。论文选择 \\(B=8\\) 作为更均衡的默认配置。\n5. Action: Adaptive-Step Flow Matching 5.1 为什么直接把 8 步改成 4 步不够？ 最直接的 Action 加速方案是均匀减少 ODE 求解步数。但这隐含一个假设：去噪路径上每个区间同样重要。\n作者比较相邻两步的速度向量 \\(\\mathbf v_i\\) 与 \\(\\mathbf v_{i+1}\\)，使用两个指标：\n$$ r_i {}={} \\frac{ \\lVert\\mathbf v_{i+1}-\\mathbf v_i\\rVert_2 }{ \\lVert\\mathbf v_i\\rVert_2 }, $$以及：\n$$ s_i {}={} \\frac{ \\mathbf v_{i+1}^{\\top}\\mathbf v_i }{ \\lVert\\mathbf v_{i+1}\\rVert_2 \\lVert\\mathbf v_i\\rVert_2 }. $$其中 \\(r_i\\) 越小，表示速度大小和方向变化越小；\\(s_i\\) 越接近 1，表示两个速度方向越相似。\n实验呈现非常明显的结构：\n相对差异是 U 形：首尾大，中间小； 余弦相似度是 倒 U 形：首尾低，中间接近 1。 因此真正冗余的不是任意四步，而是中间的连续区域。\n5.2 首尾步骤为什么更重要？ 论文给出一个很直观的物理解释：\n早期步骤： 决定粗粒度拓扑，例如选哪条车道、直行还是转弯、从噪声中形成大致轨迹； 中间步骤： 在已经确定的大方向上进行小幅平滑，速度场几乎不变； 末尾步骤： 将结果拉回物理可行轨迹流形，满足道路几何、车辆运动学和局部精度要求。 可以把它类比为画一条转弯曲线：最开始要决定向左还是向右，最后要把曲线准确接到目标车道，中间几笔往往只是沿着已经决定的弧度延伸。\n5.3 Adaptive Velocity Caching FlashDrive 保留 8 个 Euler 更新，但并非 8 步都重新运行 Action Expert。官方实现的配置是：\nDIFFUSION_STEPS = 8 CACHE_STEPS = [3, 4, 5, 6] 也就是说，步骤 0、1、2 和 7 计算新速度；中间步骤 3 到 6 复用最近一次新鲜速度。更新写成：\n$$ \\widetilde{\\mathbf v}_i {}={} \\begin{cases} \\mathbf v_\\theta(\\mathbf x_i,t_i;c), \u0026 i\\notin\\mathcal C,\\\\ \\widetilde{\\mathbf v}_{i-1}, \u0026 i\\in\\mathcal C, \\end{cases} \\qquad \\mathcal C=\\{3,4,5,6\\}. $$随后仍然执行：\n$$ \\mathbf x_{i+1} {}={} \\mathbf x_i+\\Delta t_i\\widetilde{\\mathbf v}_i. $$因此它跳过的是昂贵的网络前向，不是把四个 ODE 时间区间直接删除。轨迹仍经过 8 次数值更新，时间网格保持不变。\n在系统优化基线上：\nAction latency：113.9 ms 降到 47.6 ms； Action 阶段加速 2.4 倍； minADE\\(_6\\) 增加约 0.04 m； minADE\\(_1\\) 反而改善约 0.14 m。 论文认为，少做冗余中间修正可能起到数值正则化作用，减少 ODE 求解器的累积误差。但应将其理解为本实验中的现象，而不是“缓存速度一定提升轨迹精度”的普遍结论。\n6. Quantization: 为什么 W4A16 还不够？ 6.1 W4A8 的记号 量化记号中的：\n\\(W4\\)：模型权重使用 4-bit； \\(A8\\)：矩阵乘法输入激活使用 8-bit； BF16：16-bit Brain Floating Point。 Alpamayo 1.5-10B 在 FP16 下生成六条轨迹约占 31.6 GB。只有高端工作站卡才能轻松容纳，对 Jetson 或消费级 GPU 很不友好。\n6.2 Prefill 与 Decode 为什么需要不同优化？ Decode 常常 memory-bound。 每次只生成一个新 token，矩阵维度较小，GPU 花很多时间从显存读取大规模权重。把权重从 16-bit 压到 4-bit 可以显著减少带宽压力。\nPrefill 常常 compute-bound。 一次要处理数千个视觉 token，形成较大的矩阵乘法。只有权重 4-bit、激活仍 16-bit 的 W4A16 无法充分使用高速 INT8 Tensor Core 路径。\n因此 FlashDrive 使用：\nFormat Weight Activation Decode Prefill BF16 16-bit 16-bit 基线 基线 W4A16 4-bit 16-bit 减少权重带宽 收益有限 W4A8 4-bit 8-bit 减少带宽 使用更快的 INT8 GEMM 具体实现采用 ParoQuant 处理权重离群值，再用 W4A8 Marlin kernel 执行。连续轨迹对数值误差更敏感，因此 Action Expert 保留 BF16，只量化语言骨干。\n最终：\n显存从约 31.6 GB 降至约 18.3 GB； 在前三种算法已经把延迟降到 176.0 ms 后，量化进一步降至 151.4 ms； Prefill 从 58.9 ms 降到 47.2 ms； Decode 从 57.5 ms 降到 45.3 ms。 量化贡献的端到端下降约 24.6 ms，比例没有 Streaming 或 DFlash 那么大，但它同时扩大了可部署硬件范围，并让六轨迹设置在 RTX 3090/4090 上从 OOM 变为可运行。\n7. System Optimizations: 算法减少计算，系统减少开销 7.1 CUDA Graph GPU 程序通常由 CPU 逐个发射 kernel。VLA 同时包含 Vision Encoder、长序列 Prefill、许多单 token Decode 和多步 Action Expert，kernel 类型多且单次 batch 小。Decode 时 GPU 计算可能很快，反而经常等待 CPU 发射下一项工作。\nCUDA Graph 会先记录固定形状下的 kernel 序列，之后用一次 GPU-side replay 重放完整流程。它特别适合：\n输入 shape 可静态化； 同一执行模式反复出现； 单个 kernel 很短，但数量很多。 官方实现还使用静态 KV Cache，为 CUDA Graph 提供稳定地址与张量形状。\n7.2 Kernel Fusion Transformer 中 Q、K、V 投影常被实现为三次独立 kernel：\n$$ \\mathbf Q=\\mathbf X\\mathbf W_Q, \\qquad \\mathbf K=\\mathbf X\\mathbf W_K, \\qquad \\mathbf V=\\mathbf X\\mathbf W_V. $$FlashDrive 将其合并成一次更大的投影和 kernel 发射；MLP 的 gate projection 与 up projection 也采用相同思路。Max-autotune 进一步合并连续的 element-wise 与 reduction 操作，减少中间结果写回显存。\n7.3 系统优化的边界 CUDA Graph 与 Fusion 将总延迟从 716.9 ms 降到 513.3 ms，获得 1.40 倍加速。但收益并不均匀：\nStage Baseline System Optimized 变化 Encode 87.0 40.5 明显改善 Prefill 165.3 188.3 测得增加 23.0 ms Decode 271.7 170.6 明显改善 Action 192.9 113.9 明显改善 论文指出，Prefill 主要由一个很大的矩阵乘法主导，kernel launch 不是主要开销；表中 23 ms 增加处于单 batch 测量方差范围，不能据此说系统优化会稳定拖慢 Prefill。这个结果反而说明：系统级优化擅长消除调度与访存开销，但不能替代真正减少计算量的算法。\n8. Experimental Setup 8.1 Model 与 Dataset 主实验模型是 Alpamayo 1.5-10B，附录还验证了 Alpamayo 1，也就是此前发布的 Alpamayo-R1-10B。\n数据来自 NVIDIA Autonomous Vehicle Dataset：\nStreaming Fine-Tuning：从不同数据块采样约 4K clips，每个 clip 最多抽取 150 个样本，合计约 600K training samples； DFlash Drafter：从约 60K clips 中各采样一个窗口； Evaluation：采样 100 clips，按 10 FPS 提取滑动窗口，每个 clip 120 个窗口，共 12K samples。 Streaming 微调使用随机起点与随机 rollout 长度，让 Action Expert 看到不同程度的缓存误差积累。\n8.2 ADE 与 minADE 设真实未来平面位置为 \\(\\mathbf g_t\\)，第 \\(k\\) 条预测轨迹为 \\(\\hat{\\mathbf g}^{(k)}_t\\)，预测包含 \\(T\\) 个时间点。单条轨迹的 Average Displacement Error 为：\n$$ \\operatorname{ADE}_k {}={} \\frac{1}{T} \\sum_{t=1}^{T} \\left\\lVert \\hat{\\mathbf g}^{(k)}_t-\\mathbf g_t \\right\\rVert_2. $$\\(K\\) 条样本的 minADE 为：\n$$ \\operatorname{minADE}_K {}={} \\min_{1\\le k\\le K} \\operatorname{ADE}_k. $$论文报告的预测 horizon 是 6.4 s：\nminADE\\(_1\\)@6.4s： 只生成一条轨迹，直接计算其误差； minADE\\(_6\\)@6.4s： 生成六条轨迹，事后挑选最接近真实未来的一条。 minADE\\(_6\\) 通常更低，因为它有六次机会。它主要衡量候选集合的覆盖能力，不等于在线规划器实际选择后的误差。\n8.3 Open-Loop 与 Closed-Loop Open-loop evaluation 使用记录好的真实传感器数据。模型预测不会反过来改变下一帧画面。优点是可重复、便于大规模比较；缺点是无法观察小误差经过车辆运动后如何积累。\nClosed-loop evaluation 把模型放入 AlpaSim。模型输出改变车辆下一时刻位置，新的场景再反馈给模型。它更接近真实控制，但仿真器、场景数量和交通建模也会限制结论。\n9. Main Results 9.1 端到端消融：每一项分别解决什么？ 下表是论文 Table 1 的完整结果，硬件为 RTX PRO 6000，生成一条轨迹。为避免窄屏横向溢出，将同一张原表拆成延迟与准确率两部分。\nLatency breakdown，单位为 ms；Tok/s 是 Decode 吞吐：\nConfiguration Encode Prefill Decode Tok/s Action Total Alpamayo 1.5 87.0 165.3 271.7 56.4 192.9 716.9 + System Optimizations 40.5 188.3 170.6 89.5 113.9 513.3 + Streaming Inference 12.0 59.6 170.5 89.5 113.8 355.8 + Speculative Reasoning 40.7 187.3 58.2 254.4 115.0 401.3 + Adaptive-Step Flow Matching 40.9 188.3 173.6 89.1 47.6 450.4 + All above 12.1 58.9 57.5 255.6 47.5 176.0 + Quantization 12.0 47.2 45.3 326.9 46.9 151.4 对应的轨迹误差：\nConfiguration minADE\\(_1\\) minADE\\(_6\\) Alpamayo 1.5 1.705 0.767 + System Optimizations 1.673 0.770 + Streaming Inference 1.697 0.791 + Speculative Reasoning 1.633 0.777 + Adaptive-Step Flow Matching 1.536 0.812 + All above 1.563 0.850 + Quantization 1.573 0.844 必须正确理解表中的加号：\nStreaming、Speculative、Adaptive 三行都是 各自单独叠加在 System Optimizations 上； 它们并不是从上一行继续累加； 只有 All above 才把三种算法同时启用； 最后一行再在 All above 上加入 W4A8。 因此可以看到非常清晰的“对症优化”：\nStreaming 只显著改变 Encode 与 Prefill； DFlash 只显著改变 Decode； Adaptive Flow Matching 只显著改变 Action； 三者组合时没有抢夺同一份收益，延迟下降可以累积。 算法优化将 513.3 ms 的系统基线进一步降到 176.0 ms，节省 337.3 ms；W4A8 再节省 24.6 ms。最终每一段都落在约 12–47 ms 范围内，不再有一个阶段独占大多数时间。\n9.2 准确率应该怎样解读？ 最终结果：\n$$ \\operatorname{minADE}_1: 1.705\\longrightarrow1.573, $$$$ \\operatorname{minADE}_6: 0.767\\longrightarrow0.844. $$前者改善 0.132 m，后者恶化 0.077 m。两者方向不同并不矛盾：\n单次采样的中心质量可能因 Streaming 微调和 Adaptive Caching 的正则化效应而提高； 六次采样的多样性或尾部覆盖可能略有下降，使 oracle 最优样本不如原模型。 论文把 0.08 m 除以 6.4 s，得到约 1.2 cm/s，并认为低于车道级规划容差。需要谨慎理解：ADE 是多个未来时刻的平均空间距离，不是一个严格的恒定横向漂移速度；这个换算只是帮助建立误差量级直觉。\n9.3 Cross-Device Deployment 生成一条轨迹：\nDevice Baseline FlashDrive Speedup Jetson Thor 3770.3 943.6 4.0× RTX 3090 1891.9 382.3 4.9× RTX 4090 1307.1 217.2 6.0× RTX 5090 878.1 183.7 4.8× RTX PRO 6000 716.9 151.4 4.7× 生成六条轨迹：\nDevice Baseline FlashDrive Speedup Jetson Thor 14596.5 1522.6 9.6× RTX 3090 OOM 694.8 — RTX 4090 OOM 404.1 — RTX 5090 3163.5 317.9 10.0× RTX PRO 6000 2609.8 245.8 10.6× 单位均为 ms。单样本在五种设备上获得 4.0–6.0 倍加速。六样本加速更大，并让 RTX 3090/4090 从 OOM 变为可运行。\n论文没有把六样本额外收益完全拆解；一个合理推断是，多样本会放大 Action Expert 的并行计算与显存占用，因此 W4A8、共享上下文和 Action Caching 的相对收益更明显。但这是根据结果做的系统层解释，不应当作论文已经严格证明的因果结论。\n9.4 Closed-Loop AlpaSim 闭环实验使用 100 个随机 clips：\nMetric Alpamayo 1.5 FlashDrive 趋势 \\(D_{\\mathrm{traj}}\\) ↓ 20.0 22.4 变差 \\(D_{\\mathrm{loc}}\\) ↓ 35.2 32.8 改善 \\(P_{\\mathrm{rel}}\\) ↑ 0.85 0.85 持平 Collision ↓ 0.19 0.15 改善 Off Road ↓ 0.41 0.32 改善 Wrong Lane ↓ 0.45 0.51 变差 Plan Deviation ↓ 0.24 0.16 改善 Per-step Latency ↓ 1150 ms 463 ms 2.5× 几个指标的含义：\n\\(D_{\\mathrm{traj}}\\)：自车到完整真实轨迹的距离； \\(D_{\\mathrm{loc}}\\)：自车到时间对齐真实位置的距离； \\(P_{\\mathrm{rel}}\\)：沿真实路线取得的相对进度； Collision / Off Road / Wrong Lane：整个 rollout 中是否发生对应事件； Plan Deviation：连续两次规划在重叠未来时刻的 L2 差异，越低表示计划越稳定。 FlashDrive 的碰撞率、驶出道路率和计划抖动都下降，说明小幅开放环误差没有在这组仿真中放大成明显闭环退化。但也必须看到：\n\\(D_{\\mathrm{traj}}\\) 从 20.0 增加到 22.4； Wrong Lane 从 0.45 增加到 0.51； Wrong Lane 对路口和并线处的车道几何很敏感，本身可能噪声较大； 只有 100 个 clips，论文没有提供置信区间和显著性检验。 所以这组结果支持“没有观察到整体闭环安全退化”，却不足以证明“FlashDrive 已通过真实道路安全验证”。\n10. Additional Results and Ablations 10.1 Alpamayo 1 / R1 上是否仍有效？ Model Total Latency minADE\\(_1\\) minADE\\(_6\\) Alpamayo 1 703.8 ms 1.869 0.800 + FlashDrive 155.4 ms 1.662 0.910 FlashDrive 在上一代模型上仍有 4.5 倍加速，说明四段优化不只绑定 Alpamayo 1.5 的某个偶然实现。但 minADE\\(_6\\) 退化 0.110 m，比 Alpamayo 1.5 的 0.077 m 更大，也提醒我们不同 backbone 对近似计算的容忍度不同。\n10.2 为什么 Fine-Tune VLM 会失败？ 附录最有信息量的负结果就是：微调整个 VLM 比完全不微调更差。\n一个合理解释是，流式近似的主要消费者是 Action Expert，而 VLM 已经拥有成熟的视觉—语言对齐和推理表示。用有限的 4K clips 调整整个大骨干，既难以精确校准每层缓存误差，又可能破坏原有表示；只训练 Action Expert 则直接优化最终连续输出，并减少可训练参数与灾难性遗忘风险。\n这也体现一种实用原则：不要因为误差出现在共享表示中，就默认要更新产生表示的所有层；应先找出真正对误差敏感的下游模块。\n10.3 Qualitative Example 附录展示了两类场景：\nLongitudinal Straight Driving： 两者都识别前方停止标志并调整速度； Oncoming Vehicle Encounter： 两者都判断应停车让行，FlashDrive 的 CoC 明确提到 crossing vehicle。 图中紫色是 Alpamayo 1.5，红色是 FlashDrive，绿色是真实轨迹。两个示例中，FlashDrive 轨迹更靠近真值，语言推理没有因 DFlash 或 W4A8 产生明显语义偏移。\n定性图只能说明方法在这些案例中行为合理，不能代替 12K 开放环样本和闭环指标；它的主要价值是帮助确认“数字上的 minADE 变化”对应怎样的实际道路轨迹。\n11. Implementation Map 官方仓库已经开源完整优化路径。若要对照论文读代码，可以按下面的映射：\nPaper Component Main File 关键实现 Streaming Inference flashdrive/streaming.py View-major mask、窗口转换、KV 平移 DFlash flashdrive/dflash.py Block drafter、Target 验证、接受前缀 Adaptive Flow Matching flashdrive/diffusion.py Euler 更新与 cache steps W4A8 flashdrive/quantization.py ParoQuant rotation 与 Marlin linear System Compilation flashdrive/_compile.py torch.compile 与 CUDA Graph Kernel Fusion flashdrive/fusion.py Expert projection fusion Benchmark scripts/infer.py 四帧窗口、8 步 diffusion、缓存步骤 3–6 官方基准脚本的优化配置明确写为：\nMAX_NEW_TOKENS = 128 DIFFUSION_STEPS = 8 CACHE_STEPS = [3, 4, 5, 6] 使用优化 checkpoint 的基本入口是：\npython scripts/infer.py --model-path z-lab/Alpamayo-1.5-10B 使用 NVIDIA 原始 checkpoint 会运行未优化基线：\npython scripts/infer.py --model-path nvidia/Alpamayo-1.5-10B 需要注意：\n代码使用 MIT License； Alpamayo 权重继续遵循 NVIDIA 的 non-commercial license； 官方环境要求 Python 3.12、CUDA 12.8，以及 compute capability 8.0 以上的 NVIDIA GPU； 第一个 Streaming window 只负责填充完整 KV Cache，不返回轨迹；从后续窗口开始才产生流式输出。 12. Limitations 12.1 Streaming Cache 不是精确等价变换 DFlash 的严格验证可以保持 Target token 分布，但 Streaming KV Cache 会保留旧上下文下计算的隐藏状态，本质上是近似。Action Expert 微调把误差降到很小，却没有数学上的无损保证。若视频窗口长度、相机布局、天气或交通分布明显改变，可能需要重新校准。\n12.2 训练与部署仍绑定特定输入结构 当前实现假设典型的四视角、四帧、view-major 输入，并针对 Alpamayo 家族做系统工程。论文认为方法可以迁移到同样具有 Encode–Prefill–Decode–Action 结构的 VLA，但不同模型的 token 排列、位置编码、Action Head 与量化敏感性都需要单独适配。\n12.3 6.6 Hz 不是完整自动驾驶实时性的终点 151.4 ms 已经进入城市轨迹重规划的实用区间，但真实车辆系统还包括：\n相机采集与同步； 图像预处理和数据传输； 路线与地图输入； 轨迹筛选和安全约束； 下游控制器； 故障检测与冗余系统。 论文基准主要测模型 rollout，不等于传感器到执行器的完整车辆端到端延迟。低层稳定控制仍需要更高频率运行。\n12.4 Closed-Loop 证据仍有限 AlpaSim 的 100 clips 说明加速没有明显破坏这组仿真任务，但不覆盖真实道路的传感器噪声、极端天气、硬件故障和复杂人类驾驶行为。Collision 改善也不能直接外推成真实事故率下降。\n12.5 最终选择哪条候选轨迹仍是另一个问题 minADE\\(_6\\) 使用真值事后选择最佳候选。实际部署时真值未知，还需要一个 planner、ranker 或 cost function 在候选间做选择。FlashDrive 加速的是候选生成，不直接解决候选评分与安全过滤。\n12.6 组件越多，工程复杂度越高 FlashDrive 同时需要：\n流式缓存布局与位置修正； Action Expert 的 Streaming Fine-Tuning； 单独训练的 DFlash Drafter； 特定 W4A8 checkpoint 和 kernel； 静态 shape、CUDA Graph 与算子融合。 4.7 倍来自多种收益叠加，也意味着复现和维护成本高于一个单独的量化或剪枝方法。\n13. How to Remember FlashDrive 可以用下面这张表建立最终心智模型：\n问题 直觉例子 FlashDrive 画面重复 四帧窗口向前滑一步，三帧没变 只编码最新帧 KV 重复 旧画面已经被 Transformer 读过 移动并复用 pre-RoPE KV 推理串行 “stop at the sign” 高度可预测，却逐字生成 DFlash 一次提出 8-token block 去噪重复 中间四步速度方向几乎相同 复用中间速度，只重算首尾 数值冗余 BF16 对语言骨干过于保守 VLM W4A8，Action Expert BF16 调度冗余 CPU 反复发射许多小 kernel CUDA Graph 与 Fusion 完整优化后的阶段变化是：\n$$ \\begin{aligned} \\text{Encode:}\\quad \u002687.0 \\rightarrow 12.0\\ \\mathrm{ms},\\\\ \\text{Prefill:}\\quad \u0026165.3 \\rightarrow 47.2\\ \\mathrm{ms},\\\\ \\text{Decode:}\\quad \u0026271.7 \\rightarrow 45.3\\ \\mathrm{ms},\\\\ \\text{Action:}\\quad \u0026192.9 \\rightarrow 46.9\\ \\mathrm{ms}. \\end{aligned} $$FlashDrive 最重要的贡献不只是一个 151.4 ms 数字，而是一套 profile-then-exploit 的思路：\n不把异构推理链路粗略概括成“大模型计算量大”； 找出每个阶段真正存在的冗余结构； 让算法捷径与该阶段的计算性质匹配； 用系统优化消除剩余调度开销； 最后用开放环、闭环和跨设备实验分别检查准确率、控制行为与部署性。 它也给出了一个清楚的边界：FlashDrive 让推理型 VLA 更接近实时部署，但没有单独解决实车安全、候选轨迹选择和完整传感器到执行器延迟。把这两句话同时记住，才是对论文结论最准确的概括。\nReferences FlashDrive paper FlashDrive project page Official FlashDrive implementation ",
+  "wordCount" : "2587",
+  "inLanguage": "zh-cn",
+  "datePublished": "2026-08-18T00:00:00Z",
+  "dateModified": "2026-08-18T00:00:00Z",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://jjl357.github.io/blog/posts/flashdrive---flash-vision-language-action-inference-for-autonomous-driving/"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "JJ's Blog",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://jjl357.github.io/blog/favicon.ico"
+    }
+  }
+}
+</script>
+</head>
+<body id="top">
+    <header class="header">
+  <nav class="nav">
+    <div class="logo">
+      
+      <a href="https://jjl357.github.io/" accesskey="h" title="☕🍵🥛 (Alt + H)">
+        <span>☕🍵🥛</span>
+        
+      </a>
+
+      <div class="logo-switches">
+        <button id="theme-toggle" accesskey="t" title="(Alt + T)" aria-label="Toggle theme">
+          <svg id="moon" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg id="sun" xmlns="http://www.w3.org/2000/svg" width="24" height="18" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+               stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <ul id="menu">
+    </ul>
+  </nav>
+</header>
+<main class="main">
+
+<article class="post-single">
+  <header class="post-header">
+    
+    <h1 class="post-title entry-hint-parent">
+      📝 FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving
+    </h1>
+    <div class="post-meta"><span title='2026-08-18 00:00:00 +0000 UTC'>August 18, 2026</span>
+
+</div>
+  </header> 
+  <div class="post-content"><h1 id="flashdrive-flash-vision-language-action-inference-for-autonomous-driving">FlashDrive: Flash Vision-Language-Action Inference for Autonomous Driving<a hidden class="anchor" aria-hidden="true" href="#flashdrive-flash-vision-language-action-inference-for-autonomous-driving">#</a></h1>
+<p><strong>Status:</strong> <strong>arXiv v1, 2026-08-13</strong></p>
+<p><strong>Paper:</strong> <a href="https://arxiv.org/abs/2608.12932">https://arxiv.org/abs/2608.12932</a></p>
+<p><strong>Project:</strong> <a href="https://z-lab.ai/projects/flashdrive/">https://z-lab.ai/projects/flashdrive/</a></p>
+<p><strong>GitHub:</strong> <a href="https://github.com/z-lab/flashdrive">https://github.com/z-lab/flashdrive</a></p>
+<p><strong>Authors:</strong> Zekai Li, Yihao Liang, Hongfei Zhang, Jian Chen, Yesheng Liang, Zhijian Liu</p>
+<p><strong>一句话总结：</strong> FlashDrive 不把 VLA 推理当成一个笼统的“大模型太慢”问题，而是把它拆成 Encode、Prefill、Decode、Action 四段，为每段找到不同的结构性冗余，再用流式 KV Cache、DFlash 推测式推理、自适应 Flow Matching、W4A8 量化与 CUDA Graph 共同加速完整链路。</p>
+<hr>
+<h2 id="abstract">Abstract<a hidden class="anchor" aria-hidden="true" href="#abstract">#</a></h2>
+<p>推理型自动驾驶 VLA 不只要“看见道路”，还要根据多相机视频理解场景、生成语言形式的因果推理，再预测未来连续轨迹。以 10B 参数的 Alpamayo 1.5 为例，一次完整推理在 RTX PRO 6000 上需要 <strong>716.9 ms</strong>，相当于每秒只能重规划约 <strong>1.4 次</strong>。更麻烦的是，这 716.9 ms 并不存在一个可以单独解决的唯一瓶颈：</p>
+<ul>
+<li>视觉编码器重复处理相邻时刻中相同的历史画面；</li>
+<li>Prefill 重复为这些画面建立几乎相同的 KV Cache；</li>
+<li>约 16 个结构化驾驶推理 token 仍被逐 token 串行生成；</li>
+<li>8 步 Flow Matching 在速度场几乎不变的中间区间反复运行 Action Expert。</li>
+</ul>
+<p>FlashDrive 的做法是为每种冗余设计不同捷径：</p>
+<ol>
+<li><strong>Streaming Inference：</strong> 只编码四个相机各自最新的一帧，复用前三帧的 KV Cache；</li>
+<li><strong>DFlash Speculative Reasoning：</strong> 用两层扩散式草稿模型并行提出 8-token 候选块，再由原 VLA 一次验证；</li>
+<li><strong>Adaptive-Step Flow Matching：</strong> 保留去噪轨迹首尾的重要网络计算，在中间四步复用已经得到的速度；</li>
+<li><strong>W4A8 Quantization：</strong> 语言骨干使用 4-bit 权重和 8-bit 激活，同时加速 memory-bound Decode 与 compute-bound Prefill；</li>
+<li><strong>System Optimizations：</strong> 用 CUDA Graph、静态 KV Cache 与算子融合减少 CPU 调度和显存读写开销。</li>
+</ol>
+<p>最终，Alpamayo 1.5-10B 的单轨迹端到端延迟从 <strong>716.9 ms 降到 151.4 ms</strong>，加速 <strong>4.7 倍</strong>，规划频率从 1.4 Hz 提升到 6.6 Hz。单样本轨迹误差 minADE\(_1\) 从 1.705 m 改善到 1.573 m；六样本 oracle 指标 minADE\(_6\) 从 0.767 m 变为 0.844 m，退化约 0.08 m。</p>
+<p>这里不能把结果简单概括成“加速而且精度完全不变”。更准确的说法是：<strong>FlashDrive 用很小的开放环候选覆盖损失换取了 4.7 倍端到端加速，而单轨迹误差反而下降；小规模闭环仿真中的碰撞、驶出道路和规划抖动指标改善，但 Wrong Lane 指标变差。</strong> 它把大型推理 VLA 推进到亚 200 ms 区间，却仍不是实车安全验证，也不等于车辆转向与制动只以 6.6 Hz 执行。</p>
+<p><img alt="FlashDrive 的延迟与开放环误差概览" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/overview.png"></p>
+<hr>
+<h2 id="1-vla-background-从看懂道路到输出可执行轨迹">1. VLA Background: 从“看懂道路”到“输出可执行轨迹”<a hidden class="anchor" aria-hidden="true" href="#1-vla-background-从看懂道路到输出可执行轨迹">#</a></h2>
+<p>这一节先不讨论加速，先回答一个更基础的问题：自动驾驶 VLA 到底在做什么？</p>
+<h3 id="11-传统模块化自动驾驶与端到端-vla">1.1 传统模块化自动驾驶与端到端 VLA<a hidden class="anchor" aria-hidden="true" href="#11-传统模块化自动驾驶与端到端-vla">#</a></h3>
+<p>传统自动驾驶通常把系统拆成多个显式模块：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>相机 / 激光雷达
+</span></span><span style="display:flex;"><span>    ↓
+</span></span><span style="display:flex;"><span>感知：车道线、车辆、行人、交通灯
+</span></span><span style="display:flex;"><span>    ↓
+</span></span><span style="display:flex;"><span>预测：其他交通参与者未来如何运动
+</span></span><span style="display:flex;"><span>    ↓
+</span></span><span style="display:flex;"><span>规划：自车应该走哪条轨迹
+</span></span><span style="display:flex;"><span>    ↓
+</span></span><span style="display:flex;"><span>控制：把轨迹转换成转向、油门和制动
+</span></span></code></pre></div><p>这种方式的优点是接口清楚、容易单独测试；缺点是上游错误会传给下游，而且很难为所有长尾场景写完规则。例如，施工人员站在路中间挥手、临时路障迫使车辆借道、没有信号灯的复杂路口，都可能同时依赖视觉常识、交通语义与交互推理。</p>
+<p>Vision-Language-Action Model 希望用一个统一模型把三类能力结合起来：</p>
+<ul>
+<li><strong>Vision：</strong> 理解多相机、多帧道路画面；</li>
+<li><strong>Language：</strong> 用语言 token 表达场景因果和驾驶意图；</li>
+<li><strong>Action：</strong> 输出未来连续轨迹或控制动作。</li>
+</ul>
+<p>可以把自动驾驶 VLA 抽象为：</p>
+$$
+\pi_\theta:
+(\text{multi-view video},\text{route},\text{ego history})
+\longrightarrow
+(\text{reasoning},\text{future trajectory}).
+$$<p>这里的 Action 通常不是一个单词，也不一定直接是方向盘角度。FlashDrive 所研究的 Alpamayo 会预测未来若干秒的 <strong>trajectory waypoints</strong>，即一串带时间顺序的车辆位置与姿态。下游控制器再以更高频率跟踪这条轨迹。</p>
+<blockquote>
+<p>因此，论文中的 6.6 Hz 更接近“大模型轨迹重规划频率”，不能理解成方向盘、制动器也只以 6.6 Hz 更新。车辆底层控制环仍可在两次 VLA 推理之间高频跟踪最近一条轨迹。</p>
+</blockquote>
+<h3 id="12-vlm-与-vla-有什么区别">1.2 VLM 与 VLA 有什么区别？<a hidden class="anchor" aria-hidden="true" href="#12-vlm-与-vla-有什么区别">#</a></h3>
+<p>假设输入是一张前方道路图片：</p>
+<ul>
+<li>VLM 可以回答：“前方有停止标志，右侧有一辆车驶向路口。”</li>
+<li>VLA 除了形成类似理解，还必须给出行动：“先减速，在停止线停车，让右侧车辆通过，然后继续直行”，并把它落成一条连续可跟踪的轨迹。</li>
+</ul>
+<p>也就是说，VLA 比 VLM 多了一个关键约束：<strong>输出不仅要语义合理，还要在物理空间中可执行。</strong></p>
+<p>语言模型很容易说“停车让行”，但 Action Head 还要回答：</p>
+<ul>
+<li>从当前速度开始应该以多大减速度接近停止线？</li>
+<li>未来每个时刻车辆中心位于哪里？</li>
+<li>轨迹是否留在车道内？</li>
+<li>转弯曲率和车辆动力学是否合理？</li>
+</ul>
+<h3 id="13-alpamayo-15-的一次推理经过哪些阶段">1.3 Alpamayo 1.5 的一次推理经过哪些阶段？<a hidden class="anchor" aria-hidden="true" href="#13-alpamayo-15-的一次推理经过哪些阶段">#</a></h3>
+<p>FlashDrive 没有重新发明一个 VLA，而是在 Alpamayo 1.5-10B 的现有推理管线之上优化。一次典型输入包含 <strong>4 个相机视角 × 4 个时间帧</strong>，也就是 16 幅图像。完整路径可以简化为：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>四路相机、每路四帧
+</span></span><span style="display:flex;"><span>        │
+</span></span><span style="display:flex;"><span>        ▼
+</span></span><span style="display:flex;"><span>1. Vision Encode
+</span></span><span style="display:flex;"><span>   图像 → 视觉特征 / 视觉 token
+</span></span><span style="display:flex;"><span>        │
+</span></span><span style="display:flex;"><span>        ▼
+</span></span><span style="display:flex;"><span>2. VLM Prefill
+</span></span><span style="display:flex;"><span>   读取系统提示、路线、自车历史和全部视觉 token
+</span></span><span style="display:flex;"><span>   建立 Transformer 的 KV Cache
+</span></span><span style="display:flex;"><span>        │
+</span></span><span style="display:flex;"><span>        ▼
+</span></span><span style="display:flex;"><span>3. Language Decode
+</span></span><span style="display:flex;"><span>   逐 token 生成 Chain-of-Causation 推理
+</span></span><span style="display:flex;"><span>        │
+</span></span><span style="display:flex;"><span>        ▼
+</span></span><span style="display:flex;"><span>4. Action Generation
+</span></span><span style="display:flex;"><span>   Flow Matching Action Expert 将隐藏表示变成连续轨迹
+</span></span></code></pre></div><p>用一个停车场景来理解：</p>
+<ol>
+<li><strong>Encode</strong> 把“停止标志、停止线、右侧来车、车道几何”转换为视觉 token；</li>
+<li><strong>Prefill</strong> 让 VLM 在一次大规模并行前向中读完这些 token，并将注意力中的 Key/Value 存进缓存；</li>
+<li><strong>Decode</strong> 逐个生成类似 “slow down for the stop sign and yield to cross traffic” 的推理 token；</li>
+<li><strong>Action</strong> 从随机噪声出发，经过多步速度场更新，得到减速、停车和再次起步的连续路径。</li>
+</ol>
+<h3 id="14-tokenprefilldecode-与-kv-cache">1.4 Token、Prefill、Decode 与 KV Cache<a hidden class="anchor" aria-hidden="true" href="#14-tokenprefilldecode-与-kv-cache">#</a></h3>
+<p>图像不会以像素数组直接进入语言模型。视觉编码器先把图像切分和压缩成一串向量，每个向量可视为一个 <strong>视觉 token</strong>。路线文字、相机标签和驾驶推理则是 <strong>文本 token</strong>。Transformer 最终处理的是一个由不同模态 token 组成的长序列。</p>
+<p><strong>Prefill</strong> 是模型一次并行读取完整输入序列的阶段。对长度为 \(N\) 的序列，注意力需要建立 token 间的关系，并把每层的 Key 和 Value 保存为 KV Cache。</p>
+<p><strong>Decode</strong> 是之后逐 token 生成推理的阶段。已经存在的 \(N\) 个 token 不必全部重新前向计算，但每个新 token 仍要查询已有 KV Cache。假设推理共有 \(L\) 个 token，标准自回归过程是：</p>
+$$
+p(y_{1:L}\mid x)
+{}={}
+\prod_{\ell=1}^{L}
+p(y_\ell\mid x,y_{1:\ell-1}).
+$$<p>第 \(\ell\) 个 token 必须等前 \(\ell-1\) 个 token 生成后才能确定，这就是 Decode 难以并行的根源。</p>
+<h3 id="15-action-head-与-flow-matching">1.5 Action Head 与 Flow Matching<a hidden class="anchor" aria-hidden="true" href="#15-action-head-与-flow-matching">#</a></h3>
+<p>语言 token 是离散符号，轨迹坐标是连续值。Alpamayo 使用 Flow Matching Action Expert 把 VLM 的上下文表示 \(c\) 转成连续轨迹。</p>
+<p>直观上，它先采样一个无结构的噪声轨迹：</p>
+$$
+\mathbf x_0\sim\mathcal N(\mathbf 0,\mathbf I),
+$$<p>再学习一个随时间变化的速度场：</p>
+$$
+\frac{\mathrm d\mathbf x_t}{\mathrm dt}
+{}={}
+\mathbf v_\theta(\mathbf x_t,t;c),
+$$<p>使噪声沿着常微分方程逐渐移动到合理轨迹分布。数值求解器将区间 \([0,1]\) 离散成多个步骤。8 步 Euler 更新可以写成：</p>
+$$
+\mathbf x_{i+1}
+{}={}
+\mathbf x_i+\Delta t_i
+\mathbf v_\theta(\mathbf x_i,t_i;c),
+\qquad i=0,\ldots,7.
+$$<p>每计算一次 \(\mathbf v_\theta\)，都要运行一次 Action Expert。于是“只生成一条轨迹”并不意味着 Action 阶段只做一次网络前向。</p>
+<h3 id="16-一条轨迹与六条轨迹">1.6 一条轨迹与六条轨迹<a hidden class="anchor" aria-hidden="true" href="#16-一条轨迹与六条轨迹">#</a></h3>
+<p>驾驶场景通常存在多种合理未来。例如到达一个无保护左转路口时，车辆既可能等待，也可能在间隙足够大时通过。生成六条轨迹样本，是为了覆盖这种多模态不确定性。</p>
+<p>但要注意：论文的 minADE\(_6\) 是在六条候选中，用真实未来轨迹做事后选择得到的 oracle 指标。它回答“六条候选中是否至少有一条接近真值”，而不回答在线系统是否一定能选中那一条。后文会给出正式定义。</p>
+<hr>
+<h2 id="2-motivation-瓶颈不是一个而是四个">2. Motivation: 瓶颈不是一个，而是四个<a hidden class="anchor" aria-hidden="true" href="#2-motivation-瓶颈不是一个而是四个">#</a></h2>
+<p>Alpamayo 1.5 在 RTX PRO 6000 上生成一条轨迹时的原始延迟为：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Stage</th>
+          <th style="text-align: right">Latency</th>
+          <th style="text-align: right">占总延迟</th>
+          <th style="text-align: left">主要工作</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Encode</td>
+          <td style="text-align: right">87.0 ms</td>
+          <td style="text-align: right">12.1%</td>
+          <td style="text-align: left">编码 16 幅多视角、多帧图像</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Prefill</td>
+          <td style="text-align: right">165.3 ms</td>
+          <td style="text-align: right">23.1%</td>
+          <td style="text-align: left">读取长视觉序列并建立 KV Cache</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Decode</td>
+          <td style="text-align: right">271.7 ms</td>
+          <td style="text-align: right">37.9%</td>
+          <td style="text-align: left">串行生成短 CoC 推理</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Action</td>
+          <td style="text-align: right">192.9 ms</td>
+          <td style="text-align: right">26.9%</td>
+          <td style="text-align: left">多步 Flow Matching 生成轨迹</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>Total</strong></td>
+          <td style="text-align: right"><strong>716.9 ms</strong></td>
+          <td style="text-align: right"><strong>100%</strong></td>
+          <td style="text-align: left">完整 VLA 推理</td>
+      </tr>
+  </tbody>
+</table>
+<p>Decode 虽然最大，却只占 37.9%。即使假设 Decode 可以被免费消除，剩余阶段仍需要 445.2 ms，仅约 2.25 Hz。只量化语言模型也不能消除视觉重复和 Action Expert 的多步前向。</p>
+<p>FlashDrive 的核心判断是：</p>
+<blockquote>
+<p>VLA latency is a cascade of four bottlenecks, and each bottleneck hides a different kind of redundancy.</p>
+</blockquote>
+<p>四种冗余分别是：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Stage</th>
+          <th style="text-align: left">冗余来自哪里</th>
+          <th style="text-align: left">FlashDrive 的对应方法</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Encode</td>
+          <td style="text-align: left">相邻滑动窗口有 75% 画面重复</td>
+          <td style="text-align: left">只编码最新帧</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Prefill</td>
+          <td style="text-align: left">重复视觉 token 再次建立 KV</td>
+          <td style="text-align: left">Streaming KV Cache</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Decode</td>
+          <td style="text-align: left">短而低熵的结构化推理仍串行生成</td>
+          <td style="text-align: left">DFlash Speculative Reasoning</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Action</td>
+          <td style="text-align: left">Flow Matching 中间速度几乎不变</td>
+          <td style="text-align: left">Adaptive Velocity Caching</td>
+      </tr>
+  </tbody>
+</table>
+<p>这也是文章最值得记住的方法论：<strong>先 profile 出每一段延迟，再针对该段真正存在的结构设计捷径。</strong> 一个适用于 Decode 的优化，未必适用于 Prefill；一个适用于语言 token 的缓存，也未必能直接用于连续轨迹去噪。</p>
+<p>延迟 \(T_{\mathrm{ms}}\) 与规划频率的换算为：</p>
+$$
+f_{\mathrm{Hz}}
+{}={}
+\frac{1000}{T_{\mathrm{ms}}}.
+$$<p>因此：</p>
+$$
+\frac{1000}{716.9}\approx1.39\ \mathrm{Hz},
+\qquad
+\frac{1000}{151.4}\approx6.60\ \mathrm{Hz}.
+$$<hr>
+<h2 id="3-encode--prefill-streaming-inference">3. Encode &amp; Prefill: Streaming Inference<a hidden class="anchor" aria-hidden="true" href="#3-encode--prefill-streaming-inference">#</a></h2>
+<h3 id="31-滑动窗口为什么天然有-75-重复">3.1 滑动窗口为什么天然有 75% 重复？<a hidden class="anchor" aria-hidden="true" href="#31-滑动窗口为什么天然有-75-重复">#</a></h3>
+<p>设单个相机在时刻 \(t\) 使用四帧窗口：</p>
+$$
+\mathcal W_t
+{}={}
+\{I_{t-3},I_{t-2},I_{t-1},I_t\}.
+$$<p>下一时刻窗口变成：</p>
+$$
+\mathcal W_{t+1}
+{}={}
+\{I_{t-2},I_{t-1},I_t,I_{t+1}\}.
+$$<p>四帧中有三帧完全相同，只有 \(I_{t+1}\) 是新画面。对四个相机也是一样：旧方法每次重新编码 16 幅图像，实际只有四幅最新图像从未见过。</p>
+<p>FlashDrive 因此执行三个操作：</p>
+<ol>
+<li>淘汰每个视角最旧的一帧；</li>
+<li>将其余三帧的缓存位置向前移动；</li>
+<li>只编码并 Prefill 四个相机各自的最新一帧。</li>
+</ol>
+<p><img alt="FlashDrive 的多相机流式推理" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/streaming.png"></p>
+<p>这看起来和聊天模型的 Prefix Cache 相似，但多相机 VLA 有两个额外难点：<strong>token 排列不是简单追加顺序，位置编码也会随窗口滑动而变化。</strong></p>
+<h3 id="32-view-major-ordering-为什么不能把新帧直接放到末尾">3.2 View-Major Ordering: 为什么不能把新帧直接放到末尾？<a hidden class="anchor" aria-hidden="true" href="#32-view-major-ordering-为什么不能把新帧直接放到末尾">#</a></h3>
+<p>Alpamayo 1.5 按视角组织视觉 token。简化后的顺序是：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>[Camera 1: f0 f1 f2 f3]
+</span></span><span style="display:flex;"><span>[Camera 2: f0 f1 f2 f3]
+</span></span><span style="display:flex;"><span>[Camera 3: f0 f1 f2 f3]
+</span></span><span style="display:flex;"><span>[Camera 4: f0 f1 f2 f3]
+</span></span><span style="display:flex;"><span>[trajectory history and text]
+</span></span></code></pre></div><p>如果把四幅新图直接追加到序列末尾，顺序就会变成：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>[Camera 1 old frames] ... [Camera 4 old frames]
+</span></span><span style="display:flex;"><span>[Camera 1 new] [Camera 2 new] [Camera 3 new] [Camera 4 new]
+</span></span></code></pre></div><p>这与模型训练时见过的布局不同。FlashDrive 必须把每个新帧 token 写入对应视角的“最后一帧槽位”，同时只让这些新 token 作为 Query 进行计算。</p>
+<p>标准注意力为：</p>
+$$
+\operatorname{Attn}(\mathbf Q,\mathbf K,\mathbf V)
+{}={}
+\operatorname{softmax}
+\left(
+\frac{\mathbf Q\mathbf K^\top}{\sqrt d}
++\mathbf M
+\right)\mathbf V,
+$$<p>其中 \(\mathbf M\) 是 attention mask。FlashDrive 构造专用 mask，使：</p>
+<ul>
+<li>每个最新帧可以看见 system token；</li>
+<li>Camera \(j\) 的最新帧可以看见此前视角的可见 token；</li>
+<li>它可以看见本视角的三个历史帧，并在当前帧内部保持因果关系；</li>
+<li>最后的轨迹与文本 token 可以看见全部视角，并在自身区间保持因果关系；</li>
+<li>只有最新帧与末尾轨迹/文本形成新 Query，历史帧只提供缓存的 Key/Value。</li>
+</ul>
+<p><img alt="流式 Attention Mask 与 Action Expert 微调效果" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/streaming-mask.png"></p>
+<h3 id="33-rope-position-shift-缓存的-key-为什么会过期">3.3 RoPE Position Shift: 缓存的 Key 为什么会“过期”？<a hidden class="anchor" aria-hidden="true" href="#33-rope-position-shift-缓存的-key-为什么会过期">#</a></h3>
+<p>Transformer 的 Rotary Position Embedding 将位置 \(p\) 旋转进 Query 与 Key。简化写成：</p>
+$$
+\mathbf q_p^{\mathrm{rope}}
+{}={}
+\mathbf R(p)\mathbf q_p,
+\qquad
+\mathbf k_p^{\mathrm{rope}}
+{}={}
+\mathbf R(p)\mathbf k_p.
+$$<p>假设旧窗口中的帧位于位置 \(p\)。窗口向前滑动后，它可能应该出现在 \(p-\Delta\)。若缓存保存的是已经做过 RoPE 的 \(\mathbf R(p)\mathbf k_p\)，直接搬动缓存不会把旋转改成 \(\mathbf R(p-\Delta)\)，于是 token 内容虽然相同，位置语义却错了。</p>
+<p>FlashDrive 的解决方法是：</p>
+<ul>
+<li>缓存 <strong>pre-RoPE Key</strong>，即还未乘 \(\mathbf R(p)\) 的 Key；</li>
+<li>窗口滑动后，根据新位置即时重新应用 RoPE；</li>
+<li>Value 不包含这种旋转位置，因此可以直接平移复用。</li>
+</ul>
+<p>这一步非常关键。普通文本生成时，历史 token 位置通常不变；滑动视频窗口则会不断淘汰旧帧并整体改写保留帧的位置。</p>
+<h3 id="34-为什么复用-kv-cache-仍然只是近似">3.4 为什么复用 KV Cache 仍然只是近似？<a hidden class="anchor" aria-hidden="true" href="#34-为什么复用-kv-cache-仍然只是近似">#</a></h3>
+<p>即使 token 内容和位置都处理正确，Streaming KV Cache 仍不等价于重新运行完整窗口。</p>
+<p>原因是历史帧的 Key/Value 最初是在旧上下文中计算的。完整重算时，同一历史帧可能通过注意力与当前窗口中的其他 token 重新交互，产生略有不同的隐藏状态；缓存复用保留的是旧隐藏状态。</p>
+<p>可以写成：</p>
+$$
+(\mathbf K_i,\mathbf V_i)_{\mathrm{cached}}
+\neq
+(\mathbf K_i,\mathbf V_i)_{\mathrm{full\ forward\ at}\ t+1}.
+$$<p>论文发现，不做适配时：</p>
+<ul>
+<li>minADE\(_1\) 约恶化 0.3 m；</li>
+<li>minADE\(_6\) 约恶化 0.2 m。</li>
+</ul>
+<p>这种分布偏移主要伤害 <strong>Action Expert</strong>，而不是语言推理头。原因是：</p>
+<ul>
+<li>语言 token 自回归生成，通常更依赖最近 token，对少量旧缓存误差较鲁棒；</li>
+<li>Action Expert 通过 cross-attention 汇聚整个 KV Cache 来输出连续坐标，小误差可能在多步 Flow Matching 中累积。</li>
+</ul>
+<h3 id="35-streaming-fine-tuning-为什么只微调-action-expert">3.5 Streaming Fine-Tuning: 为什么只微调 Action Expert？<a hidden class="anchor" aria-hidden="true" href="#35-streaming-fine-tuning-为什么只微调-action-expert">#</a></h3>
+<p>一个看似自然的方案是微调整个 VLM，让它适应流式缓存。但附录结果显示，这反而把 minADE\(_1\) 推高到 4.69 m，显著差于完全不微调的 2.04 m。</p>
+<p>作者采用针对性的 teacher-forcing rollout：</p>
+<ol>
+<li>冻结整个 VLM backbone；</li>
+<li>随机采样长度为 \(L\) 的滑动窗口序列；</li>
+<li>前 \(L-1\) 步使用真实历史画面运行流式推理，只建立会逐步积累近似误差的 KV Cache，不保留梯度；</li>
+<li>只在最后一步启用梯度；</li>
+<li>用真实未来轨迹监督 Action Expert。</li>
+</ol>
+<p>训练目标可概括为：</p>
+$$
+\min_{\phi}
+\mathbb E
+\left[
+\mathcal L_{\mathrm{action}}
+\left(
+A_{t+L-1},
+\hat A_{\phi}
+\bigl(
+\widetilde{\mathrm{KV}}_{t:t+L-1}
+\bigr)
+\right)
+\right],
+$$<p>其中 \(\phi\) 只表示 Action Expert 参数，\(\widetilde{\mathrm{KV}}\) 表示经过多轮真实流式执行后得到的近似缓存。</p>
+<p>随机改变 \(L\) 的意义是让 Action Expert 同时见到“刚开始流式复用”和“误差已经积累多轮”的情况。最终它将 Streaming 的误差恢复到 <strong>1.73 minADE\(_1\) / 0.79 minADE\(_6\)</strong>，接近非流式基线的 1.72 / 0.77。</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Streaming 训练方式</th>
+          <th style="text-align: right">minADE\(_1\)</th>
+          <th style="text-align: right">minADE\(_6\)</th>
+          <th style="text-align: left">结论</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Full baseline</td>
+          <td style="text-align: right">1.72</td>
+          <td style="text-align: right">0.77</td>
+          <td style="text-align: left">不使用流式近似</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Streaming, no fine-tuning</td>
+          <td style="text-align: right">2.04</td>
+          <td style="text-align: right">0.96</td>
+          <td style="text-align: left">缓存分布偏移明显</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Fine-tune VLM</td>
+          <td style="text-align: right">4.69</td>
+          <td style="text-align: right">2.98</td>
+          <td style="text-align: left">破坏已有推理表示</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>Fine-tune Action Expert</strong></td>
+          <td style="text-align: right"><strong>1.73</strong></td>
+          <td style="text-align: right"><strong>0.79</strong></td>
+          <td style="text-align: left">几乎恢复基线</td>
+      </tr>
+  </tbody>
+</table>
+<h3 id="36-streaming-带来了多少加速">3.6 Streaming 带来了多少加速？<a hidden class="anchor" aria-hidden="true" href="#36-streaming-带来了多少加速">#</a></h3>
+<p>在系统优化基线上，Streaming Inference 将：</p>
+<ul>
+<li>Encode：40.5 ms 降到 12.0 ms，约 3.4 倍；</li>
+<li>Prefill：188.3 ms 降到 59.6 ms，约 3.2 倍；</li>
+<li>端到端：513.3 ms 降到 355.8 ms。</li>
+</ul>
+<p>它没有直接加速 Decode 和 Action；这正是还需要后两种算法的原因。</p>
+<hr>
+<h2 id="4-decode-speculative-reasoning-with-dflash">4. Decode: Speculative Reasoning with DFlash<a hidden class="anchor" aria-hidden="true" href="#4-decode-speculative-reasoning-with-dflash">#</a></h2>
+<h3 id="41-为什么只有约-16-个-tokendecode-仍然最慢">4.1 为什么只有约 16 个 token，Decode 仍然最慢？<a hidden class="anchor" aria-hidden="true" href="#41-为什么只有约-16-个-tokendecode-仍然最慢">#</a></h3>
+<p>原始 Decode 需要 271.7 ms，占完整推理的 37.9%，吞吐只有 56.4 token/s。虽然驾驶 CoC 通常只有约 16 个 token，但每个 token 都需要一次目标模型前向，且单 batch 下大量小 kernel 会放大调度开销。</p>
+<p>更重要的是，驾驶推理与开放式写作不同。输入画面已经强烈约束了合理答案：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>场景：前方停止标志，右侧车辆正穿过路口
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>可能推理：
+</span></span><span style="display:flex;"><span>slow down → stop at the line → yield to cross traffic
+</span></span></code></pre></div><p>候选不会突然变成一段诗歌或无关代码。论文认为它有两个适合 speculative decoding 的性质：</p>
+<ol>
+<li><strong>Low per-token entropy：</strong> 每一步可接受的下一个 token 很少；</li>
+<li><strong>Strong intra-block correlation：</strong> “stop sign” 一旦出现，后续 “yield / crossing vehicle / slow down” 高度相关。</li>
+</ol>
+<h3 id="42-推测式解码不是让小模型替大模型做决定">4.2 推测式解码不是“让小模型替大模型做决定”<a hidden class="anchor" aria-hidden="true" href="#42-推测式解码不是让小模型替大模型做决定">#</a></h3>
+<p>标准推测式解码包含一个快速 Drafter 和一个原始 Target Model：</p>
+<ol>
+<li>Drafter 先提出多个候选 token；</li>
+<li>Target 用一次并行前向计算这些位置的概率；</li>
+<li>按严格接受/拒绝规则保留最长合法前缀；</li>
+<li>第一个被拒绝的位置由 Target 分布纠正；</li>
+<li>从新的前缀继续下一轮。</li>
+</ol>
+<p>只要验证规则正确，最终输出仍服从 Target Model 的分布。Drafter 只是在猜 Target 接下来可能说什么，并没有越过 Target 验证。因此 speculative decoding 的质量保证与“直接用小模型替换大模型”完全不同。</p>
+<p>举例说，Drafter 一次提出 8 个 token：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>slow | down | for | the | stop | sign | ahead | .
+</span></span></code></pre></div><p>如果 Target 只接受前 6 个，那么一次验证仍推进了 6 个 token；第 7 个位置按 Target 规则重新采样，而不是无条件采用错误草稿。平均每轮接受越长，减少的 Target 串行调用越多。</p>
+<h3 id="43-为什么使用扩散式-block-drafter">4.3 为什么使用扩散式 Block Drafter？<a hidden class="anchor" aria-hidden="true" href="#43-为什么使用扩散式-block-drafter">#</a></h3>
+<p>普通 Drafter 仍按自回归方式逐 token 猜 8 次。DFlash 使用 Diffusion Language Model，把一个 8-token mask block 视为整体，在一次草稿前向中并行提出整个候选块：</p>
+$$
+[\texttt{MASK}]^8
+\xrightarrow{\text{DFlash Draft}}
+[\tilde y_1,\tilde y_2,\ldots,\tilde y_8].
+$$<p>由于块内 token 彼此强相关，整体预测比八次独立贪心猜测更适合结构化驾驶推理。FlashDrive 的 Drafter 只有 <strong>2 层</strong>，block size 为 <strong>8</strong>，使用约 <strong>60K clips</strong> 训练。</p>
+<p><img alt="DFlash 对驾驶 CoC 进行 Block Speculative Decoding" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/dflash.png"></p>
+<p>Target Model 最近 token 的隐藏状态已经同时包含视觉场景、路线和当前推理进度。FlashDrive 不像通用 DFlash 那样融合大量 Target 中间表示，而只将最近 8 个 Target token 的 hidden states 融入 Drafter KV Cache，以降低草稿与验证成本。</p>
+<h3 id="44-dflash-的收益与-block-size-消融">4.4 DFlash 的收益与 Block Size 消融<a hidden class="anchor" aria-hidden="true" href="#44-dflash-的收益与-block-size-消融">#</a></h3>
+<p>最终平均每轮接受 <strong>5.6 token</strong>：</p>
+<ul>
+<li>Decode latency：271.7 ms 降至 58.2 ms；</li>
+<li>相对原始实现加速 4.7 倍；</li>
+<li>相对系统优化后的 170.6 ms 加速 2.9 倍；</li>
+<li>吞吐：56.4 token/s 提升到 254.4 token/s。</li>
+</ul>
+<p>附录还比较了 block size \(B=8\) 与 \(B=16\)。更大的块平均可以接受约 8 个 token，但草稿与验证也更贵，因此总延迟没有稳定下降：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">GPU</th>
+          <th style="text-align: right">\(B=8\) latency</th>
+          <th style="text-align: right">\(B=16\) latency</th>
+          <th style="text-align: right">\(B=8\) throughput</th>
+          <th style="text-align: right">\(B=16\) throughput</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">RTX 4090</td>
+          <td style="text-align: right"><strong>208.6 ms</strong></td>
+          <td style="text-align: right">215.2 ms</td>
+          <td style="text-align: right"><strong>246.2 tok/s</strong></td>
+          <td style="text-align: right">230.8 tok/s</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX PRO 6000</td>
+          <td style="text-align: right">159.4 ms</td>
+          <td style="text-align: right"><strong>154.4 ms</strong></td>
+          <td style="text-align: right"><strong>317.5 tok/s</strong></td>
+          <td style="text-align: right">305.0 tok/s</td>
+      </tr>
+  </tbody>
+</table>
+<p>这说明 speculative decoding 不是“候选块越长越好”。Block 太短，Target 推进不够；Block 太长，大量候选最终被拒绝，草稿和验证计算被浪费。论文选择 \(B=8\) 作为更均衡的默认配置。</p>
+<hr>
+<h2 id="5-action-adaptive-step-flow-matching">5. Action: Adaptive-Step Flow Matching<a hidden class="anchor" aria-hidden="true" href="#5-action-adaptive-step-flow-matching">#</a></h2>
+<h3 id="51-为什么直接把-8-步改成-4-步不够">5.1 为什么直接把 8 步改成 4 步不够？<a hidden class="anchor" aria-hidden="true" href="#51-为什么直接把-8-步改成-4-步不够">#</a></h3>
+<p>最直接的 Action 加速方案是均匀减少 ODE 求解步数。但这隐含一个假设：去噪路径上每个区间同样重要。</p>
+<p>作者比较相邻两步的速度向量 \(\mathbf v_i\) 与 \(\mathbf v_{i+1}\)，使用两个指标：</p>
+$$
+r_i
+{}={}
+\frac{
+\lVert\mathbf v_{i+1}-\mathbf v_i\rVert_2
+}{
+\lVert\mathbf v_i\rVert_2
+},
+$$<p>以及：</p>
+$$
+s_i
+{}={}
+\frac{
+\mathbf v_{i+1}^{\top}\mathbf v_i
+}{
+\lVert\mathbf v_{i+1}\rVert_2
+\lVert\mathbf v_i\rVert_2
+}.
+$$<p>其中 \(r_i\) 越小，表示速度大小和方向变化越小；\(s_i\) 越接近 1，表示两个速度方向越相似。</p>
+<p><img alt="Flow Matching 相邻步骤的速度差异与余弦相似度" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/flow-velocity.png"></p>
+<p>实验呈现非常明显的结构：</p>
+<ul>
+<li>相对差异是 <strong>U 形</strong>：首尾大，中间小；</li>
+<li>余弦相似度是 <strong>倒 U 形</strong>：首尾低，中间接近 1。</li>
+</ul>
+<p>因此真正冗余的不是任意四步，而是中间的连续区域。</p>
+<h3 id="52-首尾步骤为什么更重要">5.2 首尾步骤为什么更重要？<a hidden class="anchor" aria-hidden="true" href="#52-首尾步骤为什么更重要">#</a></h3>
+<p>论文给出一个很直观的物理解释：</p>
+<ul>
+<li><strong>早期步骤：</strong> 决定粗粒度拓扑，例如选哪条车道、直行还是转弯、从噪声中形成大致轨迹；</li>
+<li><strong>中间步骤：</strong> 在已经确定的大方向上进行小幅平滑，速度场几乎不变；</li>
+<li><strong>末尾步骤：</strong> 将结果拉回物理可行轨迹流形，满足道路几何、车辆运动学和局部精度要求。</li>
+</ul>
+<p>可以把它类比为画一条转弯曲线：最开始要决定向左还是向右，最后要把曲线准确接到目标车道，中间几笔往往只是沿着已经决定的弧度延伸。</p>
+<h3 id="53-adaptive-velocity-caching">5.3 Adaptive Velocity Caching<a hidden class="anchor" aria-hidden="true" href="#53-adaptive-velocity-caching">#</a></h3>
+<p>FlashDrive 保留 8 个 Euler 更新，但并非 8 步都重新运行 Action Expert。官方实现的配置是：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>DIFFUSION_STEPS = 8
+</span></span><span style="display:flex;"><span>CACHE_STEPS = [3, 4, 5, 6]
+</span></span></code></pre></div><p>也就是说，步骤 0、1、2 和 7 计算新速度；中间步骤 3 到 6 复用最近一次新鲜速度。更新写成：</p>
+$$
+\widetilde{\mathbf v}_i
+{}={}
+\begin{cases}
+\mathbf v_\theta(\mathbf x_i,t_i;c),
+& i\notin\mathcal C,\\
+\widetilde{\mathbf v}_{i-1},
+& i\in\mathcal C,
+\end{cases}
+\qquad
+\mathcal C=\{3,4,5,6\}.
+$$<p>随后仍然执行：</p>
+$$
+\mathbf x_{i+1}
+{}={}
+\mathbf x_i+\Delta t_i\widetilde{\mathbf v}_i.
+$$<p>因此它跳过的是昂贵的网络前向，不是把四个 ODE 时间区间直接删除。轨迹仍经过 8 次数值更新，时间网格保持不变。</p>
+<p>在系统优化基线上：</p>
+<ul>
+<li>Action latency：113.9 ms 降到 47.6 ms；</li>
+<li>Action 阶段加速 2.4 倍；</li>
+<li>minADE\(_6\) 增加约 0.04 m；</li>
+<li>minADE\(_1\) 反而改善约 0.14 m。</li>
+</ul>
+<p>论文认为，少做冗余中间修正可能起到数值正则化作用，减少 ODE 求解器的累积误差。但应将其理解为本实验中的现象，而不是“缓存速度一定提升轨迹精度”的普遍结论。</p>
+<hr>
+<h2 id="6-quantization-为什么-w4a16-还不够">6. Quantization: 为什么 W4A16 还不够？<a hidden class="anchor" aria-hidden="true" href="#6-quantization-为什么-w4a16-还不够">#</a></h2>
+<h3 id="61-w4a8-的记号">6.1 W4A8 的记号<a hidden class="anchor" aria-hidden="true" href="#61-w4a8-的记号">#</a></h3>
+<p>量化记号中的：</p>
+<ul>
+<li>\(W4\)：模型权重使用 4-bit；</li>
+<li>\(A8\)：矩阵乘法输入激活使用 8-bit；</li>
+<li>BF16：16-bit Brain Floating Point。</li>
+</ul>
+<p>Alpamayo 1.5-10B 在 FP16 下生成六条轨迹约占 <strong>31.6 GB</strong>。只有高端工作站卡才能轻松容纳，对 Jetson 或消费级 GPU 很不友好。</p>
+<h3 id="62-prefill-与-decode-为什么需要不同优化">6.2 Prefill 与 Decode 为什么需要不同优化？<a hidden class="anchor" aria-hidden="true" href="#62-prefill-与-decode-为什么需要不同优化">#</a></h3>
+<p><strong>Decode 常常 memory-bound。</strong> 每次只生成一个新 token，矩阵维度较小，GPU 花很多时间从显存读取大规模权重。把权重从 16-bit 压到 4-bit 可以显著减少带宽压力。</p>
+<p><strong>Prefill 常常 compute-bound。</strong> 一次要处理数千个视觉 token，形成较大的矩阵乘法。只有权重 4-bit、激活仍 16-bit 的 W4A16 无法充分使用高速 INT8 Tensor Core 路径。</p>
+<p>因此 FlashDrive 使用：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Format</th>
+          <th style="text-align: right">Weight</th>
+          <th style="text-align: right">Activation</th>
+          <th style="text-align: left">Decode</th>
+          <th style="text-align: left">Prefill</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">BF16</td>
+          <td style="text-align: right">16-bit</td>
+          <td style="text-align: right">16-bit</td>
+          <td style="text-align: left">基线</td>
+          <td style="text-align: left">基线</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">W4A16</td>
+          <td style="text-align: right">4-bit</td>
+          <td style="text-align: right">16-bit</td>
+          <td style="text-align: left">减少权重带宽</td>
+          <td style="text-align: left">收益有限</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>W4A8</strong></td>
+          <td style="text-align: right"><strong>4-bit</strong></td>
+          <td style="text-align: right"><strong>8-bit</strong></td>
+          <td style="text-align: left">减少带宽</td>
+          <td style="text-align: left">使用更快的 INT8 GEMM</td>
+      </tr>
+  </tbody>
+</table>
+<p>具体实现采用 ParoQuant 处理权重离群值，再用 W4A8 Marlin kernel 执行。连续轨迹对数值误差更敏感，因此 <strong>Action Expert 保留 BF16</strong>，只量化语言骨干。</p>
+<p>最终：</p>
+<ul>
+<li>显存从约 31.6 GB 降至约 <strong>18.3 GB</strong>；</li>
+<li>在前三种算法已经把延迟降到 176.0 ms 后，量化进一步降至 <strong>151.4 ms</strong>；</li>
+<li>Prefill 从 58.9 ms 降到 47.2 ms；</li>
+<li>Decode 从 57.5 ms 降到 45.3 ms。</li>
+</ul>
+<p>量化贡献的端到端下降约 24.6 ms，比例没有 Streaming 或 DFlash 那么大，但它同时扩大了可部署硬件范围，并让六轨迹设置在 RTX 3090/4090 上从 OOM 变为可运行。</p>
+<hr>
+<h2 id="7-system-optimizations-算法减少计算系统减少开销">7. System Optimizations: 算法减少计算，系统减少开销<a hidden class="anchor" aria-hidden="true" href="#7-system-optimizations-算法减少计算系统减少开销">#</a></h2>
+<h3 id="71-cuda-graph">7.1 CUDA Graph<a hidden class="anchor" aria-hidden="true" href="#71-cuda-graph">#</a></h3>
+<p>GPU 程序通常由 CPU 逐个发射 kernel。VLA 同时包含 Vision Encoder、长序列 Prefill、许多单 token Decode 和多步 Action Expert，kernel 类型多且单次 batch 小。Decode 时 GPU 计算可能很快，反而经常等待 CPU 发射下一项工作。</p>
+<p>CUDA Graph 会先记录固定形状下的 kernel 序列，之后用一次 GPU-side replay 重放完整流程。它特别适合：</p>
+<ul>
+<li>输入 shape 可静态化；</li>
+<li>同一执行模式反复出现；</li>
+<li>单个 kernel 很短，但数量很多。</li>
+</ul>
+<p>官方实现还使用静态 KV Cache，为 CUDA Graph 提供稳定地址与张量形状。</p>
+<h3 id="72-kernel-fusion">7.2 Kernel Fusion<a hidden class="anchor" aria-hidden="true" href="#72-kernel-fusion">#</a></h3>
+<p>Transformer 中 Q、K、V 投影常被实现为三次独立 kernel：</p>
+$$
+\mathbf Q=\mathbf X\mathbf W_Q,
+\qquad
+\mathbf K=\mathbf X\mathbf W_K,
+\qquad
+\mathbf V=\mathbf X\mathbf W_V.
+$$<p>FlashDrive 将其合并成一次更大的投影和 kernel 发射；MLP 的 gate projection 与 up projection 也采用相同思路。Max-autotune 进一步合并连续的 element-wise 与 reduction 操作，减少中间结果写回显存。</p>
+<h3 id="73-系统优化的边界">7.3 系统优化的边界<a hidden class="anchor" aria-hidden="true" href="#73-系统优化的边界">#</a></h3>
+<p>CUDA Graph 与 Fusion 将总延迟从 716.9 ms 降到 513.3 ms，获得 <strong>1.40 倍</strong>加速。但收益并不均匀：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Stage</th>
+          <th style="text-align: right">Baseline</th>
+          <th style="text-align: right">System Optimized</th>
+          <th style="text-align: left">变化</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Encode</td>
+          <td style="text-align: right">87.0</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: left">明显改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Prefill</td>
+          <td style="text-align: right">165.3</td>
+          <td style="text-align: right">188.3</td>
+          <td style="text-align: left">测得增加 23.0 ms</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Decode</td>
+          <td style="text-align: right">271.7</td>
+          <td style="text-align: right">170.6</td>
+          <td style="text-align: left">明显改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Action</td>
+          <td style="text-align: right">192.9</td>
+          <td style="text-align: right">113.9</td>
+          <td style="text-align: left">明显改善</td>
+      </tr>
+  </tbody>
+</table>
+<p>论文指出，Prefill 主要由一个很大的矩阵乘法主导，kernel launch 不是主要开销；表中 23 ms 增加处于单 batch 测量方差范围，不能据此说系统优化会稳定拖慢 Prefill。这个结果反而说明：<strong>系统级优化擅长消除调度与访存开销，但不能替代真正减少计算量的算法。</strong></p>
+<hr>
+<h2 id="8-experimental-setup">8. Experimental Setup<a hidden class="anchor" aria-hidden="true" href="#8-experimental-setup">#</a></h2>
+<h3 id="81-model-与-dataset">8.1 Model 与 Dataset<a hidden class="anchor" aria-hidden="true" href="#81-model-与-dataset">#</a></h3>
+<p>主实验模型是 <strong>Alpamayo 1.5-10B</strong>，附录还验证了 Alpamayo 1，也就是此前发布的 Alpamayo-R1-10B。</p>
+<p>数据来自 NVIDIA Autonomous Vehicle Dataset：</p>
+<ul>
+<li>Streaming Fine-Tuning：从不同数据块采样约 <strong>4K clips</strong>，每个 clip 最多抽取 150 个样本，合计约 <strong>600K training samples</strong>；</li>
+<li>DFlash Drafter：从约 <strong>60K clips</strong> 中各采样一个窗口；</li>
+<li>Evaluation：采样 <strong>100 clips</strong>，按 10 FPS 提取滑动窗口，每个 clip 120 个窗口，共 <strong>12K samples</strong>。</li>
+</ul>
+<p>Streaming 微调使用随机起点与随机 rollout 长度，让 Action Expert 看到不同程度的缓存误差积累。</p>
+<h3 id="82-ade-与-minade">8.2 ADE 与 minADE<a hidden class="anchor" aria-hidden="true" href="#82-ade-与-minade">#</a></h3>
+<p>设真实未来平面位置为 \(\mathbf g_t\)，第 \(k\) 条预测轨迹为 \(\hat{\mathbf g}^{(k)}_t\)，预测包含 \(T\) 个时间点。单条轨迹的 Average Displacement Error 为：</p>
+$$
+\operatorname{ADE}_k
+{}={}
+\frac{1}{T}
+\sum_{t=1}^{T}
+\left\lVert
+\hat{\mathbf g}^{(k)}_t-\mathbf g_t
+\right\rVert_2.
+$$<p>\(K\) 条样本的 minADE 为：</p>
+$$
+\operatorname{minADE}_K
+{}={}
+\min_{1\le k\le K}
+\operatorname{ADE}_k.
+$$<p>论文报告的预测 horizon 是 6.4 s：</p>
+<ul>
+<li><strong>minADE\(_1\)@6.4s：</strong> 只生成一条轨迹，直接计算其误差；</li>
+<li><strong>minADE\(_6\)@6.4s：</strong> 生成六条轨迹，事后挑选最接近真实未来的一条。</li>
+</ul>
+<p>minADE\(_6\) 通常更低，因为它有六次机会。它主要衡量候选集合的覆盖能力，不等于在线规划器实际选择后的误差。</p>
+<h3 id="83-open-loop-与-closed-loop">8.3 Open-Loop 与 Closed-Loop<a hidden class="anchor" aria-hidden="true" href="#83-open-loop-与-closed-loop">#</a></h3>
+<p><strong>Open-loop evaluation</strong> 使用记录好的真实传感器数据。模型预测不会反过来改变下一帧画面。优点是可重复、便于大规模比较；缺点是无法观察小误差经过车辆运动后如何积累。</p>
+<p><strong>Closed-loop evaluation</strong> 把模型放入 AlpaSim。模型输出改变车辆下一时刻位置，新的场景再反馈给模型。它更接近真实控制，但仿真器、场景数量和交通建模也会限制结论。</p>
+<hr>
+<h2 id="9-main-results">9. Main Results<a hidden class="anchor" aria-hidden="true" href="#9-main-results">#</a></h2>
+<h3 id="91-端到端消融每一项分别解决什么">9.1 端到端消融：每一项分别解决什么？<a hidden class="anchor" aria-hidden="true" href="#91-端到端消融每一项分别解决什么">#</a></h3>
+<p>下表是论文 Table 1 的完整结果，硬件为 RTX PRO 6000，生成一条轨迹。为避免窄屏横向溢出，将同一张原表拆成延迟与准确率两部分。</p>
+<p><strong>Latency breakdown，单位为 ms；Tok/s 是 Decode 吞吐：</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Configuration</th>
+          <th style="text-align: right">Encode</th>
+          <th style="text-align: right">Prefill</th>
+          <th style="text-align: right">Decode</th>
+          <th style="text-align: right">Tok/s</th>
+          <th style="text-align: right">Action</th>
+          <th style="text-align: right">Total</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Alpamayo 1.5</td>
+          <td style="text-align: right">87.0</td>
+          <td style="text-align: right">165.3</td>
+          <td style="text-align: right">271.7</td>
+          <td style="text-align: right">56.4</td>
+          <td style="text-align: right">192.9</td>
+          <td style="text-align: right">716.9</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ System Optimizations</td>
+          <td style="text-align: right">40.5</td>
+          <td style="text-align: right">188.3</td>
+          <td style="text-align: right">170.6</td>
+          <td style="text-align: right">89.5</td>
+          <td style="text-align: right">113.9</td>
+          <td style="text-align: right">513.3</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Streaming Inference</td>
+          <td style="text-align: right">12.0</td>
+          <td style="text-align: right">59.6</td>
+          <td style="text-align: right">170.5</td>
+          <td style="text-align: right">89.5</td>
+          <td style="text-align: right">113.8</td>
+          <td style="text-align: right">355.8</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Speculative Reasoning</td>
+          <td style="text-align: right">40.7</td>
+          <td style="text-align: right">187.3</td>
+          <td style="text-align: right">58.2</td>
+          <td style="text-align: right">254.4</td>
+          <td style="text-align: right">115.0</td>
+          <td style="text-align: right">401.3</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Adaptive-Step Flow Matching</td>
+          <td style="text-align: right">40.9</td>
+          <td style="text-align: right">188.3</td>
+          <td style="text-align: right">173.6</td>
+          <td style="text-align: right">89.1</td>
+          <td style="text-align: right">47.6</td>
+          <td style="text-align: right">450.4</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>+ All above</strong></td>
+          <td style="text-align: right"><strong>12.1</strong></td>
+          <td style="text-align: right"><strong>58.9</strong></td>
+          <td style="text-align: right"><strong>57.5</strong></td>
+          <td style="text-align: right"><strong>255.6</strong></td>
+          <td style="text-align: right"><strong>47.5</strong></td>
+          <td style="text-align: right"><strong>176.0</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>+ Quantization</strong></td>
+          <td style="text-align: right"><strong>12.0</strong></td>
+          <td style="text-align: right"><strong>47.2</strong></td>
+          <td style="text-align: right"><strong>45.3</strong></td>
+          <td style="text-align: right"><strong>326.9</strong></td>
+          <td style="text-align: right"><strong>46.9</strong></td>
+          <td style="text-align: right"><strong>151.4</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>对应的轨迹误差：</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Configuration</th>
+          <th style="text-align: right">minADE\(_1\)</th>
+          <th style="text-align: right">minADE\(_6\)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Alpamayo 1.5</td>
+          <td style="text-align: right">1.705</td>
+          <td style="text-align: right">0.767</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ System Optimizations</td>
+          <td style="text-align: right">1.673</td>
+          <td style="text-align: right">0.770</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Streaming Inference</td>
+          <td style="text-align: right">1.697</td>
+          <td style="text-align: right">0.791</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Speculative Reasoning</td>
+          <td style="text-align: right">1.633</td>
+          <td style="text-align: right">0.777</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ Adaptive-Step Flow Matching</td>
+          <td style="text-align: right">1.536</td>
+          <td style="text-align: right">0.812</td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>+ All above</strong></td>
+          <td style="text-align: right"><strong>1.563</strong></td>
+          <td style="text-align: right"><strong>0.850</strong></td>
+      </tr>
+      <tr>
+          <td style="text-align: left"><strong>+ Quantization</strong></td>
+          <td style="text-align: right"><strong>1.573</strong></td>
+          <td style="text-align: right"><strong>0.844</strong></td>
+      </tr>
+  </tbody>
+</table>
+<p>必须正确理解表中的加号：</p>
+<ul>
+<li>Streaming、Speculative、Adaptive 三行都是 <strong>各自单独叠加在 System Optimizations 上</strong>；</li>
+<li>它们并不是从上一行继续累加；</li>
+<li>只有 All above 才把三种算法同时启用；</li>
+<li>最后一行再在 All above 上加入 W4A8。</li>
+</ul>
+<p>因此可以看到非常清晰的“对症优化”：</p>
+<ul>
+<li>Streaming 只显著改变 Encode 与 Prefill；</li>
+<li>DFlash 只显著改变 Decode；</li>
+<li>Adaptive Flow Matching 只显著改变 Action；</li>
+<li>三者组合时没有抢夺同一份收益，延迟下降可以累积。</li>
+</ul>
+<p>算法优化将 513.3 ms 的系统基线进一步降到 176.0 ms，节省 337.3 ms；W4A8 再节省 24.6 ms。最终每一段都落在约 12–47 ms 范围内，不再有一个阶段独占大多数时间。</p>
+<h3 id="92-准确率应该怎样解读">9.2 准确率应该怎样解读？<a hidden class="anchor" aria-hidden="true" href="#92-准确率应该怎样解读">#</a></h3>
+<p>最终结果：</p>
+$$
+\operatorname{minADE}_1:
+1.705\longrightarrow1.573,
+$$$$
+\operatorname{minADE}_6:
+0.767\longrightarrow0.844.
+$$<p>前者改善 0.132 m，后者恶化 0.077 m。两者方向不同并不矛盾：</p>
+<ul>
+<li>单次采样的中心质量可能因 Streaming 微调和 Adaptive Caching 的正则化效应而提高；</li>
+<li>六次采样的多样性或尾部覆盖可能略有下降，使 oracle 最优样本不如原模型。</li>
+</ul>
+<p>论文把 0.08 m 除以 6.4 s，得到约 1.2 cm/s，并认为低于车道级规划容差。需要谨慎理解：ADE 是多个未来时刻的平均空间距离，不是一个严格的恒定横向漂移速度；这个换算只是帮助建立误差量级直觉。</p>
+<h3 id="93-cross-device-deployment">9.3 Cross-Device Deployment<a hidden class="anchor" aria-hidden="true" href="#93-cross-device-deployment">#</a></h3>
+<p><strong>生成一条轨迹：</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Device</th>
+          <th style="text-align: right">Baseline</th>
+          <th style="text-align: right">FlashDrive</th>
+          <th style="text-align: right">Speedup</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Jetson Thor</td>
+          <td style="text-align: right">3770.3</td>
+          <td style="text-align: right">943.6</td>
+          <td style="text-align: right">4.0×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 3090</td>
+          <td style="text-align: right">1891.9</td>
+          <td style="text-align: right">382.3</td>
+          <td style="text-align: right">4.9×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 4090</td>
+          <td style="text-align: right">1307.1</td>
+          <td style="text-align: right">217.2</td>
+          <td style="text-align: right">6.0×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 5090</td>
+          <td style="text-align: right">878.1</td>
+          <td style="text-align: right">183.7</td>
+          <td style="text-align: right">4.8×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX PRO 6000</td>
+          <td style="text-align: right">716.9</td>
+          <td style="text-align: right">151.4</td>
+          <td style="text-align: right">4.7×</td>
+      </tr>
+  </tbody>
+</table>
+<p><strong>生成六条轨迹：</strong></p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Device</th>
+          <th style="text-align: right">Baseline</th>
+          <th style="text-align: right">FlashDrive</th>
+          <th style="text-align: right">Speedup</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Jetson Thor</td>
+          <td style="text-align: right">14596.5</td>
+          <td style="text-align: right">1522.6</td>
+          <td style="text-align: right">9.6×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 3090</td>
+          <td style="text-align: right">OOM</td>
+          <td style="text-align: right">694.8</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 4090</td>
+          <td style="text-align: right">OOM</td>
+          <td style="text-align: right">404.1</td>
+          <td style="text-align: right">—</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX 5090</td>
+          <td style="text-align: right">3163.5</td>
+          <td style="text-align: right">317.9</td>
+          <td style="text-align: right">10.0×</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">RTX PRO 6000</td>
+          <td style="text-align: right">2609.8</td>
+          <td style="text-align: right">245.8</td>
+          <td style="text-align: right">10.6×</td>
+      </tr>
+  </tbody>
+</table>
+<p>单位均为 ms。单样本在五种设备上获得 4.0–6.0 倍加速。六样本加速更大，并让 RTX 3090/4090 从 OOM 变为可运行。</p>
+<p>论文没有把六样本额外收益完全拆解；一个合理推断是，多样本会放大 Action Expert 的并行计算与显存占用，因此 W4A8、共享上下文和 Action Caching 的相对收益更明显。但这是根据结果做的系统层解释，不应当作论文已经严格证明的因果结论。</p>
+<h3 id="94-closed-loop-alpasim">9.4 Closed-Loop AlpaSim<a hidden class="anchor" aria-hidden="true" href="#94-closed-loop-alpasim">#</a></h3>
+<p>闭环实验使用 100 个随机 clips：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Metric</th>
+          <th style="text-align: right">Alpamayo 1.5</th>
+          <th style="text-align: right">FlashDrive</th>
+          <th style="text-align: left">趋势</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">\(D_{\mathrm{traj}}\) ↓</td>
+          <td style="text-align: right"><strong>20.0</strong></td>
+          <td style="text-align: right">22.4</td>
+          <td style="text-align: left">变差</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">\(D_{\mathrm{loc}}\) ↓</td>
+          <td style="text-align: right">35.2</td>
+          <td style="text-align: right"><strong>32.8</strong></td>
+          <td style="text-align: left">改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">\(P_{\mathrm{rel}}\) ↑</td>
+          <td style="text-align: right">0.85</td>
+          <td style="text-align: right">0.85</td>
+          <td style="text-align: left">持平</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Collision ↓</td>
+          <td style="text-align: right">0.19</td>
+          <td style="text-align: right"><strong>0.15</strong></td>
+          <td style="text-align: left">改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Off Road ↓</td>
+          <td style="text-align: right">0.41</td>
+          <td style="text-align: right"><strong>0.32</strong></td>
+          <td style="text-align: left">改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Wrong Lane ↓</td>
+          <td style="text-align: right"><strong>0.45</strong></td>
+          <td style="text-align: right">0.51</td>
+          <td style="text-align: left">变差</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Plan Deviation ↓</td>
+          <td style="text-align: right">0.24</td>
+          <td style="text-align: right"><strong>0.16</strong></td>
+          <td style="text-align: left">改善</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Per-step Latency ↓</td>
+          <td style="text-align: right">1150 ms</td>
+          <td style="text-align: right"><strong>463 ms</strong></td>
+          <td style="text-align: left">2.5×</td>
+      </tr>
+  </tbody>
+</table>
+<p>几个指标的含义：</p>
+<ul>
+<li>\(D_{\mathrm{traj}}\)：自车到完整真实轨迹的距离；</li>
+<li>\(D_{\mathrm{loc}}\)：自车到时间对齐真实位置的距离；</li>
+<li>\(P_{\mathrm{rel}}\)：沿真实路线取得的相对进度；</li>
+<li>Collision / Off Road / Wrong Lane：整个 rollout 中是否发生对应事件；</li>
+<li>Plan Deviation：连续两次规划在重叠未来时刻的 L2 差异，越低表示计划越稳定。</li>
+</ul>
+<p>FlashDrive 的碰撞率、驶出道路率和计划抖动都下降，说明小幅开放环误差没有在这组仿真中放大成明显闭环退化。但也必须看到：</p>
+<ul>
+<li>\(D_{\mathrm{traj}}\) 从 20.0 增加到 22.4；</li>
+<li>Wrong Lane 从 0.45 增加到 0.51；</li>
+<li>Wrong Lane 对路口和并线处的车道几何很敏感，本身可能噪声较大；</li>
+<li>只有 100 个 clips，论文没有提供置信区间和显著性检验。</li>
+</ul>
+<p>所以这组结果支持“没有观察到整体闭环安全退化”，却不足以证明“FlashDrive 已通过真实道路安全验证”。</p>
+<p><img alt="FlashDrive 在 AlpaSim 中的闭环 rollout" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/closed-loop.png"></p>
+<hr>
+<h2 id="10-additional-results-and-ablations">10. Additional Results and Ablations<a hidden class="anchor" aria-hidden="true" href="#10-additional-results-and-ablations">#</a></h2>
+<h3 id="101-alpamayo-1--r1-上是否仍有效">10.1 Alpamayo 1 / R1 上是否仍有效？<a hidden class="anchor" aria-hidden="true" href="#101-alpamayo-1--r1-上是否仍有效">#</a></h3>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Model</th>
+          <th style="text-align: right">Total Latency</th>
+          <th style="text-align: right">minADE\(_1\)</th>
+          <th style="text-align: right">minADE\(_6\)</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Alpamayo 1</td>
+          <td style="text-align: right">703.8 ms</td>
+          <td style="text-align: right">1.869</td>
+          <td style="text-align: right">0.800</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">+ FlashDrive</td>
+          <td style="text-align: right"><strong>155.4 ms</strong></td>
+          <td style="text-align: right"><strong>1.662</strong></td>
+          <td style="text-align: right">0.910</td>
+      </tr>
+  </tbody>
+</table>
+<p>FlashDrive 在上一代模型上仍有 4.5 倍加速，说明四段优化不只绑定 Alpamayo 1.5 的某个偶然实现。但 minADE\(_6\) 退化 0.110 m，比 Alpamayo 1.5 的 0.077 m 更大，也提醒我们不同 backbone 对近似计算的容忍度不同。</p>
+<h3 id="102-为什么-fine-tune-vlm-会失败">10.2 为什么 Fine-Tune VLM 会失败？<a hidden class="anchor" aria-hidden="true" href="#102-为什么-fine-tune-vlm-会失败">#</a></h3>
+<p>附录最有信息量的负结果就是：微调整个 VLM 比完全不微调更差。</p>
+<p>一个合理解释是，流式近似的主要消费者是 Action Expert，而 VLM 已经拥有成熟的视觉—语言对齐和推理表示。用有限的 4K clips 调整整个大骨干，既难以精确校准每层缓存误差，又可能破坏原有表示；只训练 Action Expert 则直接优化最终连续输出，并减少可训练参数与灾难性遗忘风险。</p>
+<p>这也体现一种实用原则：<strong>不要因为误差出现在共享表示中，就默认要更新产生表示的所有层；应先找出真正对误差敏感的下游模块。</strong></p>
+<h3 id="103-qualitative-example">10.3 Qualitative Example<a hidden class="anchor" aria-hidden="true" href="#103-qualitative-example">#</a></h3>
+<p><img alt="Alpamayo 1.5 与 FlashDrive 的轨迹和 CoC 对比" loading="lazy" src="https://jjl357.github.io/blog/image/FlashDrive/qualitative.png"></p>
+<p>附录展示了两类场景：</p>
+<ul>
+<li><strong>Longitudinal Straight Driving：</strong> 两者都识别前方停止标志并调整速度；</li>
+<li><strong>Oncoming Vehicle Encounter：</strong> 两者都判断应停车让行，FlashDrive 的 CoC 明确提到 crossing vehicle。</li>
+</ul>
+<p>图中紫色是 Alpamayo 1.5，红色是 FlashDrive，绿色是真实轨迹。两个示例中，FlashDrive 轨迹更靠近真值，语言推理没有因 DFlash 或 W4A8 产生明显语义偏移。</p>
+<p>定性图只能说明方法在这些案例中行为合理，不能代替 12K 开放环样本和闭环指标；它的主要价值是帮助确认“数字上的 minADE 变化”对应怎样的实际道路轨迹。</p>
+<hr>
+<h2 id="11-implementation-map">11. Implementation Map<a hidden class="anchor" aria-hidden="true" href="#11-implementation-map">#</a></h2>
+<p>官方仓库已经开源完整优化路径。若要对照论文读代码，可以按下面的映射：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">Paper Component</th>
+          <th style="text-align: left">Main File</th>
+          <th style="text-align: left">关键实现</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">Streaming Inference</td>
+          <td style="text-align: left">flashdrive/streaming.py</td>
+          <td style="text-align: left">View-major mask、窗口转换、KV 平移</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">DFlash</td>
+          <td style="text-align: left">flashdrive/dflash.py</td>
+          <td style="text-align: left">Block drafter、Target 验证、接受前缀</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Adaptive Flow Matching</td>
+          <td style="text-align: left">flashdrive/diffusion.py</td>
+          <td style="text-align: left">Euler 更新与 cache steps</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">W4A8</td>
+          <td style="text-align: left">flashdrive/quantization.py</td>
+          <td style="text-align: left">ParoQuant rotation 与 Marlin linear</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">System Compilation</td>
+          <td style="text-align: left">flashdrive/_compile.py</td>
+          <td style="text-align: left">torch.compile 与 CUDA Graph</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Kernel Fusion</td>
+          <td style="text-align: left">flashdrive/fusion.py</td>
+          <td style="text-align: left">Expert projection fusion</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">Benchmark</td>
+          <td style="text-align: left">scripts/infer.py</td>
+          <td style="text-align: left">四帧窗口、8 步 diffusion、缓存步骤 3–6</td>
+      </tr>
+  </tbody>
+</table>
+<p>官方基准脚本的优化配置明确写为：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-text" data-lang="text"><span style="display:flex;"><span>MAX_NEW_TOKENS = 128
+</span></span><span style="display:flex;"><span>DIFFUSION_STEPS = 8
+</span></span><span style="display:flex;"><span>CACHE_STEPS = [3, 4, 5, 6]
+</span></span></code></pre></div><p>使用优化 checkpoint 的基本入口是：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>python scripts/infer.py --model-path z-lab/Alpamayo-1.5-10B
+</span></span></code></pre></div><p>使用 NVIDIA 原始 checkpoint 会运行未优化基线：</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>python scripts/infer.py --model-path nvidia/Alpamayo-1.5-10B
+</span></span></code></pre></div><p>需要注意：</p>
+<ul>
+<li>代码使用 MIT License；</li>
+<li>Alpamayo 权重继续遵循 NVIDIA 的 non-commercial license；</li>
+<li>官方环境要求 Python 3.12、CUDA 12.8，以及 compute capability 8.0 以上的 NVIDIA GPU；</li>
+<li>第一个 Streaming window 只负责填充完整 KV Cache，不返回轨迹；从后续窗口开始才产生流式输出。</li>
+</ul>
+<hr>
+<h2 id="12-limitations">12. Limitations<a hidden class="anchor" aria-hidden="true" href="#12-limitations">#</a></h2>
+<h3 id="121-streaming-cache-不是精确等价变换">12.1 Streaming Cache 不是精确等价变换<a hidden class="anchor" aria-hidden="true" href="#121-streaming-cache-不是精确等价变换">#</a></h3>
+<p>DFlash 的严格验证可以保持 Target token 分布，但 Streaming KV Cache 会保留旧上下文下计算的隐藏状态，本质上是近似。Action Expert 微调把误差降到很小，却没有数学上的无损保证。若视频窗口长度、相机布局、天气或交通分布明显改变，可能需要重新校准。</p>
+<h3 id="122-训练与部署仍绑定特定输入结构">12.2 训练与部署仍绑定特定输入结构<a hidden class="anchor" aria-hidden="true" href="#122-训练与部署仍绑定特定输入结构">#</a></h3>
+<p>当前实现假设典型的四视角、四帧、view-major 输入，并针对 Alpamayo 家族做系统工程。论文认为方法可以迁移到同样具有 Encode–Prefill–Decode–Action 结构的 VLA，但不同模型的 token 排列、位置编码、Action Head 与量化敏感性都需要单独适配。</p>
+<h3 id="123-66-hz-不是完整自动驾驶实时性的终点">12.3 6.6 Hz 不是完整自动驾驶实时性的终点<a hidden class="anchor" aria-hidden="true" href="#123-66-hz-不是完整自动驾驶实时性的终点">#</a></h3>
+<p>151.4 ms 已经进入城市轨迹重规划的实用区间，但真实车辆系统还包括：</p>
+<ul>
+<li>相机采集与同步；</li>
+<li>图像预处理和数据传输；</li>
+<li>路线与地图输入；</li>
+<li>轨迹筛选和安全约束；</li>
+<li>下游控制器；</li>
+<li>故障检测与冗余系统。</li>
+</ul>
+<p>论文基准主要测模型 rollout，不等于传感器到执行器的完整车辆端到端延迟。低层稳定控制仍需要更高频率运行。</p>
+<h3 id="124-closed-loop-证据仍有限">12.4 Closed-Loop 证据仍有限<a hidden class="anchor" aria-hidden="true" href="#124-closed-loop-证据仍有限">#</a></h3>
+<p>AlpaSim 的 100 clips 说明加速没有明显破坏这组仿真任务，但不覆盖真实道路的传感器噪声、极端天气、硬件故障和复杂人类驾驶行为。Collision 改善也不能直接外推成真实事故率下降。</p>
+<h3 id="125-最终选择哪条候选轨迹仍是另一个问题">12.5 最终选择哪条候选轨迹仍是另一个问题<a hidden class="anchor" aria-hidden="true" href="#125-最终选择哪条候选轨迹仍是另一个问题">#</a></h3>
+<p>minADE\(_6\) 使用真值事后选择最佳候选。实际部署时真值未知，还需要一个 planner、ranker 或 cost function 在候选间做选择。FlashDrive 加速的是候选生成，不直接解决候选评分与安全过滤。</p>
+<h3 id="126-组件越多工程复杂度越高">12.6 组件越多，工程复杂度越高<a hidden class="anchor" aria-hidden="true" href="#126-组件越多工程复杂度越高">#</a></h3>
+<p>FlashDrive 同时需要：</p>
+<ul>
+<li>流式缓存布局与位置修正；</li>
+<li>Action Expert 的 Streaming Fine-Tuning；</li>
+<li>单独训练的 DFlash Drafter；</li>
+<li>特定 W4A8 checkpoint 和 kernel；</li>
+<li>静态 shape、CUDA Graph 与算子融合。</li>
+</ul>
+<p>4.7 倍来自多种收益叠加，也意味着复现和维护成本高于一个单独的量化或剪枝方法。</p>
+<hr>
+<h2 id="13-how-to-remember-flashdrive">13. How to Remember FlashDrive<a hidden class="anchor" aria-hidden="true" href="#13-how-to-remember-flashdrive">#</a></h2>
+<p>可以用下面这张表建立最终心智模型：</p>
+<table>
+  <thead>
+      <tr>
+          <th style="text-align: left">问题</th>
+          <th style="text-align: left">直觉例子</th>
+          <th style="text-align: left">FlashDrive</th>
+      </tr>
+  </thead>
+  <tbody>
+      <tr>
+          <td style="text-align: left">画面重复</td>
+          <td style="text-align: left">四帧窗口向前滑一步，三帧没变</td>
+          <td style="text-align: left">只编码最新帧</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">KV 重复</td>
+          <td style="text-align: left">旧画面已经被 Transformer 读过</td>
+          <td style="text-align: left">移动并复用 pre-RoPE KV</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">推理串行</td>
+          <td style="text-align: left">“stop at the sign” 高度可预测，却逐字生成</td>
+          <td style="text-align: left">DFlash 一次提出 8-token block</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">去噪重复</td>
+          <td style="text-align: left">中间四步速度方向几乎相同</td>
+          <td style="text-align: left">复用中间速度，只重算首尾</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">数值冗余</td>
+          <td style="text-align: left">BF16 对语言骨干过于保守</td>
+          <td style="text-align: left">VLM W4A8，Action Expert BF16</td>
+      </tr>
+      <tr>
+          <td style="text-align: left">调度冗余</td>
+          <td style="text-align: left">CPU 反复发射许多小 kernel</td>
+          <td style="text-align: left">CUDA Graph 与 Fusion</td>
+      </tr>
+  </tbody>
+</table>
+<p>完整优化后的阶段变化是：</p>
+$$
+\begin{aligned}
+\text{Encode:}\quad &87.0 \rightarrow 12.0\ \mathrm{ms},\\
+\text{Prefill:}\quad &165.3 \rightarrow 47.2\ \mathrm{ms},\\
+\text{Decode:}\quad &271.7 \rightarrow 45.3\ \mathrm{ms},\\
+\text{Action:}\quad &192.9 \rightarrow 46.9\ \mathrm{ms}.
+\end{aligned}
+$$<p>FlashDrive 最重要的贡献不只是一个 151.4 ms 数字，而是一套 <strong>profile-then-exploit</strong> 的思路：</p>
+<ol>
+<li>不把异构推理链路粗略概括成“大模型计算量大”；</li>
+<li>找出每个阶段真正存在的冗余结构；</li>
+<li>让算法捷径与该阶段的计算性质匹配；</li>
+<li>用系统优化消除剩余调度开销；</li>
+<li>最后用开放环、闭环和跨设备实验分别检查准确率、控制行为与部署性。</li>
+</ol>
+<p>它也给出了一个清楚的边界：FlashDrive 让推理型 VLA <strong>更接近实时部署</strong>，但没有单独解决实车安全、候选轨迹选择和完整传感器到执行器延迟。把这两句话同时记住，才是对论文结论最准确的概括。</p>
+<hr>
+<h2 id="references">References<a hidden class="anchor" aria-hidden="true" href="#references">#</a></h2>
+<ul>
+<li><a href="https://arxiv.org/abs/2608.12932">FlashDrive paper</a></li>
+<li><a href="https://z-lab.ai/projects/flashdrive/">FlashDrive project page</a></li>
+<li><a href="https://github.com/z-lab/flashdrive">Official FlashDrive implementation</a></li>
+</ul>
+
+
+  </div>
+
+  <footer class="post-footer">
+    <ul class="post-tags">
+      <li><a href="https://jjl357.github.io/blog/tags/vla/">VLA</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/autonomous-driving/">Autonomous Driving</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/efficient-inference/">Efficient Inference</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/streaming-inference/">Streaming Inference</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/speculative-decoding/">Speculative Decoding</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/flow-matching/">Flow Matching</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/quantization/">Quantization</a></li>
+      <li><a href="https://jjl357.github.io/blog/tags/paper-note/">Paper Note</a></li>
+    </ul>
+  </footer>
+</article>
+    </main>
+    
+<footer class="footer">
+        <span>&copy; 2026 <a href="https://jjl357.github.io/blog/">JJ&#39;s Blog</a></span> · 
+
+    <span>
+        Powered by
+        <a href="https://gohugo.io/" rel="noopener noreferrer" target="_blank">Hugo</a> &
+        <a href="https://github.com/adityatelange/hugo-PaperMod/" rel="noopener" target="_blank">PaperMod</a>
+    </span>
+</footer>
+<a href="#top" aria-label="go to top" title="Go to Top (Alt + G)" class="top-link" id="top-link" accesskey="g">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 6" fill="currentColor">
+        <path d="M12 6H0l6-6z" />
+    </svg>
+</a>
+
+<script>
+    let menu = document.getElementById('menu');
+    if (menu) {
+        
+        const scrollPosition = localStorage.getItem("menu-scroll-position");
+        if (scrollPosition) {
+            menu.scrollLeft = parseInt(scrollPosition, 10);
+        }
+        
+        menu.onscroll = function () {
+            localStorage.setItem("menu-scroll-position", menu.scrollLeft);
+        }
+    }
+
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener("click", function (e) {
+            e.preventDefault();
+            var id = this.getAttribute("href").substr(1);
+            if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView({
+                    behavior: "smooth"
+                });
+            } else {
+                document.querySelector(`[id='${decodeURIComponent(id)}']`).scrollIntoView();
+            }
+            if (id === "top") {
+                history.replaceState(null, null, " ");
+            } else {
+                history.pushState(null, null, `#${id}`);
+            }
+        });
+    });
+
+</script>
+<script>
+    var mybutton = document.getElementById("top-link");
+    window.onscroll = function () {
+        if (document.body.scrollTop > 800 || document.documentElement.scrollTop > 800) {
+            mybutton.style.visibility = "visible";
+            mybutton.style.opacity = "1";
+        } else {
+            mybutton.style.visibility = "hidden";
+            mybutton.style.opacity = "0";
+        }
+    };
+
+</script>
+<script>
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const html = document.querySelector("html");
+        if (html.dataset.theme === "dark") {
+            html.dataset.theme = 'light';
+            localStorage.setItem("pref-theme", 'light');
+        } else {
+            html.dataset.theme = 'dark';
+            localStorage.setItem("pref-theme", 'dark');
+        }
+    })
+
+</script>
+</body>
+
+</html>
